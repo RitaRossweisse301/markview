@@ -5,12 +5,7 @@ pub(crate) fn fields(
 	lang: Lang,
 	backend: Option<wgpu::Backend>,
 ) -> Vec<(&'static str, String)> {
-	#[cfg(target_os = "android")]
-	let (smallest_width, phone) = (
-		crate::platform::android::smallest_width_dp(),
-		crate::platform::android::phone_layout(),
-	);
-	vec![
+	let mut fields = vec![
 		(lang.diagnostics_version(), env!("CARGO_PKG_VERSION").into()),
 		(
 			lang.diagnostics_build_date(),
@@ -29,8 +24,11 @@ pub(crate) fn fields(
 			),
 		),
 		(lang.diagnostics_commit(), env!("MARKVIEW_COMMIT").into()),
-		#[cfg(target_os = "android")]
-		(
+	];
+	if markview_platform::touch_layout() {
+		let smallest_width = markview_platform::android::smallest_width_dp();
+		let phone = markview_platform::android::phone_layout();
+		fields.push((
 			lang.diagnostics_mobile_mode(),
 			format!(
 				"{} ({smallest_width} dp)",
@@ -40,8 +38,9 @@ pub(crate) fn fields(
 					lang.diagnostics_tablet()
 				}
 			),
-		),
-	]
+		));
+	}
+	fields
 }
 
 /// The text behind "Copy diagnostics", which is pasted into issue reports.

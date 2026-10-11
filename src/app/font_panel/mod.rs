@@ -308,7 +308,7 @@ impl FontPanel {
 			.ok_or_else(|| anyhow::anyhow!("No user configuration directory"))
 			.and_then(|dir| {
 				std::fs::create_dir_all(&dir)?;
-				crate::platform::open_external(dir)?;
+				markview_platform::open_external(dir)?;
 				Ok(())
 			});
 		if let Err(error) = result {

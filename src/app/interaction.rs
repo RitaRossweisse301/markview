@@ -79,7 +79,6 @@ impl<P: super::SendEvent> App<P> {
 				}
 				return;
 			}
-			#[cfg(target_os = "android")]
 			Command::SearchOpen => {
 				self.open_new_search();
 				return;
@@ -386,7 +385,7 @@ impl<P: super::SendEvent> App<P> {
 					})
 					.and_then(|dir| {
 						std::fs::create_dir_all(&dir)?;
-						crate::platform::open_external(dir)?;
+						markview_platform::open_external(dir)?;
 						Ok(())
 					});
 				if let Err(e) = result {
@@ -480,7 +479,7 @@ impl<P: super::SendEvent> App<P> {
 			}
 			Command::OpenConfig => {
 				let result = self.preferences.ensure_file().and_then(|()| {
-					crate::platform::open_external(
+					markview_platform::open_external(
 						self.preferences.path().unwrap(),
 					)
 				});
@@ -537,12 +536,11 @@ impl<P: super::SendEvent> App<P> {
 				}
 				self.dialog_open = true;
 				let proxy = self.proxy.clone();
-				crate::platform::pick_document(move |path| {
+				markview_platform::pick_document(move |path| {
 					proxy.send(Event::Open(path));
 				});
 				return;
 			}
-			#[cfg(not(target_os = "android"))]
 			Command::RevealFolder => {
 				let dir = self
 					.readers
@@ -553,7 +551,8 @@ impl<P: super::SendEvent> App<P> {
 					.filter(|dir| dir.is_dir());
 				match dir {
 					Some(dir) => {
-						if let Err(error) = crate::platform::open_external(dir)
+						if let Err(error) =
+							markview_platform::open_external(dir)
 						{
 							let text = self
 								.preferences

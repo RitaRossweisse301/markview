@@ -5,8 +5,6 @@ use std::{
 	sync::Arc,
 	time::{Duration, Instant},
 };
-#[cfg(target_os = "linux")]
-use winit::platform::wayland::WindowAttributesExtWayland;
 use winit::{
 	application::ApplicationHandler,
 	dpi::LogicalSize,
@@ -31,63 +29,34 @@ impl<P: super::SendEvent> ApplicationHandler<Event> for App<P> {
 					self.args.height,
 				))
 				.with_min_inner_size(LogicalSize::new(536, 300));
-			#[cfg(target_os = "macos")]
-			{
-				use winit::platform::macos::WindowAttributesExtMacOS;
-				attributes = attributes
-					.with_titlebar_transparent(true)
-					.with_title_hidden(true)
-					.with_fullsize_content_view(true)
-					.with_titlebar_buttons_hidden(
-						self.frame.layout
-							!= crate::settings::WindowLayout::Macos,
-					)
-					.with_movable_by_window_background(false);
-			}
-			#[cfg(windows)]
-			{
-				use winit::platform::windows::{
-					CornerPreference, WindowAttributesExtWindows,
-				};
-				attributes = attributes
-					.with_decorations(false)
-					.with_undecorated_shadow(true)
-					.with_corner_preference(CornerPreference::Round);
-			}
-			#[cfg(target_os = "linux")]
-			{
-				attributes = attributes.with_decorations(false);
-			}
-			// The Wayland application ID. Desktops match it against the
-			// installed `markview.desktop` to find the window icon, and the
-			// X11 backend reads the same name for `WM_CLASS`.
-			#[cfg(target_os = "linux")]
-			{
-				attributes = attributes.with_name("markview", "markview");
-			}
-			if let Some(icon) = super::icon::window_icon() {
+			attributes = markview_platform::window_attributes(
+				attributes,
+				self.frame.layout == crate::settings::WindowLayout::Macos,
+			);
+			if let Some(icon) = markview_platform::window_icon() {
 				attributes = attributes.with_window_icon(Some(icon));
 			}
 			let window = Arc::new(event_loop.create_window(attributes)?);
-			#[cfg(target_os = "linux")]
-			{
-				self.touch_frame =
-					crate::platform::touch_frame::TouchFrame::new(
-						window.clone(),
-					)?;
-			}
-			#[cfg(windows)]
-			{
-				let proxy = self.proxy.clone();
-				self.native_frame =
-					Some(crate::platform::window_frame::NativeFrame::new(
-						&window,
-						self.frame.layout,
-						move || {
-							proxy.send(Event::FrameFeedback);
-						},
-					)?);
-			}
+			self.touch_frame =
+				markview_platform::TouchFrame::new(window.clone())?;
+			let proxy = self.proxy.clone();
+			let style = self.frame.layout;
+			let tab_end = self.native_tab_end.clone();
+			self.native_frame = markview_platform::NativeFrame::new(
+				&window,
+				move |metrics, x, y| {
+					super::frame::native_hit_test(
+						style,
+						tab_end.get(),
+						metrics,
+						x,
+						y,
+					)
+				},
+				move || {
+					proxy.send(Event::FrameFeedback);
+				},
+			)?;
 			self.frame.focused = window.has_focus();
 			let size = window.inner_size();
 			let scale = window.scale_factor();
@@ -134,8 +103,10 @@ impl<P: super::SendEvent> ApplicationHandler<Event> for App<P> {
 			event_loop.exit();
 		}
 	}
-	#[cfg(target_os = "android")]
 	fn suspended(&mut self, _: &ActiveEventLoop) {
+		if !markview_platform::touch_layout() {
+			return;
+		}
 		self.cancel_gestures();
 		self.flush_settings();
 		self.flush_session();
@@ -177,18 +148,28 @@ impl<P: super::SendEvent> App<P> {
 		event: Event,
 	) {
 		match event {
-			#[cfg(target_os = "linux")]
+			Event::NativeAssetsChanged => {
+				self.handle_user_event(
+					event_loop,
+					Event::Fonts(super::font_panel::Message::Settled(
+						Box::new(crate::fonts::Summary {
+							stored: 1,
+							..Default::default()
+						}),
+					)),
+				);
+				self.handle_user_event(event_loop, Event::StylesChanged);
+			}
 			Event::SystemThemeChanged(theme) => {
 				self.desktop_theme = Some(theme);
 				if self.preferences.theme_preference().is_none() {
 					self.apply_saved_settings();
 				}
 			}
-			#[cfg(target_os = "android")]
 			Event::AndroidBack => self.android_back(),
-			#[cfg(target_os = "android")]
 			Event::AndroidConfiguration => {
-				self.tab_strip.phone = crate::platform::android::phone_layout();
+				self.tab_strip.phone =
+					markview_platform::android::phone_layout();
 				if self.update_media() {
 					self.request(false);
 				}
@@ -200,7 +181,7 @@ impl<P: super::SendEvent> App<P> {
 				self.tab_strip.reveal_active = true;
 				self.redraw();
 			}
-			#[cfg(all(target_os = "android", debug_assertions))]
+			#[cfg(debug_assertions)]
 			Event::AndroidInspect(send) => {
 				let _ = send.send(self.android_snapshot());
 			}
@@ -267,7 +248,6 @@ impl<P: super::SendEvent> App<P> {
 				self.search_tick();
 				self.redraw();
 			}
-			#[cfg(windows)]
 			Event::FrameFeedback => self.redraw(),
 			Event::StylesChanged => {
 				self.reload_styles();
@@ -294,9 +274,7 @@ impl<P: super::SendEvent> App<P> {
 					self.open(path);
 				}
 			}
-			#[cfg(target_os = "android")]
 			Event::AndroidOpenUrl(url) => self.open_web_page(url),
-			#[cfg(target_os = "android")]
 			Event::AndroidShared(path) => {
 				self.open_document(path, crate::security::Security::default());
 				self.readers.session.content_version += 1;
@@ -479,7 +457,6 @@ impl<P: super::SendEvent> App<P> {
 		event_loop: &impl Loop,
 		now: Instant,
 	) -> Option<Instant> {
-		#[cfg(target_os = "linux")]
 		if let Some(frame) = &mut self.touch_frame {
 			frame.dispatch();
 		}

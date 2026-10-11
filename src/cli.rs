@@ -70,9 +70,7 @@ pub(crate) enum FontsCommand {
 pub(crate) struct LaunchOptions {
 	pub(crate) security: crate::security::Security,
 	pub(crate) offline: bool,
-	#[cfg(not(target_os = "android"))]
 	pub(crate) foreground: bool,
-	#[cfg(not(target_os = "android"))]
 	pub(crate) background_child: bool,
 	pub(crate) mode: Mode,
 	pub(crate) path: Option<PathBuf>,
@@ -104,9 +102,7 @@ impl Default for LaunchOptions {
 				crate::security::Trust::Trusted,
 			),
 			offline: false,
-			#[cfg(not(target_os = "android"))]
 			foreground: false,
-			#[cfg(not(target_os = "android"))]
 			background_child: false,
 			mode: Mode::Window,
 			path: None,
@@ -151,13 +147,6 @@ struct Cli {
 	/// Never touch the network.
 	#[arg(long, global = true)]
 	offline: bool,
-	/// Keep the reader attached to the terminal until its window closes.
-	#[cfg(not(target_os = "android"))]
-	#[arg(long, global = true)]
-	foreground: bool,
-	#[cfg(not(target_os = "android"))]
-	#[arg(long, global = true, hide = true)]
-	background_child: bool,
 	#[command(subcommand)]
 	command: Option<Command>,
 }
@@ -485,6 +474,30 @@ fn legacy_hint(args: &[OsString]) -> Option<String> {
 	None
 }
 
+fn cli_command() -> clap::Command {
+	let mut command = Cli::command();
+	if markview_platform::desktop_cli() {
+		command = command
+			.arg(
+				clap::Arg::new("foreground")
+					.long("foreground")
+					.global(true)
+					.action(clap::ArgAction::SetTrue)
+					.help(
+						"Keep the reader attached to the terminal until its window closes",
+					),
+			)
+			.arg(
+				clap::Arg::new("background_child")
+					.long("background-child")
+					.global(true)
+					.hide(true)
+					.action(clap::ArgAction::SetTrue),
+			);
+	}
+	command
+}
+
 fn parse_arguments(
 	args: impl IntoIterator<Item = OsString>,
 ) -> Result<Option<LaunchOptions>> {
@@ -492,7 +505,7 @@ fn parse_arguments(
 	if let Some(hint) = legacy_hint(&args) {
 		bail!("{hint}");
 	}
-	let mut command = Cli::command();
+	let mut command = cli_command();
 	let matches = match command.try_get_matches_from_mut(
 		std::iter::once(OsString::from("markview")).chain(args),
 	) {
@@ -522,10 +535,10 @@ fn parse_arguments(
 	let cli = Cli::from_arg_matches(&matches)?;
 	let mut out = LaunchOptions {
 		offline: cli.offline,
-		#[cfg(not(target_os = "android"))]
-		foreground: cli.foreground,
-		#[cfg(not(target_os = "android"))]
-		background_child: cli.background_child,
+		foreground: markview_platform::desktop_cli()
+			&& matches.get_flag("foreground"),
+		background_child: markview_platform::desktop_cli()
+			&& matches.get_flag("background_child"),
 		..LaunchOptions::default()
 	};
 	out.path = cli.file;
@@ -991,8 +1004,10 @@ mod tests {
 	}
 
 	#[test]
-	#[cfg(not(target_os = "android"))]
 	fn reader_foreground_flag_works_for_empty_files_and_web_launches() {
+		if !markview_platform::desktop_cli() {
+			return;
+		}
 		for command in [
 			vec![],
 			vec!["notes.md"],
@@ -1161,7 +1176,7 @@ mod tests {
 
 	#[test]
 	fn reader_themes_are_not_pdf_options() {
-		let mut command = Cli::command();
+		let mut command = cli_command();
 		let help = command
 			.find_subcommand_mut("pdf")
 			.unwrap()

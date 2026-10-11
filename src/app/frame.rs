@@ -13,15 +13,6 @@ pub(super) const CONTROL_GAP: f32 = 4.0;
 const RIGHT_INSET: f32 = 8.0;
 const CAPTION_WIDTH: f32 = 3.0 * CONTROL_SIZE + 2.0 * CONTROL_GAP;
 
-/// Keep upper/lower caption margins between `10/11` and `1`, near `0.95`.
-#[cfg(any(target_os = "macos", test))]
-pub(crate) fn traffic_light_margins(height: f64, scale: f64) -> (f64, f64) {
-	let space = f64::from(TOP) - height;
-	let top = (space * 0.95 / 1.95 * scale).round() / scale;
-	let top = top.clamp(space / 2.1, space / 2.0);
-	(top, space - top)
-}
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Caption {
 	Close,
@@ -38,7 +29,7 @@ pub(super) struct State {
 }
 impl State {
 	pub fn new(layout: WindowLayout) -> Self {
-		let layout = if cfg!(target_os = "android") {
+		let layout = if markview_platform::touch_layout() {
 			WindowLayout::System
 		} else {
 			layout
@@ -68,10 +59,6 @@ pub(crate) struct Layout {
 	pub toolbar_button_size: f32,
 	pub drag: Rect,
 	pub width: f32,
-	#[cfg_attr(
-		any(target_os = "macos", target_os = "android"),
-		allow(dead_code)
-	)]
 	pub height: f32,
 }
 impl Layout {
@@ -106,7 +93,7 @@ impl Layout {
 		let count = 5.0;
 		let toolbar_x =
 			right - (count * toolbar_button_size + (count - 1.0) * CONTROL_GAP);
-		let drag_width = if cfg!(target_os = "android") {
+		let drag_width = if markview_platform::touch_layout() {
 			0.0
 		} else if style == WindowLayout::Macos {
 			48.0
@@ -201,8 +188,9 @@ impl Layout {
 		self
 	}
 	pub fn cursor_at(self, x: f32, y: f32) -> Option<CursorIcon> {
-		#[cfg(target_os = "linux")]
-		if let Some(direction) = self.resize_at(x, y) {
+		if markview_platform::client_resize()
+			&& let Some(direction) = self.resize_at(x, y)
+		{
 			return Some(match direction {
 				ResizeDirection::North | ResizeDirection::South => {
 					CursorIcon::NsResize
@@ -224,10 +212,6 @@ impl Layout {
 			self.draggable(x, y).then_some(CursorIcon::Default)
 		}
 	}
-	#[cfg_attr(
-		any(target_os = "macos", target_os = "android"),
-		allow(dead_code)
-	)]
 	pub fn resize_at(self, x: f32, y: f32) -> Option<ResizeDirection> {
 		if self.maximized
 			|| self.fullscreen
@@ -259,7 +243,7 @@ impl Layout {
 impl<P: super::SendEvent> App<P> {
 	pub(super) fn frame_layout(&self) -> Layout {
 		let (width, height, _) = self.dimensions();
-		let fullscreen = cfg!(target_os = "android")
+		let fullscreen = markview_platform::touch_layout()
 			|| self
 				.window
 				.as_ref()
@@ -267,7 +251,7 @@ impl<P: super::SendEvent> App<P> {
 		let maximized = self.window.as_ref().is_some_and(|w| w.is_maximized());
 		let mut layout = Layout::new(
 			self.frame.layout,
-			cfg!(target_os = "macos")
+			markview_platform::native_buttons()
 				&& self.frame.layout == WindowLayout::Macos,
 			width,
 			height,
@@ -282,9 +266,10 @@ impl<P: super::SendEvent> App<P> {
 		layout.focused = self.frame.focused;
 		layout.hover = self.frame.hover;
 		layout.pressed = self.frame.pressed;
-		#[cfg(windows)]
 		if let Some(native) = &self.native_frame {
 			let (hover, pressed) = native.feedback();
+			let hover = hover.then_some(Caption::Expand);
+			let pressed = pressed.then_some(Caption::Expand);
 			if hover.is_some() || pressed.is_some() {
 				layout.hover = hover;
 				layout.pressed = pressed;
@@ -292,14 +277,13 @@ impl<P: super::SendEvent> App<P> {
 		}
 		layout
 	}
-	#[cfg(windows)]
 	pub(super) fn sync_native_frame(&self) {
 		if let Some(native) = &self.native_frame {
 			let layout = self.frame_layout();
 			native.set_fullscreen(layout.fullscreen);
-			native.set_tab_end(
+			self.native_tab_end.set(Some(
 				self.tab_metrics.end(layout.tabs, self.tab_strip.scroll),
-			);
+			));
 		}
 	}
 	/// Window input precedes viewer, text-field and document input.
@@ -375,8 +359,9 @@ impl<P: super::SendEvent> App<P> {
 		self.tab_metrics.sync(&mut self.ui, self.readers.entries());
 		let (x, y) = self.interaction.cursor;
 		let layout = self.frame_layout();
-		#[cfg(target_os = "linux")]
-		if let Some(direction) = layout.resize_at(x, y) {
+		if markview_platform::client_resize()
+			&& let Some(direction) = layout.resize_at(x, y)
+		{
 			self.clear_frame_gesture();
 			if let Some(w) = &self.window
 				&& let Err(error) = w.drag_resize_window(direction)
@@ -406,10 +391,7 @@ impl<P: super::SendEvent> App<P> {
 			});
 		if let Some(w) = &self.window {
 			if double {
-				#[cfg(target_os = "macos")]
-				crate::platform::titlebar_double_click(w);
-				#[cfg(not(target_os = "macos"))]
-				w.set_maximized(!w.is_maximized());
+				markview_platform::titlebar_double_click(w);
 			} else {
 				self.frame.last_click = Some((now, (x, y)));
 				if let Err(error) = w.drag_window() {
@@ -439,9 +421,114 @@ impl<P: super::SendEvent> App<P> {
 	}
 }
 
+/// Translate the reader's actual chrome geometry at the native callback boundary.
+pub(super) fn native_hit_test(
+	style: WindowLayout,
+	end: Option<f32>,
+	metrics: markview_platform::FrameMetrics,
+	x: f32,
+	y: f32,
+) -> markview_platform::HitTest {
+	use markview_platform::HitTest;
+	let layout = Layout::new(
+		style,
+		false,
+		metrics.width,
+		metrics.height,
+		metrics.fullscreen,
+		metrics.maximized,
+	);
+	let layout = end.map_or(layout, |end| layout.with_tab_end(end));
+	if let Some(edge) = layout.resize_at(x, y) {
+		HitTest::Resize(edge)
+	} else if layout.caption_at(x, y) == Some(Caption::Expand) {
+		HitTest::Maximize
+	} else if layout.draggable(x, y) {
+		HitTest::Caption
+	} else {
+		HitTest::Client
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
+	#[test]
+	fn native_callback_matches_caption_drag_and_resize_geometry() {
+		use markview_platform::{FrameMetrics, HitTest};
+		for style in [
+			WindowLayout::Windows,
+			WindowLayout::Macos,
+			WindowLayout::Linux,
+		] {
+			for scale in [1.0, 1.5, 2.0] {
+				let metrics = FrameMetrics {
+					width: 800.0,
+					height: 500.0,
+					scale,
+					fullscreen: false,
+					maximized: false,
+				};
+				let layout = Layout::new(
+					style,
+					false,
+					metrics.width,
+					metrics.height,
+					false,
+					false,
+				)
+				.with_tab_end(180.0);
+				let hit =
+					|x, y| native_hit_test(style, Some(180.0), metrics, x, y);
+				assert_eq!(
+					hit(1.0, 1.0),
+					HitTest::Resize(ResizeDirection::NorthWest)
+				);
+				assert_eq!(hit(layout.tabs.x + 20.0, 20.0), HitTest::Client);
+				assert_eq!(
+					hit(layout.new_page.unwrap().x + 12.0, 20.0),
+					HitTest::Client
+				);
+				assert_eq!(hit(layout.drag.x + 10.0, 20.0), HitTest::Caption);
+				let (_, expand) = layout
+					.captions()
+					.into_iter()
+					.find(|(caption, _)| *caption == Caption::Expand)
+					.unwrap();
+				assert_eq!(
+					hit(expand.x + expand.w / 2.0, 20.0),
+					HitTest::Maximize
+				);
+				assert_eq!(
+					native_hit_test(
+						style,
+						Some(180.0),
+						FrameMetrics {
+							fullscreen: true,
+							..metrics
+						},
+						layout.drag.x + 10.0,
+						20.0
+					),
+					HitTest::Client
+				);
+				assert_eq!(
+					native_hit_test(
+						style,
+						None,
+						FrameMetrics {
+							maximized: true,
+							..metrics
+						},
+						1.0,
+						1.0
+					),
+					HitTest::Client
+				);
+			}
+		}
+	}
+
 	#[test]
 	fn caption_buttons_use_a_hand_and_dragging_keeps_the_default_cursor() {
 		for style in [
@@ -530,7 +617,11 @@ mod tests {
 	fn traffic_light_margins_follow_the_requested_ratio_at_each_dpi() {
 		for height in [12.0, 14.0, 16.0, 18.0, 20.0] {
 			for scale in [1.0, 1.25, 1.5, 2.0, 3.0] {
-				let (top, bottom) = traffic_light_margins(height, scale);
+				let (top, bottom) = markview_platform::traffic_light_margins(
+					f64::from(TOP),
+					height,
+					scale,
+				);
 				assert!(
 					(1.0 / 1.1 - 1e-9..=1.0 + 1e-9).contains(&(top / bottom))
 				);

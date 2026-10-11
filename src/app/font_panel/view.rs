@@ -34,7 +34,7 @@ const ROW: f32 = 88.0;
 const LIST_TOP: f32 = 136.0;
 /// How much of the panel's bottom the footer and its separator take.
 fn footer(panel: Rect) -> f32 {
-	let actions = if !cfg!(target_os = "android")
+	let actions = if !markview_platform::touch_layout()
 		&& panel.w < 488.0
 		&& panel.h >= 360.0
 	{
@@ -343,7 +343,7 @@ fn fonts_controls(
 ) -> Vec<Button> {
 	let r = list.panel;
 	let compact = r.w < 488.0;
-	let stacked = !cfg!(target_os = "android") && compact && r.h >= 360.0;
+	let stacked = !markview_platform::touch_layout() && compact && r.h >= 360.0;
 	let third = (r.w - 64.0) / 3.0;
 	let mut out = crate::app::chrome::components::settings_header_controls(
 		r,
@@ -351,7 +351,7 @@ fn fonts_controls(
 		preview,
 		lang,
 	);
-	if !cfg!(target_os = "android") {
+	if !markview_platform::touch_layout() {
 		out.push(Button {
 			label: (lang.fonts_open_folder()).into(),
 			icon: None,
@@ -456,7 +456,9 @@ fn fonts_controls(
 			action: Command::Fonts(action),
 			rect: Rect {
 				x: r.x
-					+ if stacked || (cfg!(target_os = "android") && compact) {
+					+ if stacked
+						|| (markview_platform::touch_layout() && compact)
+					{
 						24.0 + if missing_only {
 							0.0
 						} else {
@@ -469,7 +471,8 @@ fn fonts_controls(
 						x
 					},
 				y: r.y + r.h - 48.,
-				w: if stacked || (cfg!(target_os = "android") && compact) {
+				w: if stacked || (markview_platform::touch_layout() && compact)
+				{
 					(r.w - 56.0) / 2.0
 				} else if compact {
 					third
@@ -1157,7 +1160,7 @@ mod tests {
 				buttons.iter().any(
 					|b| b.action == Command::Fonts(FontCommand::OpenFolder)
 				),
-				!cfg!(target_os = "android")
+				!markview_platform::touch_layout()
 			);
 			assert!(buttons.iter().all(|b| {
 				panel.contains(b.rect.x, b.rect.y)
@@ -1265,7 +1268,7 @@ mod tests {
 			fixed
 				.iter()
 				.any(|b| b.action == Command::Fonts(FontCommand::OpenFolder)),
-			!cfg!(target_os = "android")
+			!markview_platform::touch_layout()
 		);
 		assert!(
 			fixed

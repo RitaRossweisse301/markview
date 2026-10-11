@@ -125,19 +125,17 @@ fn coast_decays_stops_after_a_pause_and_is_independent_of_frame_rate() {
 	assert!(!held.release(start + Duration::from_millis(150)));
 }
 
-#[cfg(target_os = "linux")]
 #[test]
 #[ignore = "requires an X11 display; exercises the real application input adapter"]
 fn native_touch_and_trackpad_route_through_reader_and_chrome() {
-	use winit::{
-		dpi::PhysicalPosition, event_loop::EventLoop,
-		platform::x11::EventLoopBuilderExtX11,
-	};
-	let event_loop = EventLoop::<super::super::Event>::with_user_event()
-		.with_x11()
-		.with_any_thread(true)
-		.build()
-		.unwrap();
+	if !markview_platform::client_resize() {
+		return;
+	}
+	use winit::dpi::PhysicalPosition;
+	let event_loop = markview_platform::test_support::input_event_loop::<
+		super::super::Event,
+	>()
+	.unwrap();
 	let mut app = App::new(
 		crate::cli::LaunchOptions {
 			offline: true,

@@ -327,15 +327,7 @@ pub(crate) fn write_atomic(path: &Path, bytes: &[u8]) -> Result<()> {
 	// call owns rather than to whatever some path resolves to. `0o666` lets
 	// the umask pick the mode a plain write would have used; `tempfile`'s own
 	// default would make every export owner-only.
-	#[cfg(unix)]
-	let temp = {
-		use std::os::unix::fs::PermissionsExt;
-		tempfile::Builder::new()
-			.permissions(std::fs::Permissions::from_mode(0o666))
-			.tempfile_in(parent)
-	};
-	#[cfg(not(unix))]
-	let temp = tempfile::NamedTempFile::new_in(parent);
+	let temp = markview_platform::export_tempfile(parent);
 	let mut temp = temp
 		.with_context(|| format!("Cannot write beside {}", path.display()))?;
 	temp.write_all(bytes)

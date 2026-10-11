@@ -366,10 +366,12 @@ fn settings_feedback_measurement() {
 	);
 }
 
-#[cfg(unix)]
 #[test]
 fn symlinked_fonts_and_styles_follow_target_changes() {
-	use std::os::unix::fs::symlink;
+	if !markview_platform::test_support::special_files() {
+		return;
+	}
+	use markview_platform::test_support::symlink;
 	let resources = tempfile::tempdir().unwrap();
 	let targets = tempfile::tempdir().unwrap();
 	let dir = Some(resources.path());

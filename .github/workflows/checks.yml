@@ -28,6 +28,10 @@ jobs:
           test -n "$driver"
           printf '%s\n' "VK_DRIVER_FILES=$driver" "WGPU_BACKEND=vulkan" "LP_NUM_THREADS=1" >> "$GITHUB_ENV"
           VK_DRIVER_FILES="$driver" vulkaninfo --summary
+      - name: Application platform boundary
+        run: |
+          python scripts/check_platform_boundary.py
+          python -m unittest discover -s scripts -p test_check_platform_boundary.py
       - run: cargo check --workspace --locked --all-targets
       - run: cargo test --workspace --locked --all-targets
         env:

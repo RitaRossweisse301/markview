@@ -25,7 +25,30 @@ markview-core: semantic document → immutable layout snapshot
 
 `markview-pdf` consumes the same snapshot for paper. It re-lays the document at the page's text measure, breaks the column into pages, and writes vector content through `krilla`: text as glyph runs with subset fonts and a character map, math, rules, boxes, images, and link annotations. It owns no window, no GPU, and no source parsing.
 
-The root package owns effects that must touch the operating system: launching, file and settings I/O, file watching, image loading, clipboard access, platform link opening, window events, and background work. The UI translates gestures into commands; it does not define document semantics.
+The root package owns reader policy: launch parsing, settings persistence, file content validation, file watching, image loading, single-instance communication, UI geometry and asynchronous scheduling. The UI translates gestures into commands; it does not define document semantics.
+
+`markview-platform` owns native services for Windows, macOS, Linux and Android:
+clipboard, file and export dialogs, external opening, error dialogs, system
+appearance, wheel settings, process detachment, configuration directories,
+system locale, file-open flags and permissions, icons, window attributes and
+native window/input adapters. It depends on `winit` and system libraries, with
+no dependency on the application, core, renderer or selection engine. GPU
+backend features and final executable/library build settings stay with their
+existing owners.
+
+The application calls concrete functions and types on every target and queries
+capabilities and conventions for layout and control visibility. Unsupported
+native hooks return `None` or do nothing. Windows caption hit testing calls an
+application callback with window dimensions, scale and state, keeping reader
+geometry in the application. Direct Manipulation supplies status batches and
+physical transforms; the application retains `PanFeed`, subpixel accumulation,
+cancellation and input ownership. Native document, share, back and configuration
+events use a platform event type and a callback. Android's entry registration
+macro emits the final library's ABI exports, while platform code owns JNI,
+startup event queuing and shutdown cleanup. Application sources and tests may
+only use test/debug conditional compilation; the final executable's subsystem
+attribute is exempt. CI enforces this with
+[`check_platform_boundary.py`](../../scripts/check_platform_boundary.py).
 
 The separation matters because the same core layout is used by the interactive window, the renderer tests, and the offscreen render and benchmark modes.
 
@@ -138,7 +161,7 @@ Painting is consequently a projection of an already-decided layout. Scrolling an
 
 The application owns focus, hover, selection gestures, scrolling, scrollbar grabs, and modal input: the settings, stylesheet and export panels and the local-file confirmation. Core owns hit testing and selection geometry so those operations remain testable without a window or GPU.
 
-A document reaches the reader from the command line on every desktop. macOS adds the desktop's own handoff: the bundle declares its Markdown document types, so a double-click in Finder, an "Open with" choice, or a file dropped on the app's icon launches it with an open-documents Apple Event that carries one file URL per document. `src/app/open_document.rs` answers that event and forwards each file to the event loop as the `Event::Open` a command-line argument already produces, so a document the desktop opens and one typed on the command line reach the same tab-opening path, and every file of one event becomes its own tab. The handler is taken from the launch notification rather than from the application delegate, which `winit` owns, and it has to be taken at that moment: AppKit installs its own document handler while launching, so a registration made earlier is replaced and one made later never sees the event that is already pending.
+A document reaches the reader from the command line on every desktop. macOS adds the desktop's own handoff: the bundle declares its Markdown document types, so a double-click in Finder, an "Open with" choice, or a file dropped on the app's icon launches it with an open-documents Apple Event that carries one file URL per document. `crates/markview-platform/src/open_document.rs` answers that event and delivers each file through the application callback to the event loop as the `Event::Open` a command-line argument already produces, so a document the desktop opens and one typed on the command line reach the same tab-opening path, and every file of one event becomes its own tab. The handler is taken from the launch notification rather than from the application delegate, which `winit` owns, and it has to be taken at that moment: AppKit installs its own document handler while launching, so a registration made earlier is replaced and one made later never sees the event that is already pending.
 
 A wheel gesture's axis is decided once, from its first few moments of motion, and held until the gesture ends: sideways pans the wide block under the pointer, vertical scrolls the document. Deciding per event instead would make a diagonal gesture stutter, because an event that leans sideways pans or, over no wide block, does nothing at all while the page stops following the hand. The motion that decides the axis is held and applied with the deciding event, and a gesture inherits nothing from the one before it: a boundary the platform reports, or a pause where it reports none, ends the gesture. A sideways gesture over no wide block still scrolls the page by the vertical motion it carries, rather than being dropped; one that is purely sideways has no target and no vertical motion to apply.
 
@@ -172,7 +195,7 @@ components; helpers receive borrowed inputs instead of an application-wide conte
 | Application export | One export's settings, its background job, the PNG strip loop and the watch target | Reads and lays the document out itself at the export's own options, so it never requests a reader layout; only PNG strips touch the shared GPU device, one per frame, with the export's own stylesheet. |
 | Application tab strip | Scroll offset, drag gesture and cached filename widths | Pure strip geometry drives both painting and hit testing. Reordering moves sessions without submitting layout requests; clipped draw groups contain overflow. |
 | Application chrome | Borrowed display state and compiled icon buffers | Controls, footer, tabs and styles produce geometry without window, worker or configuration I/O access. Shared buttons and grouped forms own drawing, clipped pointer regions and focus geometry; font scroll and filters stay in the font feature; other panel offsets stay in interaction state. Selection-count caching remains in the application adapter; icons stay editable SVG files that the `markview-icon` macro parses into vector buffers at compile time, so no SVG parser reaches the binary. |
-| Window frame | Shared logical geometry and platform effects | `app::frame` reserves caption, tab, toolbar and drag regions independently of MVSS. The dropdown choice is frozen at launch. Custom frame input precedes viewer and reader input. macOS retains an `NSWindow` titlebar with native corners and, by default, traffic lights. Windows and Linux share one button size and spacing across their right-side controls; their SVG shapes differ. Windows keeps winit's native sizing and adds a scoped nonclient hit-test hook for resizing, dragging and maximize-hover Snap Layouts, synchronized explicitly during painting; nonclient touch messages continue to the system. Linux starts compositor move/resize from a mouse press or touchscreen contact. On Wayland, `platform::touch_frame` borrows the window's display and observes `wl_touch` starts so move/resize requests carry the matching touch serial and seat, without relying on a mouse pointer. |
+| Window frame | Shared logical geometry and platform effects | `app::frame` reserves caption, tab, toolbar and drag regions independently of MVSS. The dropdown choice is frozen at launch. Custom frame input precedes viewer and reader input. macOS retains an `NSWindow` titlebar with native corners and, by default, traffic lights. Windows and Linux share one button size and spacing across their right-side controls; their SVG shapes differ. Windows keeps winit's native sizing and adds a scoped nonclient hit-test hook for resizing, dragging and maximize-hover Snap Layouts, synchronized explicitly during painting; nonclient touch messages continue to the system. Linux starts compositor move/resize from a mouse press or touchscreen contact. On Wayland, `markview_platform::TouchFrame` borrows the window's display and observes `wl_touch` starts so move/resize requests carry the matching touch serial and seat, without relying on a mouse pointer. |
 | Image scheduler | Versioned entries, jobs and published snapshot | Source reads, the pinned HTTP client, the bounded disk cache, bounded decoding and allocation-aware pixel eviction are separate modules. |
 | `LayoutEngine` | Document block cache, shaping/math resources, highlight owner | Snapshot assembly and invalidation stay at this entry point; immutable stylesheet identity is computed once per document pass. |
 | `paginate` | Band segmentation, page distribution, page furniture | Pure geometry over a settled snapshot: no fonts, no I/O, and no effect on the reader's layout. |

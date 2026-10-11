@@ -7,7 +7,6 @@
 use markview_core::fonts::FontConfig;
 use markview_core::layout::{LayoutOptions, TextShaper};
 
-#[cfg(target_os = "linux")]
 #[path = "../tests/support/render_goldens.rs"]
 pub(crate) mod render_goldens;
 

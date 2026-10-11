@@ -294,8 +294,7 @@ impl<P: super::SendEvent> App<P> {
 		let mut chrome = self.chrome();
 		chrome.input_draws = inputs;
 		out.extend(chrome.overlay());
-		#[cfg(target_os = "android")]
-		{
+		if markview_platform::touch_layout() {
 			use crate::layout::{Paint, Rect};
 			use markview_core::style::{ColorField, Condition};
 			let (width, height, _) = self.dimensions();

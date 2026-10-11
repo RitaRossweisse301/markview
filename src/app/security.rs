@@ -28,7 +28,7 @@ impl<P: super::SendEvent> App<P> {
 			let proxy = self.proxy.clone();
 			let document = self.readers.session.path.clone();
 			let revision = self.readers.session.content_version;
-			crate::platform::pick_image(move |file| {
+			markview_platform::pick_image(move |file| {
 				proxy.send(super::Event::ImageSelected {
 					document,
 					revision,

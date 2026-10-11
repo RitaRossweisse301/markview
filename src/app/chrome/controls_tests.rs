@@ -198,10 +198,11 @@ fn controls_fit_minimum_window_and_panel_focus_has_no_document_actions() {
 			height,
 		);
 		let mut expected = vec![Command::NewPage];
-		#[cfg(target_os = "android")]
-		expected.push(Command::SearchOpen);
-		#[cfg(not(target_os = "android"))]
-		expected.push(Command::RevealFolder);
+		if markview_platform::folder_reveal() {
+			expected.push(Command::RevealFolder);
+		} else {
+			expected.push(Command::SearchOpen);
+		}
 		expected.extend([
 			Command::Open,
 			Command::Export,
@@ -354,7 +355,6 @@ fn the_toolbar_and_panel_close_buttons_carry_icons() {
 fn compiled_icons_stay_inside_the_unit_box() {
 	for icon in [
 		icons::OPEN,
-		#[cfg(not(target_os = "android"))]
 		icons::REVEAL,
 		icons::EXPORT,
 		icons::DOWNLOAD,
@@ -462,7 +462,7 @@ fn file_and_style_folder_controls_are_desktop_only() {
 			form(&mut ui, &settings, 0.0, width, height).visible_buttons();
 		assert_eq!(
 			buttons.iter().any(|b| b.action == Command::OpenConfig),
-			!cfg!(target_os = "android")
+			!markview_platform::touch_layout()
 		);
 		assert!(buttons.iter().any(|b| b.action == Command::Reset));
 		for target in [StylesTarget::Reader, StylesTarget::Export] {
@@ -470,7 +470,7 @@ fn file_and_style_folder_controls_are_desktop_only() {
 				style_controls(target, None, false, width, height, Lang::En);
 			assert_eq!(
 				buttons.iter().any(|b| b.action == Command::StylesFolder),
-				!cfg!(target_os = "android")
+				!markview_platform::touch_layout()
 			);
 			assert!(buttons.iter().any(|b| b.action == Command::Settings));
 		}
@@ -494,7 +494,7 @@ fn panel_offers_scroll_speed_only_on_desktop() {
 			for action in [Command::ScrollSpeed(-1), Command::ScrollSpeed(1)] {
 				assert_eq!(
 					buttons.iter().any(|b| b.action == action),
-					!cfg!(target_os = "android"),
+					!markview_platform::touch_layout(),
 					"{action:?}, phone={phone}, width={width}"
 				);
 			}
@@ -725,5 +725,12 @@ fn launch_options_belong_to_the_interface_section() {
 			found += 1;
 		}
 	}
-	assert_eq!(found, if cfg!(target_os = "android") { 0 } else { 2 });
+	assert_eq!(
+		found,
+		if markview_platform::touch_layout() {
+			0
+		} else {
+			2
+		}
+	);
 }

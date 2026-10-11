@@ -1,5 +1,3 @@
-#![cfg(target_os = "linux")]
-
 use std::{
 	io::{Read, Write},
 	net::TcpListener,
@@ -12,6 +10,9 @@ use std::{
 
 #[test]
 fn reader_releases_the_shell_while_the_background_process_is_running() {
+	if !markview_platform::test_support::shell_launch() {
+		return;
+	}
 	for arguments in
 		[vec![], vec!["notes.md"], vec!["--foreground", "notes.md"]]
 	{
@@ -98,6 +99,9 @@ fn reader_releases_the_shell_while_the_background_process_is_running() {
 
 #[test]
 fn help_errors_and_stylesheet_commands_stay_synchronous() {
+	if !markview_platform::test_support::shell_launch() {
+		return;
+	}
 	let directory = tempfile::tempdir().unwrap();
 	for (arguments, success, expected) in [
 		(vec!["--help"], true, "--foreground"),
@@ -132,7 +136,9 @@ fn help_errors_and_stylesheet_commands_stay_synchronous() {
 
 #[test]
 fn startup_errors_use_dialogs_for_background_and_stderr_for_foreground() {
-	use std::os::unix::fs::PermissionsExt;
+	if !markview_platform::test_support::shell_launch() {
+		return;
+	}
 
 	let directory = tempfile::tempdir().unwrap();
 	let bin = directory.path().join("bin");
@@ -143,8 +149,7 @@ fn startup_errors_use_dialogs_for_background_and_stderr_for_foreground() {
 		"#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$MARKVIEW_TEST_DIALOG.tmp\"\nmv \"$MARKVIEW_TEST_DIALOG.tmp\" \"$MARKVIEW_TEST_DIALOG\"\n",
 	)
 	.unwrap();
-	std::fs::set_permissions(&zenity, std::fs::Permissions::from_mode(0o755))
-		.unwrap();
+	markview_platform::test_support::set_mode(&zenity, 0o755).unwrap();
 	let dialog = directory.path().join("dialog.txt");
 	let styles = directory.path().join("markview/styles");
 	std::fs::create_dir_all(&styles).unwrap();

@@ -598,10 +598,12 @@ mod tests {
 	}
 
 	/// A store must never write through a link planted in the cache directory.
-	#[cfg(unix)]
 	#[test]
 	fn a_planted_cache_symlink_is_never_written_through() {
-		use std::os::unix::fs::symlink;
+		if !markview_platform::test_support::special_files() {
+			return;
+		}
+		use markview_platform::test_support::symlink;
 		let dir = tempfile::tempdir().unwrap();
 		let cache = Cache::new(dir.path().to_owned());
 		let victim = dir.path().join("victim");

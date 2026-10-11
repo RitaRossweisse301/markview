@@ -11,7 +11,6 @@ pub(crate) fn validate_url(value: &str) -> Result<url::Url> {
 	Ok(url)
 }
 
-#[cfg(any(target_os = "android", test))]
 pub(crate) fn shared_url(text: &str) -> Option<String> {
 	let mut lines = text.trim_matches(['\r', '\n']).lines();
 	let first = lines.next()?;
@@ -37,7 +36,6 @@ pub(crate) fn shared_url(text: &str) -> Option<String> {
 	validate_url(candidate).ok().map(|url| url.to_string())
 }
 
-#[cfg(any(target_os = "android", test))]
 fn plain_share_title(title: &str) -> bool {
 	use crate::document::{BlockKind, InlineKind, parse, plain_text};
 	let document = parse(title.to_owned());

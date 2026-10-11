@@ -28,11 +28,13 @@ pub enum WindowLayout {
 }
 impl WindowLayout {
 	pub fn resolved(self) -> Self {
-		match self {
-			Self::System if cfg!(target_os = "macos") => Self::Macos,
-			Self::System if cfg!(target_os = "linux") => Self::Linux,
-			Self::System => Self::Windows,
-			layout => layout,
+		if self != Self::System {
+			return self;
+		}
+		match markview_platform::window_buttons() {
+			markview_platform::WindowButtons::Windows => Self::Windows,
+			markview_platform::WindowButtons::Macos => Self::Macos,
+			markview_platform::WindowButtons::Linux => Self::Linux,
 		}
 	}
 }
@@ -104,8 +106,8 @@ impl Default for ReaderSettings {
 			codeblock_theme_override: None,
 			codeblock_wrap: false,
 			scroll_speed: 1.0,
-			single_instance: cfg!(target_os = "android"),
-			restore_session: cfg!(target_os = "android"),
+			single_instance: markview_platform::mobile_session(),
+			restore_session: markview_platform::mobile_session(),
 		}
 	}
 }
@@ -401,25 +403,7 @@ fn default_cjk_type() -> CjkType {
 	}
 }
 pub fn config_path() -> Option<PathBuf> {
-	#[cfg(target_os = "android")]
-	let base = crate::platform::android::data_path();
-	#[cfg(target_os = "windows")]
-	let base = std::env::var_os("APPDATA").map(PathBuf::from);
-	#[cfg(target_os = "macos")]
-	let base = std::env::var_os("HOME")
-		.map(|p| PathBuf::from(p).join("Library/Application Support"));
-	#[cfg(not(any(
-		target_os = "windows",
-		target_os = "macos",
-		target_os = "android"
-	)))]
-	let base = std::env::var_os("XDG_CONFIG_HOME")
-		.map(PathBuf::from)
-		.filter(|p| p.is_absolute())
-		.or_else(|| {
-			std::env::var_os("HOME").map(|p| PathBuf::from(p).join(".config"))
-		});
-	base.map(|p| p.join("markview/settings.toml"))
+	markview_platform::config_base().map(|p| p.join("markview/settings.toml"))
 }
 
 #[cfg(test)]

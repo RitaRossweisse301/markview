@@ -947,19 +947,17 @@ fn loader_publishes_pixels_and_reports_failures() {
 }
 
 /// A FIFO with no writer is refused instead of holding an image pipeline.
-#[cfg(unix)]
 #[test]
 fn a_fifo_image_is_refused_without_blocking_the_scheduler() {
+	if !markview_platform::test_support::special_files() {
+		return;
+	}
 	let dir = tempfile::tempdir().unwrap();
 	let path = dir.path().join("note.md");
 	let source = "![a](pipe.png) ![b](b.png)";
 	fs::write(&path, source).unwrap();
 	fs::write(dir.path().join("b.png"), png(6, 4, [9, 8, 7, 255])).unwrap();
-	let status = std::process::Command::new("mkfifo")
-		.arg(dir.path().join("pipe.png"))
-		.status()
-		.expect("run mkfifo");
-	assert!(status.success());
+	markview_platform::test_support::fifo(dir.path().join("pipe.png"));
 	let doc = crate::document::parse(source.to_string());
 	let mut images = images(true);
 	images.prepare(
@@ -1444,19 +1442,25 @@ fn offline_serves_a_cached_remote_image_and_fails_without_one() {
 	);
 }
 
-#[cfg(unix)]
 #[test]
 fn non_utf8_grants_preserve_remote_image_loading_and_cache_isolation() {
+	if !markview_platform::test_support::special_files() {
+		return;
+	}
 	use crate::security::{Resource, Security};
-	use std::{ffi::OsString, os::unix::ffi::OsStringExt};
+
 	let dir = tempfile::tempdir().unwrap();
 	let root = dir.path().join("cache");
 	let file = dir
 		.path()
-		.join(OsString::from_vec(b"image-\xff.png".to_vec()));
-	let other = dir
-		.path()
-		.join(OsString::from_vec(b"image-\xfe.png".to_vec()));
+		.join(markview_platform::test_support::raw_os_string(
+			b"image-\xff.png".to_vec(),
+		));
+	let other =
+		dir.path()
+			.join(markview_platform::test_support::raw_os_string(
+				b"image-\xfe.png".to_vec(),
+			));
 	let bytes = png(5, 3, [4, 5, 6, 255]);
 	assert_eq!(file.to_string_lossy(), other.to_string_lossy());
 	let url = "https://example.com/cached.png";

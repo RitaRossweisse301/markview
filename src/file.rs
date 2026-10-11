@@ -1,10 +1,6 @@
 //! Bounded, read-only local file loading.
 use anyhow::{Context, Result, bail};
-use std::{
-	fs,
-	io::{self, Read},
-	path::Path,
-};
+use std::{fs, io::Read, path::Path};
 pub const MAX_FILE_BYTES: u64 = 32 * 1024 * 1024;
 
 /// Opens `path` for reading, refusing anything that is not a regular file.
@@ -18,31 +14,12 @@ pub const MAX_FILE_BYTES: u64 = 32 * 1024 * 1024;
 /// swapped for a FIFO between check and open cannot reintroduce a wait, because
 /// the open itself does not wait.
 pub(crate) fn open_regular(path: &Path) -> Result<fs::File> {
-	let file = open_nonblocking(path)
+	let file = markview_platform::open_nonblocking(path)
 		.with_context(|| format!("Cannot open {}", path.display()))?;
 	if !file.metadata()?.is_file() {
 		bail!("Not a regular file: {}", path.display());
 	}
 	Ok(file)
-}
-
-#[cfg(unix)]
-fn open_nonblocking(path: &Path) -> io::Result<fs::File> {
-	use std::os::unix::fs::OpenOptionsExt;
-	// `O_NONBLOCK` has no effect on a regular file; it only decides whether the
-	// open waits. Standard Rust opens already set `O_CLOEXEC`, so no descriptor
-	// escapes into a child.
-	fs::OpenOptions::new()
-		.read(true)
-		.custom_flags(libc::O_NONBLOCK)
-		.open(path)
-}
-
-#[cfg(not(unix))]
-fn open_nonblocking(path: &Path) -> io::Result<fs::File> {
-	// Windows has no portable non-blocking open, so opening a device or a pipe
-	// can still wait there; the type check still refuses it once it returns.
-	fs::File::open(path)
 }
 
 pub fn read_document(path: &Path) -> Result<String> {
@@ -74,24 +51,14 @@ pub fn read_document(path: &Path) -> Result<String> {
 
 #[cfg(test)]
 mod tests {
-	#[cfg(unix)]
 	use std::time::Duration;
 
 	use super::*;
 
-	/// Leaves a real FIFO, the special file an open would wait on.
-	#[cfg(unix)]
-	fn fifo(path: &Path) {
-		let status = std::process::Command::new("mkfifo")
-			.arg(path)
-			.status()
-			.expect("run mkfifo");
-		assert!(status.success(), "mkfifo {} failed", path.display());
-	}
+	use markview_platform::test_support::fifo;
 
 	/// Runs `read` off the test thread, so a regression fails the test instead
 	/// of hanging the suite.
-	#[cfg(unix)]
 	fn within_a_second(read: impl FnOnce() -> Result<String> + Send + 'static) {
 		let (send, recv) = std::sync::mpsc::channel();
 		std::thread::spawn(move || {
@@ -103,9 +70,11 @@ mod tests {
 		assert!(result.is_err(), "a FIFO was read as a document");
 	}
 
-	#[cfg(unix)]
 	#[test]
 	fn a_fifo_document_is_refused_without_waiting() {
+		if !markview_platform::test_support::special_files() {
+			return;
+		}
 		let dir = tempfile::tempdir().unwrap();
 		let path = dir.path().join("note.md");
 		fifo(&path);

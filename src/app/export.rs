@@ -309,8 +309,7 @@ impl<P: super::SendEvent> App<P> {
 					},
 				);
 				if rebuild {
-					#[cfg(target_os = "android")]
-					if let Err(error) = crate::platform::android::call_string(
+					if let Err(error) = markview_platform::android::call_string(
 						"publishExport",
 						&path.to_string_lossy(),
 					) {
@@ -374,7 +373,7 @@ impl<P: super::SendEvent> App<P> {
 	/// result. A platform that cannot start a viewer does not undo the file,
 	/// so its failure is reported beside the export's own status.
 	fn open_export(&mut self, path: &Path, message: String) {
-		match crate::platform::open_external(path) {
+		match markview_platform::open_external(path) {
 			Ok(()) => self.notify(&message, false, 6),
 			Err(error) => self.notify(
 				&self
@@ -536,8 +535,7 @@ impl<P: super::SendEvent> App<P> {
 					},
 				);
 				if job.rebuild {
-					#[cfg(target_os = "android")]
-					if let Err(error) = crate::platform::android::call_string(
+					if let Err(error) = markview_platform::android::call_string(
 						"publishExport",
 						&path.to_string_lossy(),
 					) {
@@ -567,46 +565,24 @@ impl<P: super::SendEvent> App<P> {
 }
 
 /// Construct native dialogs on the UI thread; await their result on the I/O service.
-#[cfg(not(target_os = "android"))]
 fn choose_output(
 	stem: &str,
 	settings: &ExportSettings,
 	directory: Option<&Path>,
 	window: Option<&winit::window::Window>,
-) -> impl std::future::Future<Output = Option<PathBuf>> + Send + use<> {
-	// The format names the export panel offers, so the dialog and the page
-	// behind it cannot drift apart.
+) -> impl Future<Output = Option<PathBuf>> + Send + use<> {
 	let lang = crate::lang::Lang::default();
 	let (extension, label) = match settings.format {
 		ExportFormat::Pdf => ("pdf", lang.export_pdf()),
 		ExportFormat::Png => ("png", lang.export_png()),
 	};
-	let mut dialog = rfd::AsyncFileDialog::new()
-		.set_file_name(format!("{stem}.{extension}"))
-		.add_filter(label, &[extension]);
-	if let Some(directory) = directory.filter(|dir| dir.is_dir()) {
-		dialog = dialog.set_directory(directory);
-	}
-	if let Some(window) = window {
-		dialog = dialog.set_parent(window);
-	}
-	// Construct native dialogs on the UI thread and await them on the I/O service.
-	let selection = dialog.save_file();
-	async move { selection.await.map(|file| file.path().to_owned()) }
-}
-
-#[cfg(target_os = "android")]
-fn choose_output(
-	stem: &str,
-	settings: &ExportSettings,
-	_directory: Option<&Path>,
-	_window: Option<&winit::window::Window>,
-) -> impl std::future::Future<Output = Option<PathBuf>> + Send + use<> {
-	let extension = match settings.format {
-		ExportFormat::Pdf => "pdf",
-		ExportFormat::Png => "png",
-	};
-	crate::platform::android::choose_output(format!("{stem}.{extension}"))
+	markview_platform::choose_output(
+		format!("{stem}.{extension}"),
+		extension,
+		label,
+		directory,
+		window,
+	)
 }
 
 fn wait_for_output(

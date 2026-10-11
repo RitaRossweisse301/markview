@@ -1,20 +1,31 @@
 //! OS effects stay outside the reading core.
 
 #[cfg(target_os = "android")]
-pub(crate) mod android;
+#[path = "android.rs"]
+pub mod android;
+#[cfg(not(target_os = "android"))]
+#[path = "android_stub.rs"]
+pub mod android;
 
 #[cfg(windows)]
-pub(crate) mod window_frame;
+#[path = "window_frame.rs"]
+mod native_window_frame;
+#[cfg(windows)]
+pub use native_window_frame::NativeFrame;
 
 #[cfg(target_os = "linux")]
-pub(crate) mod touch_frame;
+#[path = "touch_frame.rs"]
+mod native_touch_frame;
+#[cfg(target_os = "linux")]
+pub use native_touch_frame::TouchFrame;
 
 #[cfg(target_os = "linux")]
-pub(crate) mod appearance;
+#[path = "appearance.rs"]
+mod native_appearance;
 
 /// Show fatal reader errors without relying on a terminal or a working GPU.
 #[cfg(not(target_os = "android"))]
-pub(crate) fn show_error(message: &str) {
+pub fn show_error(message: &str) {
 	rfd::MessageDialog::new()
 		.set_title("Markview")
 		.set_description(message)
@@ -26,7 +37,10 @@ pub(crate) fn show_error(message: &str) {
 /// Move native traffic lights without replacing their system behavior.
 #[cfg(target_os = "macos")]
 #[allow(unsafe_code)]
-pub(crate) fn align_traffic_lights(window: &winit::window::Window) {
+pub fn align_traffic_lights(
+	window: &winit::window::Window,
+	titlebar_height: f64,
+) {
 	use objc2_app_kit::{NSView, NSWindowButton};
 	use winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
 	let RawWindowHandle::AppKit(handle) =
@@ -54,7 +68,8 @@ pub(crate) fn align_traffic_lights(window: &winit::window::Window) {
 			continue;
 		};
 		let mut rect = parent.convertRect_toView(button.frame(), Some(view));
-		let (top, bottom) = crate::app::frame::traffic_light_margins(
+		let (top, bottom) = traffic_light_margins(
+			titlebar_height,
 			rect.size.height,
 			window.scale_factor(),
 		);
@@ -78,7 +93,7 @@ pub(crate) fn align_traffic_lights(window: &winit::window::Window) {
 
 /// Honor the desktop's titlebar double-click preference.
 #[cfg(target_os = "macos")]
-pub(crate) fn titlebar_double_click(window: &winit::window::Window) {
+pub fn titlebar_double_click(window: &winit::window::Window) {
 	use objc2_foundation::{NSUserDefaults, ns_string};
 	let action = NSUserDefaults::standardUserDefaults()
 		.stringForKey(ns_string!("AppleActionOnDoubleClick"))
@@ -102,7 +117,7 @@ use windows_sys::Win32::UI::WindowsAndMessaging::SYSTEM_PARAMETERS_INFO_ACTION a
 /// parent console to borrow, and its output is dropped.
 #[cfg(windows)]
 #[allow(unsafe_code)]
-pub(crate) fn attach_parent_console() {
+pub fn attach_parent_console() {
 	// SAFETY: `AttachConsole` reads one process id and attaches this process
 	// to that console; failing leaves the process unchanged.
 	unsafe {
@@ -114,7 +129,7 @@ pub(crate) fn attach_parent_console() {
 
 /// Other platforms keep the console they were launched from.
 #[cfg(not(windows))]
-pub(crate) fn attach_parent_console() {}
+pub fn attach_parent_console() {}
 
 /// What one wheel notch travels on each axis, as the desktop configures it.
 ///
@@ -123,14 +138,14 @@ pub(crate) fn attach_parent_console() {}
 /// detent with no user setting behind it, and scale only the continuous axes a
 /// touchpad produces.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub(crate) struct WheelNotch {
+pub struct WheelNotch {
 	pub vertical: WheelAmount,
 	pub horizontal: WheelAmount,
 }
 
 /// How far one wheel notch travels.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub(crate) enum WheelAmount {
+pub enum WheelAmount {
 	/// A whole number of text lines, or of characters across when sideways.
 	Lines(f32),
 	/// One screenful along the axis the notch moves.
@@ -144,7 +159,7 @@ const DEFAULT_WHEEL_LINES: f32 = 3.0;
 
 /// Reads the desktop's wheel-notch choice for each axis.
 #[cfg(windows)]
-pub(crate) fn wheel_notch() -> WheelNotch {
+pub fn wheel_notch() -> WheelNotch {
 	use windows_sys::Win32::UI::WindowsAndMessaging::{
 		SPI_GETWHEELSCROLLCHARS, SPI_GETWHEELSCROLLLINES,
 	};
@@ -183,7 +198,7 @@ fn axis(action: SystemParametersInfoAction) -> WheelAmount {
 
 /// macOS reports the lines the desktop's own speed produced, so one is enough.
 #[cfg(target_os = "macos")]
-pub(crate) fn wheel_notch() -> WheelNotch {
+pub fn wheel_notch() -> WheelNotch {
 	let lines = WheelAmount::Lines(1.0);
 	WheelNotch {
 		vertical: lines,
@@ -195,7 +210,7 @@ pub(crate) fn wheel_notch() -> WheelNotch {
 /// detent, and neither desktop publishes a lines-per-notch value, so a detent
 /// takes the conventional three; Windows ships the same default.
 #[cfg(not(any(windows, target_os = "macos")))]
-pub(crate) fn wheel_notch() -> WheelNotch {
+pub fn wheel_notch() -> WheelNotch {
 	let lines = WheelAmount::Lines(DEFAULT_WHEEL_LINES);
 	WheelNotch {
 		vertical: lines,
@@ -235,7 +250,7 @@ impl Clipboard {
 	}
 }
 
-pub(crate) fn pick_image(
+pub fn pick_image(
 	done: impl FnOnce(Option<std::path::PathBuf>) + Send + 'static,
 ) {
 	#[cfg(not(target_os = "android"))]
@@ -253,7 +268,7 @@ pub(crate) fn pick_image(
 	android::pick_document(done);
 }
 
-pub(crate) fn pick_document(
+pub fn pick_document(
 	done: impl FnOnce(Option<std::path::PathBuf>) + Send + 'static,
 ) {
 	#[cfg(not(target_os = "android"))]
@@ -268,7 +283,7 @@ pub(crate) fn pick_document(
 	android::pick_document(done);
 }
 
-pub(crate) fn open_external(
+pub fn open_external(
 	target: impl AsRef<std::ffi::OsStr>,
 ) -> anyhow::Result<()> {
 	#[cfg(not(target_os = "android"))]
@@ -297,4 +312,89 @@ mod tests {
 			}
 		);
 	}
+}
+
+mod conventions;
+pub use conventions::*;
+mod files;
+pub use files::*;
+mod background;
+pub use background::{background_allowed, detach};
+mod icon;
+pub use icon::window_icon;
+mod window;
+pub use window::*;
+mod events;
+#[cfg(any(test, target_os = "android"))]
+mod requests;
+pub use events::{NativeEvent, install_events, shutdown_events};
+pub mod dm;
+#[cfg(target_os = "macos")]
+mod open_document;
+#[cfg(feature = "test-support")]
+pub mod test_support;
+
+#[cfg(target_os = "android")]
+pub fn show_error(_: &str) {}
+#[cfg(not(target_os = "macos"))]
+pub fn align_traffic_lights(_: &winit::window::Window, _: f64) {}
+#[cfg(not(target_os = "macos"))]
+pub fn titlebar_double_click(window: &winit::window::Window) {
+	window.set_maximized(!window.is_maximized());
+}
+
+/// Position system buttons within the application's titlebar.
+pub fn traffic_light_margins(
+	titlebar: f64,
+	height: f64,
+	scale: f64,
+) -> (f64, f64) {
+	let space = titlebar - height;
+	let top = (space * 0.95 / 1.95 * scale).round() / scale;
+	let top = top.clamp(space / 2.1, space / 2.0);
+	(top, space - top)
+}
+
+#[cfg(target_os = "linux")]
+pub async fn watch_theme(
+	changed: impl Fn(winit::window::Theme),
+) -> anyhow::Result<()> {
+	Ok(native_appearance::watch(changed).await?)
+}
+#[cfg(not(target_os = "linux"))]
+pub async fn watch_theme(
+	_: impl Fn(winit::window::Theme),
+) -> anyhow::Result<()> {
+	Ok(())
+}
+
+#[cfg(not(target_os = "android"))]
+pub fn choose_output(
+	name: String,
+	extension: &str,
+	label: &str,
+	directory: Option<&std::path::Path>,
+	window: Option<&winit::window::Window>,
+) -> impl Future<Output = Option<std::path::PathBuf>> + Send + use<> {
+	let mut dialog = rfd::AsyncFileDialog::new()
+		.set_file_name(name)
+		.add_filter(label, &[extension]);
+	if let Some(directory) = directory.filter(|dir| dir.is_dir()) {
+		dialog = dialog.set_directory(directory);
+	}
+	if let Some(window) = window {
+		dialog = dialog.set_parent(window);
+	}
+	let selection = dialog.save_file();
+	async move { selection.await.map(|file| file.path().to_owned()) }
+}
+#[cfg(target_os = "android")]
+pub fn choose_output(
+	name: String,
+	_: &str,
+	_: &str,
+	_: Option<&std::path::Path>,
+	_: Option<&winit::window::Window>,
+) -> impl Future<Output = Option<std::path::PathBuf>> + Send + use<> {
+	android::choose_output(name)
 }

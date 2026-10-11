@@ -72,7 +72,7 @@ fn read_locale() -> Option<String> {
 	#[cfg(test)]
 	let locale = Some("en-US".to_owned());
 	#[cfg(not(test))]
-	let locale = sys_locale::get_locale();
+	let locale = markview_platform::system_locale();
 	locale.map(|locale| normalize(&locale))
 }
 

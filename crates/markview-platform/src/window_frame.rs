@@ -1,9 +1,6 @@
 //! `winit` owns window styles and client sizing; this hook adds native hit tests.
 #![allow(unsafe_code)]
-use crate::{
-	app::frame::{Caption, Layout},
-	settings::WindowLayout,
-};
+use crate::{FrameMetrics, HitTest};
 use anyhow::{Result, anyhow};
 use std::{cell::Cell, ptr};
 use windows_sys::Win32::{
@@ -27,8 +24,7 @@ use winit::{
 const SUBCLASS: usize = 0x4d56;
 
 struct State {
-	style: WindowLayout,
-	tab_end: Cell<Option<f32>>,
+	hit_test: Box<dyn Fn(FrameMetrics, f32, f32) -> HitTest>,
 	fullscreen: Cell<bool>,
 	hover: Cell<bool>,
 	pressed: Cell<bool>,
@@ -37,24 +33,23 @@ struct State {
 }
 
 /// The stable allocation outlives the hook and drops before the `Window`.
-pub(crate) struct NativeFrame {
+pub struct NativeFrame {
 	hwnd: HWND,
 	state: Box<State>,
 }
 impl NativeFrame {
 	pub fn new(
 		window: &Window,
-		style: WindowLayout,
+		hit_test: impl Fn(FrameMetrics, f32, f32) -> HitTest + 'static,
 		redraw: impl Fn() + 'static,
-	) -> Result<Self> {
+	) -> Result<Option<Self>> {
 		let RawWindowHandle::Win32(handle) = window.window_handle()?.as_raw()
 		else {
 			unreachable!();
 		};
 		let hwnd = handle.hwnd.get() as HWND;
 		let state = Box::new(State {
-			style,
-			tab_end: Cell::new(None),
+			hit_test: Box::new(hit_test),
 			fullscreen: Cell::new(false),
 			hover: Cell::new(false),
 			pressed: Cell::new(false),
@@ -69,19 +64,13 @@ impl NativeFrame {
 		{
 			return Err(anyhow!("Cannot install window caption hit testing"));
 		}
-		Ok(Self { hwnd, state })
+		Ok(Some(Self { hwnd, state }))
 	}
 	pub fn set_fullscreen(&self, fullscreen: bool) {
 		self.state.fullscreen.set(fullscreen);
 	}
-	pub fn set_tab_end(&self, end: f32) {
-		self.state.tab_end.set(Some(end));
-	}
-	pub fn feedback(&self) -> (Option<Caption>, Option<Caption>) {
-		(
-			self.state.hover.get().then_some(Caption::Expand),
-			self.state.pressed.get().then_some(Caption::Expand),
-		)
+	pub fn feedback(&self) -> (bool, bool) {
+		(self.state.hover.get(), self.state.pressed.get())
 	}
 	pub fn cancel(&self) {
 		if self.state.pressed.get() {
@@ -105,10 +94,9 @@ impl Drop for NativeFrame {
 	}
 }
 impl State {
-	fn layout(&self, hwnd: HWND) -> Layout {
+	fn hit(&self, hwnd: HWND, x: f32, y: f32) -> HitTest {
 		let mut rect = RECT::default();
-		// SAFETY: `hwnd` belongs to the callback; `rect` is writable. DPI
-		// and maximization queries do not retain pointers or send callbacks.
+		// SAFETY: `hwnd` is alive during the callback; these queries retain no pointers.
 		let (scale, maximized) = unsafe {
 			GetClientRect(hwnd, &mut rect);
 			(
@@ -116,17 +104,17 @@ impl State {
 				IsZoomed(hwnd) != 0,
 			)
 		};
-		let layout = Layout::new(
-			self.style,
-			false,
-			(rect.right - rect.left) as f32 / scale,
-			(rect.bottom - rect.top) as f32 / scale,
-			self.fullscreen.get(),
-			maximized,
-		);
-		self.tab_end
-			.get()
-			.map_or(layout, |end| layout.with_tab_end(end))
+		(self.hit_test)(
+			FrameMetrics {
+				width: (rect.right - rect.left) as f32 / scale,
+				height: (rect.bottom - rect.top) as f32 / scale,
+				scale,
+				fullscreen: self.fullscreen.get(),
+				maximized,
+			},
+			x,
+			y,
+		)
 	}
 	fn point(&self, hwnd: HWND, mut point: POINT) -> (f32, f32) {
 		// SAFETY: `point` is writable and `hwnd` is alive during its callback.
@@ -143,7 +131,7 @@ impl State {
 			GetCursorPos(&mut point);
 		}
 		let (x, y) = self.point(hwnd, point);
-		self.layout(hwnd).caption_at(x, y) == Some(Caption::Expand)
+		self.hit(hwnd, x, y) == HitTest::Maximize
 	}
 	fn feedback(&self, hover: bool, pressed: bool) {
 		if self.hover.replace(hover) != hover || self.pressed.get() != pressed {
@@ -172,9 +160,11 @@ unsafe extern "system" fn subclass(
 				y: ((lparam >> 16) as u16 as i16) as i32,
 			};
 			let (x, y) = state.point(hwnd, point);
-			let layout = state.layout(hwnd);
-			if let Some(edge) = layout.resize_at(x, y) {
-				return match edge {
+			return match state.hit(hwnd, x, y) {
+				HitTest::Client => HTCLIENT,
+				HitTest::Caption => HTCAPTION,
+				HitTest::Maximize => HTMAXBUTTON,
+				HitTest::Resize(edge) => match edge {
 					ResizeDirection::North => HTTOP,
 					ResizeDirection::South => HTBOTTOM,
 					ResizeDirection::West => HTLEFT,
@@ -183,14 +173,7 @@ unsafe extern "system" fn subclass(
 					ResizeDirection::NorthEast => HTTOPRIGHT,
 					ResizeDirection::SouthWest => HTBOTTOMLEFT,
 					ResizeDirection::SouthEast => HTBOTTOMRIGHT,
-				} as LRESULT;
-			}
-			return if layout.caption_at(x, y) == Some(Caption::Expand) {
-				HTMAXBUTTON
-			} else if layout.draggable(x, y) {
-				HTCAPTION
-			} else {
-				HTCLIENT
+				},
 			} as LRESULT;
 		}
 		WM_SETCURSOR if lparam as u16 as u32 == HTMAXBUTTON => {
@@ -274,55 +257,45 @@ unsafe extern "system" fn subclass(
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use windows_sys::Win32::Graphics::Gdi::ClientToScreen;
 	use winit::{
-		dpi::LogicalSize, event_loop::EventLoop,
-		platform::windows::EventLoopBuilderExtWindows,
+		event_loop::EventLoop, platform::windows::EventLoopBuilderExtWindows,
 	};
-
 	#[test]
-	#[ignore = "requires a Windows desktop"]
 	#[allow(deprecated)]
-	fn native_caption_hit_testing_tracks_empty_space_and_tab_changes() {
+	fn native_hit_test_uses_the_application_callback() {
 		let event_loop =
 			EventLoop::builder().with_any_thread(true).build().unwrap();
 		let window = event_loop
 			.create_window(
 				Window::default_attributes()
 					.with_visible(false)
-					.with_decorations(false)
-					.with_inner_size(LogicalSize::new(800, 500)),
+					.with_decorations(false),
 			)
 			.unwrap();
-		let native =
-			NativeFrame::new(&window, WindowLayout::Windows, || {}).unwrap();
-		let hit = |x: f32, y: f32| {
-			// SAFETY: The hidden window and its hook are alive on this thread;
-			// coordinate conversion and hit testing retain no Rust pointers.
-			unsafe {
-				let scale = GetDpiForWindow(native.hwnd).max(96) as f32 / 96.0;
-				let mut point = POINT {
-					x: (x * scale) as i32,
-					y: (y * scale) as i32,
-				};
-				ClientToScreen(native.hwnd, &mut point);
-				let coordinates = ((point.y as u16 as usize) << 16
-					| point.x as u16 as usize) as LPARAM;
-				SendMessageW(native.hwnd, WM_NCHITTEST, 0, coordinates) as u32
-			}
-		};
-		let layout = native.state.layout(native.hwnd);
-		native.set_tab_end(layout.tabs.x);
-		assert_eq!(hit(200.0, 20.0), HTCAPTION);
-		native.set_tab_end(180.0);
-		assert_eq!(hit(80.0, 20.0), HTCLIENT);
-		assert_eq!(hit(200.0, 20.0), HTCAPTION);
-		assert_eq!(hit(layout.toolbar_x + 16.0, 20.0), HTCLIENT);
-		let (_, expand) = layout.captions()[1];
-		assert_eq!(hit(expand.x + expand.w / 2.0, 20.0), HTMAXBUTTON);
-		// SAFETY: The window and its hook are alive on this thread, and the
-		// shared cursor remains valid without cleanup.
+		let native = NativeFrame::new(
+			&window,
+			|metrics, _, _| {
+				assert!(
+					metrics.width > 0.0
+						&& metrics.height > 0.0
+						&& metrics.scale > 0.0
+				);
+				if metrics.fullscreen {
+					HitTest::Client
+				} else {
+					HitTest::Maximize
+				}
+			},
+			|| {},
+		)
+		.unwrap()
+		.unwrap();
+		// SAFETY: The hidden window and its hook live on this thread during these messages.
 		unsafe {
+			assert_eq!(
+				SendMessageW(native.hwnd, WM_NCHITTEST, 0, 0),
+				HTMAXBUTTON as isize
+			);
 			assert_eq!(
 				SendMessageW(
 					native.hwnd,
@@ -333,13 +306,11 @@ mod tests {
 				1
 			);
 			assert_eq!(GetCursor(), LoadCursorW(ptr::null_mut(), IDC_HAND));
+			native.set_fullscreen(true);
+			assert_eq!(
+				SendMessageW(native.hwnd, WM_NCHITTEST, 0, 0),
+				HTCLIENT as isize
+			);
 		}
-		assert_eq!(hit(1.0, 1.0), HTTOPLEFT);
-		native.set_tab_end(layout.toolbar_x + 100.0);
-		assert_eq!(hit(200.0, 20.0), HTCLIENT);
-		assert_eq!(hit(layout.drag.x + 10.0, 20.0), HTCAPTION);
-		native.set_fullscreen(true);
-		assert_eq!(hit(layout.drag.x + 10.0, 20.0), HTCLIENT);
-		assert_eq!(hit(1.0, 1.0), HTCLIENT);
 	}
 }

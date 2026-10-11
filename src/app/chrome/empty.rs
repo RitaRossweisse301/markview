@@ -22,7 +22,7 @@ fn layout(ui: &mut TextShaper, width: f32, height: f32, lang: Lang) -> Layout {
 	let columns = w >= 480.0;
 	let section_w = if columns { (w - 40.0) / 2.0 } else { w };
 	let mut detail = [
-		if cfg!(target_os = "android") {
+		if markview_platform::touch_layout() {
 			lang.empty_open_detail_android()
 		} else {
 			lang.empty_open_detail()
@@ -45,7 +45,7 @@ fn layout(ui: &mut TextShaper, width: f32, height: f32, lang: Lang) -> Layout {
 	};
 	let mut hint = controls::wrap(
 		ui,
-		&lang.empty_paste_hint(if cfg!(target_os = "macos") {
+		&lang.empty_paste_hint(if markview_platform::command_key() {
 			"⌘V"
 		} else {
 			"Ctrl+V"
@@ -241,10 +241,10 @@ pub(super) fn draw(
 			Paint::Styled(Condition::Ui, C::Muted),
 		));
 	}
-	if !cfg!(target_os = "android") {
+	if !markview_platform::touch_layout() {
 		let open = l.buttons[0].rect;
 		out.extend(ui.centered_label(
-			if cfg!(target_os = "macos") {
+			if markview_platform::command_key() {
 				"⌘O"
 			} else {
 				"Ctrl+O"

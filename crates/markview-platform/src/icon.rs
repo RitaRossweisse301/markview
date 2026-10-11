@@ -6,16 +6,18 @@ use std::sync::OnceLock;
 use winit::window::Icon;
 
 #[cfg(target_os = "windows")]
-const WINDOWS_ICON: &[u8] = include_bytes!("../../assets/icons/markview.ico");
+const WINDOWS_ICON: &[u8] =
+	include_bytes!("../../../assets/icons/markview.ico");
 
 #[cfg(not(target_os = "windows"))]
-const LINUX_ICON: &[u8] = include_bytes!("../../assets/icons/markview-128.png");
+const LINUX_ICON: &[u8] =
+	include_bytes!("../../../assets/icons/markview-128.png");
 
 /// Returns the window icon, decoding the embedded bytes at most once.
 ///
 /// winit wants an owned [`Icon`], so the decoded RGBA buffer is cached and a
 /// fresh icon is built from it.
-pub(super) fn window_icon() -> Option<Icon> {
+pub fn window_icon() -> Option<Icon> {
 	type Pixels = (u32, u32, Vec<u8>);
 	static PIXELS: OnceLock<Option<Pixels>> = OnceLock::new();
 	let (width, height, data) = PIXELS.get_or_init(decode).as_ref()?;

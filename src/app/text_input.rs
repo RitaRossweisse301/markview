@@ -59,7 +59,7 @@ trait InputClipboard {
 	fn read(&mut self) -> anyhow::Result<String>;
 	fn write(&mut self, text: String) -> anyhow::Result<()>;
 }
-impl InputClipboard for crate::platform::Clipboard {
+impl InputClipboard for markview_platform::Clipboard {
 	fn read(&mut self) -> anyhow::Result<String> {
 		self.read()
 	}
@@ -77,7 +77,7 @@ fn key(
 	text: Option<&str>,
 	mods: ModifiersState,
 ) -> Outcome {
-	let mac = cfg!(target_os = "macos");
+	let mac = markview_platform::command_key();
 	let primary = if mac {
 		mods.super_key()
 	} else {

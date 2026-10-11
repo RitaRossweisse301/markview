@@ -581,7 +581,7 @@ fn single_instance_platform_default_and_settings_merge() {
 	assert!(warning.is_none());
 	assert_eq!(
 		store.settings().single_instance,
-		cfg!(target_os = "android")
+		markview_platform::touch_layout()
 	);
 	store.ensure_file().unwrap();
 	let mut settings = store.settings();
@@ -597,15 +597,15 @@ fn single_instance_platform_default_and_settings_merge() {
 	loaded.flush().unwrap();
 	assert_eq!(
 		loaded.settings().single_instance,
-		cfg!(target_os = "android")
+		markview_platform::touch_layout()
 	);
 }
 
 #[test]
 fn restore_session_defaults_legacy_conflicts_reload_and_save() {
 	let defaults = ReaderSettings::default();
-	assert_eq!(defaults.restore_session, cfg!(target_os = "android"));
-	assert_eq!(defaults.single_instance, cfg!(target_os = "android"));
+	assert_eq!(defaults.restore_session, markview_platform::touch_layout());
+	assert_eq!(defaults.single_instance, markview_platform::touch_layout());
 	let dir = tempfile::tempdir().unwrap();
 	let path = dir.path().join("settings.toml");
 	std::fs::write(

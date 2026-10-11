@@ -1,7 +1,5 @@
 mod anchor;
-#[cfg(target_os = "android")]
 pub(crate) mod android;
-#[cfg(not(target_os = "android"))]
 mod background;
 mod chrome;
 mod dm;
@@ -12,7 +10,6 @@ pub(crate) mod font_panel;
 mod fonts_command;
 pub(crate) mod frame;
 mod gestures;
-mod icon;
 mod interaction;
 mod launch;
 mod lifecycle;
@@ -78,7 +75,7 @@ pub fn run() -> Result<()> {
 }
 
 enum Event {
-	#[cfg(target_os = "linux")]
+	NativeAssetsChanged,
 	SystemThemeChanged(Theme),
 	SettingsLoaded(Box<settings_load::Completion>),
 	ImageSelected {
@@ -92,7 +89,6 @@ enum Event {
 		path: PathBuf,
 		result: anyhow::Result<crate::web_page::Article>,
 	},
-	#[cfg(windows)]
 	FrameFeedback,
 	Ready(Box<Update>),
 	SearchReady(search::Result),
@@ -107,15 +103,11 @@ enum Event {
 	Open(Option<PathBuf>),
 	Activate(Option<PathBuf>),
 	DeviceLost,
-	#[cfg(target_os = "android")]
 	AndroidBack,
-	#[cfg(target_os = "android")]
 	AndroidConfiguration,
-	#[cfg(target_os = "android")]
 	AndroidOpenUrl(String),
-	#[cfg(target_os = "android")]
 	AndroidShared(PathBuf),
-	#[cfg(all(target_os = "android", debug_assertions))]
+	#[cfg(debug_assertions)]
 	AndroidInspect(std::sync::mpsc::Sender<String>),
 	Exported(Box<ExportOutcome>),
 	Fonts(font_panel::Message),
@@ -225,10 +217,9 @@ fn register_font_dir(
 struct App<P = EventLoopProxy<Event>> {
 	surface_insets: [f32; 4],
 	frame: frame::State,
-	#[cfg(windows)]
-	native_frame: Option<crate::platform::window_frame::NativeFrame>,
-	#[cfg(target_os = "linux")]
-	touch_frame: Option<crate::platform::touch_frame::TouchFrame>,
+	native_frame: Option<markview_platform::NativeFrame>,
+	native_tab_end: std::rc::Rc<std::cell::Cell<Option<f32>>>,
+	touch_frame: Option<markview_platform::TouchFrame>,
 	interaction: InteractionState,
 	gestures: gestures::GestureState,
 	readers: tabs::Tabs,
@@ -244,7 +235,6 @@ struct App<P = EventLoopProxy<Event>> {
 	instance_path: Option<PathBuf>,
 	instance: Option<single_instance::Listener>,
 	window: Option<Arc<Window>>,
-	#[cfg(target_os = "linux")]
 	desktop_theme: Option<Theme>,
 	renderer: Option<Renderer>,
 	worker: Worker,
@@ -257,13 +247,13 @@ struct App<P = EventLoopProxy<Event>> {
 	settings_resources: settings_load::Resources,
 	/// What one wheel notch travels on this desktop, read once at startup:
 	/// nothing reports the desktop setting changing afterwards.
-	wheel_notch: crate::platform::WheelNotch,
+	wheel_notch: markview_platform::WheelNotch,
 	/// The window's Direct Manipulation viewport, when the desktop and the
 	/// initialization both offered one; `None` keeps the wheel paths.
 	dm: Option<dm::DirectManipulation>,
 	font_panel: font_panel::FontPanel,
 	services: Arc<crate::services::Services>,
-	clipboard: crate::platform::Clipboard,
+	clipboard: markview_platform::Clipboard,
 	text_input: text_input::InputState,
 	url_input: markview_core::text_input::TextInput,
 	paste_dir: tempfile::TempDir,
@@ -319,15 +309,16 @@ impl<P: SendEvent> App<P> {
 		let done = proxy.clone();
 		let parsed_proxy = proxy.clone();
 		let services = Arc::new(crate::services::Services::new(4));
-		#[cfg(target_os = "linux")]
-		if args.mode == crate::cli::Mode::Window {
+		if args.mode == crate::cli::Mode::Window
+			&& markview_platform::portal_theme()
+		{
 			let proxy = proxy.clone();
 			let cancel = services.handle.cancel.clone();
 			services.handle.submit(async move {
 				tokio::select! {
 					_ = cancel.cancelled() => {},
-					result = crate::platform::appearance::watch(move |theme| {
-						proxy.send(Event::SystemThemeChanged(theme));
+					result = markview_platform::watch_theme(move |theme| {
+						proxy.send(Event::SystemThemeChanged(reader_theme(theme)));
 					}) => {
 						if let Err(error) = result {
 							log::debug!("Desktop appearance unavailable: {error}");
@@ -378,9 +369,8 @@ impl<P: SendEvent> App<P> {
 		Self {
 			surface_insets: [0.0; 4],
 			frame: frame::State::new(preferences.values.window_layout),
-			#[cfg(windows)]
 			native_frame: None,
-			#[cfg(target_os = "linux")]
+			native_tab_end: Default::default(),
 			touch_frame: None,
 			interaction: InteractionState::default(),
 			gestures: gestures::GestureState::default(),
@@ -399,7 +389,6 @@ impl<P: SendEvent> App<P> {
 			instance_path,
 			instance: None,
 			window: None,
-			#[cfg(target_os = "linux")]
 			desktop_theme: None,
 			renderer: None,
 			worker,
@@ -410,7 +399,7 @@ impl<P: SendEvent> App<P> {
 			ui,
 			preferences,
 			settings_resources,
-			wheel_notch: crate::platform::wheel_notch(),
+			wheel_notch: markview_platform::wheel_notch(),
 			dm: None,
 			font_panel: font_panel::FontPanel::with_services(
 				services.handle.clone(),
@@ -445,16 +434,10 @@ impl<P: SendEvent> App<P> {
 	}
 	/// The desktop preference; `None` when the platform does not report one.
 	fn system_theme(&self) -> Option<Theme> {
-		#[cfg(target_os = "linux")]
-		{
+		if markview_platform::portal_theme() {
 			self.desktop_theme
-		}
-		#[cfg(not(target_os = "linux"))]
-		{
-			self.window.as_ref()?.theme().map(|theme| match theme {
-				winit::window::Theme::Dark => Theme::Dark,
-				winit::window::Theme::Light => Theme::Light,
-			})
+		} else {
+			self.window.as_ref()?.theme().map(reader_theme)
 		}
 	}
 
@@ -469,8 +452,7 @@ impl<P: SendEvent> App<P> {
 				self.request(false);
 			}
 		}
-		#[cfg(target_os = "android")]
-		{
+		if markview_platform::touch_layout() {
 			use markview_core::style::{ColorField, Condition};
 			let [r, g, b, _] = self
 				.ui
@@ -482,7 +464,7 @@ impl<P: SendEvent> App<P> {
 				"dark"
 			};
 			if let Err(error) =
-				crate::platform::android::call_string("systemBars", mode)
+				markview_platform::android::call_string("systemBars", mode)
 			{
 				log::warn!("Android system bars: {error:#}");
 			}
@@ -529,10 +511,11 @@ impl<P: SendEvent> App<P> {
 		changed
 	}
 	pub(super) fn insets(&self) -> [f32; 4] {
-		#[cfg(target_os = "android")]
-		if let Some(window) = &self.window {
+		if markview_platform::touch_layout()
+			&& let Some(window) = &self.window
+		{
 			let size = window.inner_size();
-			return crate::platform::android::insets(
+			return markview_platform::android::insets(
 				size.width,
 				size.height,
 				window.scale_factor() as f32,
@@ -602,6 +585,27 @@ impl<P: SendEvent> App<P> {
 		let config = self.fonts_config.clone();
 		self.ui.set_fonts(&config);
 		self.request(false);
+	}
+}
+
+fn native_event(event: markview_platform::NativeEvent) -> Event {
+	use markview_platform::NativeEvent;
+	match event {
+		NativeEvent::Open(path) => Event::Open(Some(path)),
+		NativeEvent::Shared(path) => Event::AndroidShared(path),
+		NativeEvent::OpenUrl(url) => Event::AndroidOpenUrl(url),
+		NativeEvent::Back => Event::AndroidBack,
+		NativeEvent::Configuration => Event::AndroidConfiguration,
+		NativeEvent::AssetsChanged => Event::NativeAssetsChanged,
+		#[cfg(debug_assertions)]
+		NativeEvent::Inspect(send) => Event::AndroidInspect(send),
+	}
+}
+
+fn reader_theme(theme: winit::window::Theme) -> Theme {
+	match theme {
+		winit::window::Theme::Dark => Theme::Dark,
+		winit::window::Theme::Light => Theme::Light,
 	}
 }
 

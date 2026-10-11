@@ -3,7 +3,7 @@ mod cache;
 mod decode;
 mod diagram;
 mod fonts;
-#[cfg(all(test, target_os = "linux"))]
+#[cfg(test)]
 mod golden;
 mod pixels;
 mod source;

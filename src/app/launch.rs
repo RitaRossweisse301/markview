@@ -21,7 +21,7 @@ pub(super) fn run() -> Result<()> {
 		&& std::env::args_os().nth(1).as_deref()
 			!= Some(std::ffi::OsStr::new("--background-child"))
 	{
-		crate::platform::attach_parent_console();
+		markview_platform::attach_parent_console();
 	}
 	let Some(args) = arguments()? else {
 		return Ok(());
@@ -69,18 +69,15 @@ pub(super) fn run() -> Result<()> {
 		));
 		return Ok(());
 	}
-	#[cfg(not(target_os = "android"))]
 	let report_error = args.mode == Mode::Window && !args.foreground;
 	let result = run_with_options(args);
-	#[cfg(not(target_os = "android"))]
 	if report_error && let Err(error) = &result {
-		crate::platform::show_error(&format!("{error:#}"));
+		markview_platform::show_error(&format!("{error:#}"));
 	}
 	result
 }
 
 fn run_with_options(mut args: LaunchOptions) -> Result<()> {
-	#[cfg(not(target_os = "android"))]
 	if super::background::launch(&args)? {
 		return Ok(());
 	}
@@ -320,6 +317,7 @@ fn run_with_options(mut args: LaunchOptions) -> Result<()> {
 		primary.listen(move |event| proxy.send_event(event).is_ok())
 	});
 	let result = event_loop.run_app(&mut app);
+	markview_platform::shutdown_events();
 	app.flush_session();
 	app.instance_path = None;
 	app.instance.take();

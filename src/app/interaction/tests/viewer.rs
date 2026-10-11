@@ -251,9 +251,11 @@ fn caption_taps_do_not_reach_covered_controls_or_activate_after_a_drag() {
 	}
 }
 
-#[cfg(target_os = "linux")]
 #[test]
 fn touch_window_drags_start_on_contact_and_never_pan_the_reader_or_viewer() {
+	if !markview_platform::client_resize() {
+		return;
+	}
 	use crate::settings::WindowLayout;
 	use winit::{event::Touch, window::ResizeDirection};
 	#[derive(Default)]

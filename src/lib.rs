@@ -17,7 +17,6 @@ mod mailbox;
 mod net;
 mod paste;
 mod pdf;
-mod platform;
 pub mod security;
 mod services;
 mod settings;
@@ -44,3 +43,9 @@ pub fn mark_process_start() {
 pub fn process_started() -> Instant {
 	*PROCESS_START.get_or_init(Instant::now)
 }
+
+markview_platform::android_entry!(
+	crate::mark_process_start,
+	crate::app::android::run,
+	crate::web_page::shared_url
+);

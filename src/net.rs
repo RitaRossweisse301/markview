@@ -23,17 +23,7 @@ const OVERFLOW_AGE: u64 = 1 << 31;
 const FONT_USER_AGENT: &str = concat!("Markview/", env!("CARGO_PKG_VERSION"));
 
 pub(crate) fn ua_os_comment() -> &'static str {
-	if cfg!(target_os = "windows") {
-		"Windows NT 10.0; Win64; x64"
-	} else if cfg!(target_os = "macos") {
-		"Macintosh; Intel Mac OS X 10_15_7"
-	} else if cfg!(target_os = "android") {
-		"Linux; Android 10"
-	} else if cfg!(target_arch = "aarch64") {
-		"X11; Linux aarch64"
-	} else {
-		"X11; Linux x86_64"
-	}
+	markview_platform::ua_os_comment()
 }
 
 /// Browser headers shared by article and image requests.
@@ -962,10 +952,12 @@ mod tests {
 
 	/// A streamed body must never be written through a link planted at the
 	/// destination, even when the caller reserved a predictable name.
-	#[cfg(unix)]
 	#[test]
 	fn a_streamed_body_never_writes_through_a_planted_symlink() {
-		use std::os::unix::fs::symlink;
+		if !markview_platform::test_support::special_files() {
+			return;
+		}
+		use markview_platform::test_support::symlink;
 		let runtime = tokio::runtime::Builder::new_current_thread()
 			.enable_all()
 			.build()

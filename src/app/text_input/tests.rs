@@ -209,7 +209,7 @@ fn clipboard_shortcuts_replace_selection_and_undo_without_a_desktop_clipboard()
 	let mut ui = crate::test_support::shaper();
 	let mut input = TextInput::default();
 	let mut clipboard = Clipboard::default();
-	let primary = if cfg!(target_os = "macos") {
+	let primary = if markview_platform::command_key() {
 		ModifiersState::SUPER
 	} else {
 		ModifiersState::CONTROL

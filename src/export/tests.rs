@@ -182,10 +182,12 @@ fn a_write_replaces_the_destination_atomically() {
 	);
 }
 
-#[cfg(unix)]
 #[test]
 fn a_planted_temporary_symlink_is_never_written_through() {
-	use std::os::unix::fs::{PermissionsExt, symlink};
+	if !markview_platform::test_support::special_files() {
+		return;
+	}
+	use markview_platform::test_support::symlink;
 	let dir = tempfile::tempdir().unwrap();
 	let victim = dir.path().join("victim");
 	std::fs::write(&victim, b"safe").unwrap();
@@ -207,18 +209,23 @@ fn a_planted_temporary_symlink_is_never_written_through() {
 		b"exported"
 	);
 	assert_eq!(
-		std::fs::metadata(dir.path().join("out.pdf"))
-			.unwrap()
-			.permissions()
-			.mode() & 0o777,
-		std::fs::metadata(&plain).unwrap().permissions().mode() & 0o777
+		markview_platform::test_support::permission_mode(
+			std::fs::metadata(dir.path().join("out.pdf"))
+				.unwrap()
+				.permissions()
+		),
+		markview_platform::test_support::permission_mode(
+			std::fs::metadata(&plain).unwrap().permissions()
+		)
 	);
 }
 
-#[cfg(unix)]
 #[test]
 fn a_symlinked_destination_is_replaced_rather_than_followed() {
-	use std::os::unix::fs::symlink;
+	if !markview_platform::test_support::special_files() {
+		return;
+	}
+	use markview_platform::test_support::symlink;
 	let dir = tempfile::tempdir().unwrap();
 	let victim = dir.path().join("victim");
 	std::fs::write(&victim, b"safe").unwrap();

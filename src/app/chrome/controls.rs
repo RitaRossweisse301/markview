@@ -57,7 +57,7 @@ fn rows(settings: &ReaderSettings, phone: bool) -> Vec<Row> {
 			.menu(DropdownId::Language, language_options(t, settings))
 			.section(t.section_interface()),
 	];
-	if !cfg!(target_os = "android") {
+	if !markview_platform::touch_layout() {
 		// How far a scroll request moves is a property of the pointing device,
 		// not of the type, so it belongs beside the interface language.
 		rows.push(
@@ -92,7 +92,7 @@ fn rows(settings: &ReaderSettings, phone: bool) -> Vec<Row> {
 			),
 		));
 	}
-	if !cfg!(target_os = "android") {
+	if !markview_platform::touch_layout() {
 		rows.extend([
 			Row::new(t.settings_window_layout(), vec![]).menu(
 				DropdownId::WindowLayout,
@@ -266,7 +266,7 @@ fn reader_form(
 	form.preview_control();
 	let t = settings.lang();
 	let mut footer = vec![];
-	if !cfg!(target_os = "android") {
+	if !markview_platform::touch_layout() {
 		footer.push((
 			t.settings_open_config(),
 			Command::OpenConfig,
@@ -369,16 +369,15 @@ pub(super) fn toolbar_controls_at(
 ) -> Vec<Button> {
 	[
 		(icons::PLUS, lang.toolbar_new_page(), Command::NewPage),
-		#[cfg(target_os = "android")]
-		(
-			icons::SEARCH,
-			lang.search_placeholder(),
-			Command::SearchOpen,
-		),
-		// Android has no file manager to reveal a folder in, and its asset
-		// picker is not one, so the control waits for a native equivalent.
-		#[cfg(not(target_os = "android"))]
-		(icons::REVEAL, lang.toolbar_reveal(), Command::RevealFolder),
+		if markview_platform::folder_reveal() {
+			(icons::REVEAL, lang.toolbar_reveal(), Command::RevealFolder)
+		} else {
+			(
+				icons::SEARCH,
+				lang.search_placeholder(),
+				Command::SearchOpen,
+			)
+		},
 		(icons::OPEN, lang.toolbar_open(), Command::Open),
 		(icons::EXPORT, lang.toolbar_export(), Command::Export),
 		(icons::SETTINGS, lang.toolbar_settings(), Command::Settings),

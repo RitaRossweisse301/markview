@@ -1,5 +1,5 @@
 use super::wheel_pixels;
-use crate::platform::{WheelAmount, WheelNotch};
+use markview_platform::{WheelAmount, WheelNotch};
 use winit::{
 	dpi::PhysicalPosition,
 	event::MouseScrollDelta::{LineDelta, PixelDelta},

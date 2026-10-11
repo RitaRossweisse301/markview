@@ -14,7 +14,6 @@ type Point = (f32, f32);
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum TouchAction {
 	Caption(super::frame::Caption),
-	#[cfg(target_os = "linux")]
 	Drag(Option<winit::window::ResizeDirection>),
 }
 
@@ -254,8 +253,9 @@ impl<P: super::SendEvent> App<P> {
 				surface: self.touch_surface(),
 				tap: self.touch_tap(),
 			};
-			#[cfg(target_os = "linux")]
-			let capture = if self.gestures.gesture.contacts.is_empty() {
+			let capture = if markview_platform::client_resize()
+				&& self.gestures.gesture.contacts.is_empty()
+			{
 				self.tab_metrics.sync(&mut self.ui, self.readers.entries());
 				let layout = self.frame_layout();
 				let direction = layout.resize_at(point.0, point.1);

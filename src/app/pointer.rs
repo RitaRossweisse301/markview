@@ -8,7 +8,7 @@ use std::{
 use winit::{event::MouseScrollDelta, window::CursorIcon};
 
 use super::{App, LINE_STEP, anchor, chrome};
-use crate::platform::{WheelAmount, WheelNotch};
+use markview_platform::{WheelAmount, WheelNotch};
 
 /// The logical pixels one notch of `amount` travels along an axis `extent` long.
 ///
@@ -504,7 +504,7 @@ impl<P: super::SendEvent> App<P> {
 	pub(super) fn launch(&mut self, target: &str) {
 		self.error = false;
 		let lang = self.preferences.values.lang();
-		self.status = match crate::platform::open_external(target) {
+		self.status = match markview_platform::open_external(target) {
 			Ok(()) => lang.status_opened(target),
 			Err(error) => {
 				self.error = true;

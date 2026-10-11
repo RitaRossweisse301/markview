@@ -265,7 +265,7 @@ impl Tabs {
 
 impl<P> App<P> {
 	fn owns_session(&self) -> bool {
-		cfg!(target_os = "android") || self.instance.is_some()
+		markview_platform::touch_layout() || self.instance.is_some()
 	}
 	pub(super) fn flush_session(&mut self) {
 		self.persistence.deadline = None;

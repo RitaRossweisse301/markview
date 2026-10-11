@@ -29,7 +29,7 @@ impl<P: super::SendEvent> App<P> {
 		// Keep the document bar's painted width and grab zone fixed.
 		metrics.thickness_hover = metrics.thickness;
 		let band = metrics.band();
-		let inset = if cfg!(any(target_os = "android", target_os = "ios")) {
+		let inset = if markview_platform::touch_inset() {
 			0.0
 		} else {
 			6.0

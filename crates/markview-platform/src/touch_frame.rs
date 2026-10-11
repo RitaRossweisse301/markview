@@ -17,7 +17,7 @@ use winit::{
 	window::{ResizeDirection, Window},
 };
 
-pub(crate) struct TouchFrame {
+pub struct TouchFrame {
 	queue: EventQueue<State>,
 	state: State,
 	connection: Connection,
@@ -254,4 +254,5 @@ impl Drop for TouchFrame {
 wayland_client::delegate_noop!(State: ignore wl_surface::WlSurface);
 
 #[cfg(test)]
+#[path = "touch_frame/tests.rs"]
 mod tests;

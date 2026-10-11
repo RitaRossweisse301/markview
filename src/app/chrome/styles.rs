@@ -172,7 +172,7 @@ pub(super) fn style_controls(
 		));
 		vec![]
 	};
-	if !cfg!(target_os = "android") {
+	if !markview_platform::touch_layout() {
 		headers.push((
 			lang.styles_open_folder(),
 			None,

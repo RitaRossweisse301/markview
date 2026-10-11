@@ -440,13 +440,15 @@ fn external_open_before_window_creation_restores_then_selects_the_requested_tab(
 	assert_eq!(app.readers.active(), 1);
 }
 
-#[cfg(unix)]
 #[test]
 fn clipboard_exclusion_uses_the_canonical_temporary_directory() {
+	if !markview_platform::test_support::special_files() {
+		return;
+	}
 	let dir = tempfile::tempdir().unwrap();
 	let paste = tempfile::tempdir().unwrap();
 	let link = dir.path().join("paste");
-	std::os::unix::fs::symlink(paste.path(), &link).unwrap();
+	markview_platform::test_support::symlink(paste.path(), &link).unwrap();
 	let mut tabs = Tabs::default();
 	tabs.open(document(paste.path(), "clipboard.md"), Instant::now());
 	assert!(tabs.capture_session(&link).tabs.is_empty());

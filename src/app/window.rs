@@ -21,7 +21,6 @@ use super::{App, TOP, frame::Caption};
 /// handlers below name this rather than the concrete type.
 pub(super) trait Loop {
 	fn exit(&self);
-	#[cfg(target_os = "linux")]
 	fn window_drag(
 		&self,
 		window: Option<&Window>,
@@ -43,13 +42,14 @@ pub(super) trait Loop {
 		} else if let Some(window) = window {
 			match caption {
 				Caption::Minimize => window.set_minimized(true),
-				Caption::Expand if cfg!(target_os = "macos") => window
-					.set_fullscreen(
+				Caption::Expand if markview_platform::native_buttons() => {
+					window.set_fullscreen(
 						window
 							.fullscreen()
 							.is_none()
 							.then_some(Fullscreen::Borderless(None)),
-					),
+					)
+				}
 				Caption::Expand => window.set_maximized(!window.is_maximized()),
 				Caption::Close => unreachable!(),
 			}
@@ -63,7 +63,6 @@ impl Loop for ActiveEventLoop {
 }
 
 impl<P: super::SendEvent> App<P> {
-	#[cfg(target_os = "android")]
 	pub(super) fn android_back(&mut self) {
 		if self.readers.session.search.open {
 			self.close_search();
@@ -74,7 +73,7 @@ impl<P: super::SendEvent> App<P> {
 		{
 			self.key_pressed(&Key::Named(NamedKey::Escape));
 		} else if let Err(error) =
-			crate::platform::android::call_string("backgroundTask", "")
+			markview_platform::android::call_string("backgroundTask", "")
 		{
 			log::warn!("Android back: {error}");
 		}
@@ -86,8 +85,8 @@ impl<P: super::SendEvent> App<P> {
 		_: WindowId,
 		event: WindowEvent,
 	) {
-		#[cfg(target_os = "android")]
-		if let WindowEvent::KeyboardInput { event, .. } = &event
+		if markview_platform::touch_layout()
+			&& let WindowEvent::KeyboardInput { event, .. } = &event
 			&& event.state == ElementState::Pressed
 			&& event.logical_key == Key::Named(NamedKey::BrowserBack)
 		{
@@ -101,7 +100,7 @@ impl<P: super::SendEvent> App<P> {
 			&& let WindowEvent::KeyboardInput { event, .. } = &event
 			&& event.state == ElementState::Pressed
 		{
-			let primary = if cfg!(target_os = "macos") {
+			let primary = if markview_platform::command_key() {
 				self.interaction.modifiers.super_key()
 			} else {
 				self.interaction.modifiers.control_key()
@@ -134,8 +133,7 @@ impl<P: super::SendEvent> App<P> {
 		match event {
 			WindowEvent::Touch(touch) => {
 				let action = self.handle_touch(touch);
-				#[cfg(target_os = "linux")]
-				{
+				if markview_platform::client_resize() {
 					let drag = match action {
 						Some(super::gestures::TouchAction::Drag(direction)) => {
 							Some(direction)
@@ -519,7 +517,6 @@ impl<P: super::SendEvent> App<P> {
 				self.redraw();
 			}
 			WindowEvent::Focused(false) => {
-				#[cfg(windows)]
 				if let Some(native) = &self.native_frame {
 					native.cancel();
 				}
@@ -609,11 +606,12 @@ impl<P: super::SendEvent> App<P> {
 						// macOS delivers its momentum inside the pixel deltas;
 						// every other desktop's pixel stream asks the reader
 						// to coast on its own when the stream ends.
-						let inertia = if cfg!(target_os = "macos") {
-							super::gestures::Inertia::Native
-						} else {
-							super::gestures::Inertia::Synthesized
-						};
+						let inertia =
+							if markview_platform::native_scroll_inertia() {
+								super::gestures::Inertia::Native
+							} else {
+								super::gestures::Inertia::Synthesized
+							};
 						self.trackpad_scroll(dx, dy, phase, inertia);
 					}
 					return;
@@ -650,7 +648,7 @@ impl<P: super::SendEvent> App<P> {
 					// step per event. A whole detent inside a live stream is
 					// the OS rounding a packet, not a wheel: the stream
 					// adopts it, or easing it would kill the momentum.
-					let packets = cfg!(windows)
+					let packets = markview_platform::wheel_packets()
 						&& (super::pointer::high_resolution(delta)
 							|| self.readers.session.wheel_stream_alive(now));
 					let travel = if packets {
@@ -735,8 +733,8 @@ impl<P: super::SendEvent> App<P> {
 							"o" if !self.panel_has_focus() => {
 								self.action(Command::Open)
 							}
-							#[cfg(not(target_os = "android"))]
-							"r" if self.interaction.modifiers.alt_key()
+							"r" if markview_platform::folder_reveal()
+								&& self.interaction.modifiers.alt_key()
 								&& !self.interaction.modifiers.shift_key()
 								&& !self.panel_has_focus() =>
 							{
@@ -965,7 +963,6 @@ impl<P: super::SendEvent> App<P> {
 				}
 			}
 			Key::Named(NamedKey::Escape) => {
-				#[cfg(windows)]
 				if let Some(native) = &self.native_frame {
 					native.cancel();
 				}

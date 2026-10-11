@@ -647,8 +647,7 @@ fn search_states_match_rendering_baselines() -> anyhow::Result<()> {
 			.join(format!("artifacts/search/{name}.png"));
 		std::fs::create_dir_all(path.parent().unwrap())?;
 		renderer.save_png(&texture, &path)?;
-		#[cfg(target_os = "linux")]
-		{
+		if markview_platform::test_support::desktop_goldens() {
 			anyhow::ensure!(
 				renderer.adapter_name.starts_with("llvmpipe")
 					&& renderer.adapter_name.ends_with("(Vulkan, Cpu)"),

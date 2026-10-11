@@ -107,9 +107,11 @@ impl Loop for StubLoop {
 	fn exit(&self) {}
 }
 
-#[cfg(target_os = "linux")]
 #[test]
 fn follow_system_uses_desktop_updates_and_releases_explicit_styles() {
+	if !markview_platform::portal_theme() {
+		return;
+	}
 	use crate::render::Theme;
 	use markview_core::style::{ColorField, Condition, Stylesheet};
 
@@ -162,10 +164,12 @@ fn follow_system_uses_desktop_updates_and_releases_explicit_styles() {
 	assert_eq!(background(&app), dark);
 }
 
-#[cfg(target_os = "linux")]
 #[test]
 #[ignore = "requires a desktop settings portal on the session bus"]
 fn follow_system_reads_the_live_desktop_portal() {
+	if !markview_platform::portal_theme() {
+		return;
+	}
 	use crate::render::Theme;
 	use std::sync::mpsc;
 
@@ -175,8 +179,8 @@ fn follow_system_reads_the_live_desktop_portal() {
 	services.handle.submit(async move {
 		tokio::select! {
 			_ = cancel.cancelled() => {},
-			result = crate::platform::appearance::watch(|theme| {
-				send.send(theme).unwrap();
+			result = markview_platform::watch_theme(|theme| {
+				send.send(super::super::reader_theme(theme)).unwrap();
 			}) => result.unwrap(),
 		}
 	});
@@ -280,7 +284,7 @@ fn document_scrollbar_keeps_its_edge_inset_and_width_while_dragging() {
 		.unwrap(),
 	);
 	let width = app.dimensions().0;
-	let inset = if cfg!(any(target_os = "android", target_os = "ios")) {
+	let inset = if markview_platform::touch_inset() {
 		0.0
 	} else {
 		6.0
@@ -759,7 +763,7 @@ fn a_fractional_line_wheel_coasts_on_windows_and_eases_elsewhere() {
 	app.interaction.wheel = Default::default();
 	feed(&mut app, -0.5);
 	assert_eq!(app.readers.session.scrolling.target, Some(whole * 0.5));
-	if cfg!(windows) {
+	if markview_platform::wheel_packets() {
 		// A fractional line count names a touchpad's packet stream, which
 		// owns the offset and coasts under momentum instead of an eased step.
 		assert!(app.readers.session.scrolling.animation.is_none());

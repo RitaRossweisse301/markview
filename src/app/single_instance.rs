@@ -59,11 +59,7 @@ pub(super) fn start(
 	std::fs::create_dir_all(directory)?;
 	let mut options = OpenOptions::new();
 	options.read(true).write(true).create(true).truncate(false);
-	#[cfg(unix)]
-	{
-		use std::os::unix::fs::OpenOptionsExt;
-		options.mode(0o600);
-	}
+	markview_platform::private_file_options(&mut options);
 	let lock = options.open(lock_path)?;
 	let endpoint_path = lock_path.with_extension("json");
 	let deadline = Instant::now() + TIMEOUT;
@@ -117,7 +113,7 @@ pub(super) fn start(
 
 impl<P: super::SendEvent> super::App<P> {
 	pub(super) fn register_instance(&mut self) {
-		if cfg!(target_os = "android")
+		if markview_platform::touch_layout()
 			|| self.instance.is_some()
 			|| !self.preferences.values.single_instance
 		{
@@ -342,11 +338,13 @@ mod tests {
 		assert!(matches!(rx.try_recv(), Err(mpsc::TryRecvError::Empty)));
 	}
 
-	#[cfg(unix)]
 	#[test]
 	fn endpoint_keeps_its_token_out_of_directory_notifications() {
+		if !markview_platform::test_support::special_files() {
+			return;
+		}
+		use markview_platform::test_support::symlink;
 		use notify::Watcher;
-		use std::os::unix::fs::{PermissionsExt, symlink};
 
 		let tmp = tempfile::tempdir().unwrap();
 		let directory = tmp.path().join("settings");
@@ -354,11 +352,7 @@ mod tests {
 		let directory = directory.canonicalize().unwrap();
 		let alias = tmp.path().join("alias");
 		symlink(&directory, &alias).unwrap();
-		std::fs::set_permissions(
-			&directory,
-			std::fs::Permissions::from_mode(0o755),
-		)
-		.unwrap();
+		markview_platform::test_support::set_mode(&directory, 0o755).unwrap();
 		let (tx, rx) = mpsc::channel();
 		let mut watcher = notify::recommended_watcher(move |event| {
 			tx.send(event).unwrap();
@@ -373,10 +367,9 @@ mod tests {
 		};
 		let endpoint_path = lock.with_extension("json").canonicalize().unwrap();
 		assert_eq!(
-			std::fs::metadata(&endpoint_path)
-				.unwrap()
-				.permissions()
-				.mode() & 0o777,
+			markview_platform::test_support::permission_mode(
+				std::fs::metadata(&endpoint_path).unwrap().permissions()
+			),
 			0o600
 		);
 		loop {

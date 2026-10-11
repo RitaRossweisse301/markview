@@ -13,14 +13,15 @@ pub const SUFFIX: &str = ".mvss.toml";
 
 pub(crate) fn media_context(target: StyleTarget) -> MediaContext {
 	let context = MediaContext::native(target);
-	#[cfg(target_os = "android")]
-	let context =
-		context.with_device(if crate::platform::android::phone_layout() {
+	if markview_platform::touch_layout() {
+		context.with_device(if markview_platform::android::phone_layout() {
 			markview_core::style::Media::Phone
 		} else {
 			markview_core::style::Media::Tablet
-		});
-	context
+		})
+	} else {
+		context
+	}
 }
 pub fn apply_font_overrides(
 	sheet: Arc<Stylesheet>,

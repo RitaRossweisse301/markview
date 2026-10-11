@@ -10,6 +10,9 @@ use std::{collections::HashMap, fs, path::Path, sync::Arc};
 
 #[test]
 fn ui_styles_match_rendering_baselines() -> Result<()> {
+	if !markview_platform::test_support::desktop_goldens() {
+		return Ok(());
+	}
 	let root = Path::new(env!("CARGO_MANIFEST_DIR"));
 	let mut baselines = Baselines::new(
 		root.join("tests/goldens/ui"),
