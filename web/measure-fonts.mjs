@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 const root = fileURLToPath(new URL("../", import.meta.url));
 const fonts = {
 	otf: readFileSync(
-		`${root}/crates/markview-core/tests/fonts/NotoSerif-Regular-subset.otf`,
+		`${root}/crates/markview-layout/tests/fonts/NotoSerif-Regular-subset.otf`,
 	),
 	woff: readFileSync(
 		`${root}/crates/markview-web/tests/fonts/NotoSerif-Regular-subset.woff`,

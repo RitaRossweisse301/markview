@@ -1,5 +1,5 @@
 //! Allocation-aware eviction for shared image aliases.
-use markview_core::image::Pixels;
+use markview_layout::image::Pixels;
 use std::{
 	collections::{HashMap, HashSet},
 	sync::Arc,
@@ -18,7 +18,7 @@ pub(super) fn cache_pixels(
 	pixels: &mut HashMap<String, Arc<Pixels>>,
 	aliases: &[String],
 	incoming: Arc<Pixels>,
-	demand: &HashMap<String, markview_core::image::ImageDemand>,
+	demand: &HashMap<String, markview_layout::image::ImageDemand>,
 	budget: usize,
 ) {
 	for a in aliases {

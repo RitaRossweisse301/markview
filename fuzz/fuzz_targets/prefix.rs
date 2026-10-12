@@ -27,7 +27,7 @@ fuzz_target!(|data: &[u8]| {
 	}
 	let guard = budget::InputGuard::new();
 	let source: Arc<str> = Arc::from(md.as_str());
-	let full = markview_core::document::parse(source.clone());
+	let full = markview_commonmark::parse(source.clone());
 	oracle::assert_source_ranges(&full);
 	// Several cuts, fixed and derived: the fixed ones straddle block
 	// boundaries in ordinary documents, the derived one moves with the input.
@@ -44,9 +44,7 @@ fuzz_target!(|data: &[u8]| {
 	cuts.sort_unstable();
 	cuts.dedup();
 	for cut in cuts {
-		if let Some(prefix) =
-			markview_core::document::parse_prefix(&source, cut)
-		{
+		if let Some(prefix) = markview_commonmark::parse_prefix(&source, cut) {
 			oracle::assert_prefix_consistent(&full, &prefix);
 			oracle::assert_source_ranges(&prefix);
 		}

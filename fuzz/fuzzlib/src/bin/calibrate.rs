@@ -40,8 +40,8 @@ fn parse_sample(input: &str) -> Sample {
 		|s| {
 			// Both parse shapes: the full parse and the incremental reparse of
 			// the unchanged document, which the reader uses on every edit.
-			let doc = markview_core::document::parse(s.to_string());
-			let _ = markview_core::document::reparse(&doc, Arc::from(s));
+			let doc = markview_commonmark::parse(s.to_string());
+			let _ = markview_commonmark::reparse(&doc, Arc::from(s));
 			Sample::default()
 		},
 		input,

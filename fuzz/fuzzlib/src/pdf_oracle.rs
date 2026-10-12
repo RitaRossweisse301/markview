@@ -14,7 +14,7 @@
 use std::collections::{HashMap, HashSet};
 
 use lopdf::{Document, Object, ObjectId};
-use markview_core::{
+use markview_layout::{
 	layout::LayoutSnapshot,
 	paginate::{PT_PER_PX, PageGeometry, PageItem, Pagination},
 	scene::Rect,
@@ -139,7 +139,7 @@ impl Structure {
 	}
 
 	/// 2. The number of pages the exporter wrote equals what
-	///    `markview_core::paginate` reported for the same document.
+	///    `markview_layout::paginate` reported for the same document.
 	pub fn assert_page_count(&self, pagination: &Pagination) {
 		assert_eq!(
 			self.pages.len(),

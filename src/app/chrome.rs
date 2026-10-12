@@ -31,7 +31,7 @@ pub(super) use components::panel_rect;
 use controls::{draw_controls, toolbar_controls_at};
 use fonts::draw_fonts;
 use footer::draw_footer;
-use markview_core::{
+use markview_layout::{
 	fonts::FontConfig,
 	style::{ColorField as C, Condition, TextAppearance},
 };
@@ -878,8 +878,8 @@ impl<'a> Chrome<'a> {
 		out.push(Draw::Rect(
 			rect,
 			crate::layout::Paint::Styled(
-				markview_core::style::Condition::Panel,
-				markview_core::style::ColorField::Background,
+				markview_layout::style::Condition::Panel,
+				markview_layout::style::ColorField::Background,
 			),
 		));
 		let width = (rect.w - if failed { 116. } else { 48. }).max(0.);
@@ -894,8 +894,8 @@ impl<'a> Chrome<'a> {
 				rect.y + rect.h / 2. - 8.
 			},
 			crate::layout::Paint::Styled(
-				markview_core::style::Condition::Panel,
-				markview_core::style::ColorField::Muted,
+				markview_layout::style::Condition::Panel,
+				markview_layout::style::ColorField::Muted,
 			),
 		));
 		if failed && rect.h >= 16. {

@@ -1,0 +1,16 @@
+[package]
+name = "markview-commonmark"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+markview-document = { path = "../markview-document" }
+comrak.workspace = true
+html-escape = "0.2"
+percent-encoding = "2"
+
+[lints]
+workspace = true

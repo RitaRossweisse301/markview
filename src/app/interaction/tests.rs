@@ -12,8 +12,8 @@ use crate::app::window::Loop;
 use crate::layout::{LayoutEngine, LayoutOptions, LayoutSnapshot};
 use crate::state::{Drag, Grain, Point};
 use crate::worker::{ReaderSnapshot, Update};
-use markview_core::document::Document;
-use markview_core::text::{Affinity, TextSelection};
+use markview_document::Document;
+use markview_layout::text::{Affinity, TextSelection};
 use std::path::PathBuf;
 use std::sync::Arc;
 use winit::dpi::PhysicalPosition;
@@ -113,7 +113,7 @@ fn follow_system_uses_desktop_updates_and_releases_explicit_styles() {
 		return;
 	}
 	use crate::render::Theme;
-	use markview_core::style::{ColorField, Condition, Stylesheet};
+	use markview_layout::style::{ColorField, Condition, Stylesheet};
 
 	let mut app = App::new(
 		crate::cli::LaunchOptions {
@@ -195,7 +195,7 @@ fn follow_system_reads_the_live_desktop_portal() {
 			.values
 			.stylesheet
 			.paint(crate::layout::Paint::Background),
-		markview_core::style::Stylesheet::bundled(theme == Theme::Dark)
+		markview_layout::style::Stylesheet::bundled(theme == Theme::Dark)
 			.paint(crate::layout::Paint::Background),
 	);
 }
@@ -228,7 +228,7 @@ fn reader(source: &str, width: f32) -> (App<StubProxy>, Arc<Document>) {
 	);
 	app.ui = crate::test_support::shaper();
 	app.preferences.values = crate::settings::ReaderSettings::default();
-	let document = Arc::new(crate::document::parse(source));
+	let document = Arc::new(markview_commonmark::parse(source));
 	let options = LayoutOptions {
 		width,
 		..app.options()
@@ -275,7 +275,7 @@ fn reading_viewport_meets_chrome_and_scrollbar_edges() {
 
 #[test]
 fn document_scrollbar_keeps_its_edge_inset_and_width_while_dragging() {
-	use markview_core::style::Stylesheet;
+	use markview_layout::style::Stylesheet;
 	let (mut app, _) = reader(&"Body line.\n\n".repeat(100), 760.0);
 	app.preferences.values.stylesheet = Arc::new(
 		Stylesheet::parse(
@@ -1030,7 +1030,7 @@ fn touch_swipes_open_drawers_without_toggling_them_closed() {
 fn drawer_animations_keep_outgoing_content_until_the_final_frame() {
 	use crate::layout::{Draw, Paint};
 	use crate::state::PanelPage;
-	use markview_core::style::{ColorField, Condition};
+	use markview_layout::style::{ColorField, Condition};
 	let (mut app, _) = reader("# Heading\n\nText.", 400.0);
 	let has_drawer = |draws: Vec<Draw>| {
 		draws.iter().any(|draw| {
@@ -1234,7 +1234,7 @@ fn phone_drawer_switches_and_closes_shared_tabs_and_hides_tab_style() {
 fn only_window_layout_changes_replace_the_saved_hint_until_reverted() {
 	use crate::layout::{Draw, Paint};
 	use crate::settings::WindowLayout;
-	use markview_core::style::{ColorField, Condition};
+	use markview_layout::style::{ColorField, Condition};
 
 	let mut app = App::new(
 		crate::cli::LaunchOptions {

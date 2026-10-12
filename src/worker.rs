@@ -52,7 +52,7 @@ pub struct Update {
 	/// Reading counts for a complete snapshot whose content changed, so the
 	/// event loop does not have to segment the whole document to draw the
 	/// footer.
-	pub counts: Option<markview_core::text::TextCounts>,
+	pub counts: Option<markview_layout::text::TextCounts>,
 }
 
 type Inbox = crate::mailbox::Inbox<Request>;
@@ -113,14 +113,14 @@ impl Worker {
 	}
 	pub fn with_images(
 		offline: bool,
-		fonts: markview_core::fonts::FontConfig,
+		fonts: markview_layout::fonts::FontConfig,
 		done: impl Fn(Update) + Send + 'static,
 	) -> Self {
 		Self::with_images_and_parsed(offline, fonts, done, |_, _, _| {})
 	}
 	pub fn with_images_and_parsed(
 		offline: bool,
-		fonts: markview_core::fonts::FontConfig,
+		fonts: markview_layout::fonts::FontConfig,
 		done: impl Fn(Update) + Send + 'static,
 		parsed: impl Fn(PathBuf, u64, Arc<document::Document>) + Send + 'static,
 	) -> Self {
@@ -135,7 +135,7 @@ impl Worker {
 	pub(crate) fn with_services_and_parsed(
 		services: Arc<crate::services::Services>,
 		offline: bool,
-		fonts: markview_core::fonts::FontConfig,
+		fonts: markview_layout::fonts::FontConfig,
 		done: impl Fn(Update) + Send + 'static,
 		parsed: impl Fn(PathBuf, u64, Arc<document::Document>) + Send + 'static,
 	) -> Self {
@@ -156,7 +156,7 @@ impl Worker {
 				// renderer initialize on the main thread; every later shaper
 				// clones the resulting collection instead of scanning again.
 				crate::layout::TextShaper::warm_fonts(&fonts);
-				let wake: markview_core::background::Wake = Arc::new({
+				let wake: markview_layout::background::Wake = Arc::new({
 					let inbox = thread_inbox.clone();
 					move || {
 						let (lock, signal) = &*inbox;
@@ -180,7 +180,7 @@ impl Worker {
 				// later update that carries the same content.
 				let mut counted: Option<(
 					u64,
-					markview_core::text::TextCounts,
+					markview_layout::text::TextCounts,
 				)> = None;
 				let mut cached: Option<(
 					PathBuf,
@@ -284,7 +284,7 @@ impl Worker {
 									.map(|(_, _, doc)| doc.clone());
 								let doc = match previous {
 									Some(previous) => {
-										Arc::new(document::reparse(
+										Arc::new(markview_commonmark::reparse(
 											&previous,
 											source.clone(),
 										))
@@ -300,7 +300,7 @@ impl Worker {
 											.sequence
 											.load(Ordering::Relaxed) == request
 											.version && let Some(prefix) =
-											document::parse_prefix(
+											markview_commonmark::parse_prefix(
 												&source,
 												PREFIX_BYTES,
 											) {
@@ -388,7 +388,7 @@ impl Worker {
 												done(partial);
 											}
 										}
-										Arc::new(document::parse(
+										Arc::new(markview_commonmark::parse(
 											source.clone(),
 										))
 									}
@@ -524,7 +524,7 @@ impl Worker {
 											Inbox::lock(lock).pending.is_some()
 										};
 										(!pending).then(|| {
-											let counts = markview_core::text::TextCounts::of(&reader.layout.full_reading_text());
+											let counts = markview_layout::text::TextCounts::of(&reader.layout.full_reading_text());
 											counted = Some((
 												reader.document.content_id,
 												counts,

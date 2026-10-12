@@ -4,7 +4,7 @@ use crate::{
 	layout::{Draw, Rect, TextShaper},
 	state::{Command, TextField},
 };
-use markview_core::text_input::{EditKind, Motion, TextInput};
+use markview_layout::text_input::{EditKind, Motion, TextInput};
 use std::time::{Duration, Instant};
 use winit::{
 	dpi::{LogicalPosition, LogicalSize},

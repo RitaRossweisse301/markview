@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regenerate the pinned test fonts under `crates/markview-core/tests/fonts`.
+"""Regenerate the pinned test fonts under `crates/markview-layout/tests/fonts`.
 
 The layout tests assert exact geometry, so they must not shape with whatever
 fonts the machine happens to have installed: the same test then passes on
@@ -31,7 +31,7 @@ ESCAPE = re.compile(r"\\u\{([0-9a-fA-F]+)\}")
 
 NOTO = "/usr/share/fonts/noto"
 NOTO_CJK = "/usr/share/fonts/noto-cjk"
-OUT = "crates/markview-core/tests/fonts"
+OUT = "crates/markview-layout/tests/fonts"
 
 # (source, face index, output file). The face index selects one family out of a
 # `.ttc`, so a single Noto CJK collection provides the SC faces per style.

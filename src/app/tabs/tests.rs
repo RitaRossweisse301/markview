@@ -72,9 +72,9 @@ fn closing_tabs_preserves_active_state_and_releases_only_inactive_documents() {
 	let mut tabs = Tabs::default();
 	let now = Instant::now();
 	tabs.open(PathBuf::from("a.md"), now);
-	tabs.session.document = Some(Arc::new(crate::document::parse("a")));
+	tabs.session.document = Some(Arc::new(markview_commonmark::parse("a")));
 	tabs.open(PathBuf::from("b.md"), now);
-	tabs.session.document = Some(Arc::new(crate::document::parse("b")));
+	tabs.session.document = Some(Arc::new(markview_commonmark::parse("b")));
 	tabs.release_inactive(now + Duration::from_secs(21));
 	assert!(tabs.entries()[0].session.document.is_none());
 	assert!(tabs.session.document.is_some());
@@ -152,7 +152,8 @@ fn background_open_preserves_active_reading_and_deduplicates_tabs() {
 	let mut tabs = Tabs::default();
 	let now = Instant::now();
 	tabs.open(PathBuf::from("a.md"), now);
-	tabs.session.document = Some(Arc::new(crate::document::parse("current")));
+	tabs.session.document =
+		Some(Arc::new(markview_commonmark::parse("current")));
 	let document = tabs.session.document.clone().unwrap();
 	tabs.session.scrolling.offset = 123.0;
 	tabs.session.horizontal.insert((0, 0), 42.0);

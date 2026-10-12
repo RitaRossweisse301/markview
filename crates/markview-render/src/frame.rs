@@ -1,6 +1,6 @@
 use crate::{Renderer, View};
 use anyhow::{Result, bail};
-use markview_core::scene::{Draw, LayoutSnapshot, Paint, Rect};
+use markview_layout::scene::{Draw, LayoutSnapshot, Paint, Rect};
 use std::sync::Arc;
 
 /// A visible command staged until its layer is painted.
@@ -57,7 +57,7 @@ impl Renderer {
 		};
 		let clip = view.viewport().clip();
 		let metrics = self.stylesheet.as_ref().map_or_else(
-			|| markview_core::scene::ScrollbarMetrics::OVERFLOW,
+			|| markview_layout::scene::ScrollbarMetrics::OVERFLOW,
 			|s| s.overflow_scrollbar_metrics(),
 		);
 		if let Some(background) = &snapshot.document_box {
@@ -135,11 +135,11 @@ impl Renderer {
 						Paint::Text
 						| Paint::Cascade(
 							_,
-							markview_core::style::ColorField::Color,
+							markview_layout::style::ColorField::Color,
 						)
 						| Paint::Styled(
 							_,
-							markview_core::style::ColorField::Color,
+							markview_layout::style::ColorField::Color,
 						),
 					)
 					| Draw::Clipped { .. }
@@ -164,7 +164,7 @@ impl Renderer {
 					w: o.rect.w,
 					h: metrics.overflow_band(o.gutter),
 				};
-				let Some(bar) = markview_core::scene::Scrollbar::horizontal(
+				let Some(bar) = markview_layout::scene::Scrollbar::horizontal(
 					band,
 					offset,
 					o.content_width,
@@ -183,8 +183,8 @@ impl Renderer {
 					track,
 					self.color(
 						Paint::Styled(
-							markview_core::style::Condition::Scrollbar,
-							markview_core::style::ColorField::Track,
+							markview_layout::style::Condition::Scrollbar,
+							markview_layout::style::ColorField::Track,
 						),
 						view.theme,
 					),
@@ -193,11 +193,11 @@ impl Renderer {
 					thumb,
 					self.color(
 						Paint::Styled(
-							markview_core::style::Condition::Scrollbar,
+							markview_layout::style::Condition::Scrollbar,
 							if on_thumb {
-								markview_core::style::ColorField::ThumbHover
+								markview_layout::style::ColorField::ThumbHover
 							} else {
-								markview_core::style::ColorField::Thumb
+								markview_layout::style::ColorField::Thumb
 							},
 						),
 						view.theme,
@@ -218,8 +218,8 @@ impl Renderer {
 		if let Some(selection) = view.selection {
 			let color = self.color(
 				Paint::Styled(
-					markview_core::style::Condition::Selection,
-					markview_core::style::ColorField::Background,
+					markview_layout::style::Condition::Selection,
+					markview_layout::style::ColorField::Background,
 				),
 				view.theme,
 			);
@@ -279,7 +279,7 @@ impl Renderer {
 		underlay: &[Draw],
 		overlay: &[Draw],
 		target: &wgpu::TextureView,
-		stylesheet: Arc<markview_core::style::Stylesheet>,
+		stylesheet: Arc<markview_layout::style::Stylesheet>,
 	) -> Result<wgpu::SubmissionIndex> {
 		let previous = self.stylesheet.replace(stylesheet);
 		let result =

@@ -19,7 +19,7 @@ Debian and Ubuntu additionally need the native development packages:
 sudo apt-get install libfontconfig1-dev libxkbcommon-dev libwayland-dev mesa-vulkan-drivers vulkan-tools
 ```
 
-Automated tests use the committed subsets in `crates/markview-core/tests/fonts`
+Automated tests use the committed subsets in `crates/markview-layout/tests/fonts`
 with system fonts disabled, including SVG, Mermaid and GPU tests. Running the
 reader itself needs fonts covering Latin and CJK, such as `fonts-noto-core` and
 `fonts-noto-cjk`. Regenerate subsets with `scripts/generate_test_fonts.py` when
@@ -192,7 +192,7 @@ excluded. To exercise warnings, use a temporary custom style with unavailable fo
 families and a character those fonts cannot draw; verify repeated reflows stay
 quiet.
 
-The reader and the core crate log through the `log` facade, and the binary writes
+The reader and layout engine log through the `log` facade, and the binary writes
 `LEVEL message` lines to stderr. A plain window run defaults to `warn`, so the
 lifecycle and timing lines stay quiet; `render`, `bench` and `smoke-test`
 default their own targets to `debug` so the diagnostics below are visible. Set
@@ -243,12 +243,12 @@ document and print typography are independent.
 
 ## Choose the layer
 
-1. Put Markdown meaning, reading text, geometry, hit testing, and selection mapping in `crates/markview-core`.
+1. Put source conversion in `markview-commonmark`, semantic nodes and identities in `markview-document`, and reading text, geometry, hit testing and selection mapping in `markview-layout`.
 2. Put the pointer-driven selection machine, which holds no reading text and no events of its own, in `crates/markview-selection`.
 3. Put GPU resources, clipping, rasterization, and frame assembly in `crates/markview-render`.
 4. Put files, settings, watching, image I/O, platform effects, commands, and window interaction in the root crate.
 
-Keep core free of window, GPU, clipboard, filesystem, and configuration dependencies. Prefer immutable snapshots and explicit version tags at asynchronous boundaries. Reuse the retained `Document` when only layout settings change.
+Keep document processing free of window, GPU, clipboard and application configuration dependencies; native callers opt into font-directory access. Prefer immutable snapshots and explicit version tags at asynchronous boundaries. Reuse the retained `Document` when only layout settings change.
 
 ## Change a feature
 
@@ -277,7 +277,7 @@ with their respective services.
 Use this sequence when adding a Markdown or HTML construct:
 
 1. Identify the semantic input and its intended reading-text and copy behavior. Do not begin with a renderer primitive.
-2. Extend `BlockKind`, `InlineKind`, or the relevant style data in `crates/markview-core/src/document.rs` (and `html.rs` for supported raw HTML).
+2. Extend `BlockKind`, `InlineKind`, or the relevant style data in `crates/markview-document/src/lib.rs` (and `markview-commonmark`'s `html.rs` for supported raw HTML).
 3. Parse the construct into that semantic representation, preserving a source range and stable reading order. Keep unsupported syntax as literal text rather than silently dropping it.
 4. Add layout behavior in `layout.rs`. Decide whether the node is text, a block, or an atomic inline box; produce text nodes and geometry together so hit testing and copying use the same mapping.
 5. Add only the semantic paint instructions needed by the renderer. Do not make the renderer reinterpret Markdown.
@@ -295,7 +295,7 @@ When a worker or loader changes, test stale-result rejection, replacement of pen
 
 Start with the [MVSS authoring workflow](../users/stylesheets.md#authoring-workflow).
 
-For a repository-bundled theme, add the file to `Stylesheet::named_rules` and its ID to `Stylesheet::READER_THEMES` or `Stylesheet::PDF_THEMES` according to its destination in `crates/markview-core/src/style.rs`; discovery and reserved-ID checks use that registry. Run `cargo fmt --all` and `cargo test --workspace`, then render the fixture. A new theme usually needs no parser or renderer changes. Extend MVSS only for a concrete visual requirement that existing fields cannot express, with parser and rendering tests plus documentation.
+For a repository-bundled theme, add the file to `Stylesheet::named_rules` and its ID to `Stylesheet::READER_THEMES` or `Stylesheet::PDF_THEMES` according to its destination in `crates/markview-layout/src/style.rs`; discovery and reserved-ID checks use that registry. Run `cargo fmt --all` and `cargo test --workspace`, then render the fixture. A new theme usually needs no parser or renderer changes. Extend MVSS only for a concrete visual requirement that existing fields cannot express, with parser and rendering tests plus documentation.
 
 The rendering comparison uses the committed test fonts and draws requested weights 400, 450 and 500 at 12/14/16 logical pixels on light/dark panels and at 1×, 1.25× and 2× scale:
 

@@ -3,7 +3,7 @@ use crate::{
 	document,
 	layout::{LayoutOptions, LayoutSnapshot},
 };
-use markview_core::text::{TextCounts, TextSelection};
+use markview_layout::text::{TextCounts, TextSelection};
 use std::{
 	collections::{BTreeMap, HashMap},
 	path::PathBuf,
@@ -17,7 +17,7 @@ mod outline;
 use drawer::DrawerAnimation;
 pub(crate) use outline::OutlineTree;
 
-pub(crate) use markview_core::layout::scroll_limit;
+pub(crate) use markview_layout::layout::scroll_limit;
 pub(crate) use markview_selection::{
 	Drag, Grain, Host, Modifiers, Point, Selection,
 };
@@ -51,7 +51,7 @@ pub(crate) enum Command {
 	ScrollSpeed(i8),
 	/// First-line paragraph indent in whole em units.
 	Indent(u8),
-	CjkType(markview_core::style::CjkType),
+	CjkType(markview_layout::style::CjkType),
 	/// The interface language; `None` follows the system again.
 	Language(Option<crate::lang::Lang>),
 	/// Pick the family a font role shapes with; `None` restores the
@@ -315,9 +315,9 @@ impl Viewer {
 	pub(crate) fn rect(
 		&self,
 		window: (f32, f32),
-	) -> markview_core::scene::Rect {
+	) -> markview_layout::scene::Rect {
 		let (w, h) = self.displayed(window);
-		markview_core::scene::Rect {
+		markview_layout::scene::Rect {
 			x: (window.0 - w) / 2. + self.pan.0,
 			y: (window.1 - h) / 2. + self.pan.1,
 			w,
@@ -467,7 +467,7 @@ pub(crate) struct ReaderSession {
 	pub(crate) blocked_images: HashMap<String, crate::security::Resource>,
 	pub(crate) search: crate::app::search::SearchState,
 	pub(crate) parse_complete: bool,
-	pub(crate) export_title: markview_core::text_input::TextInput,
+	pub(crate) export_title: markview_layout::text_input::TextInput,
 	pub(crate) counts: TextCounts,
 	pub(crate) path: Option<PathBuf>,
 	/// Metadata sampled before the last content reload, including missing files.

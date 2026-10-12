@@ -1,6 +1,6 @@
 //! User stylesheet discovery and atomic installation. Bundled IDs cannot be shadowed.
 use anyhow::{Context, Result, bail};
-use markview_core::style::{
+use markview_layout::style::{
 	CjkType, MediaContext, StyleTarget, Stylesheet, StylesheetSource,
 };
 use std::{
@@ -15,9 +15,9 @@ pub(crate) fn media_context(target: StyleTarget) -> MediaContext {
 	let context = MediaContext::native(target);
 	if markview_platform::touch_layout() {
 		context.with_device(if markview_platform::android::phone_layout() {
-			markview_core::style::Media::Phone
+			markview_layout::style::Media::Phone
 		} else {
-			markview_core::style::Media::Tablet
+			markview_layout::style::Media::Tablet
 		})
 	} else {
 		context
@@ -178,7 +178,7 @@ pub struct Entry {
 	pub source: String,
 	pub error: Option<String>,
 	/// Font families the sheet offers to download, in declaration order.
-	pub font_families: Vec<markview_core::style::FontFamily>,
+	pub font_families: Vec<markview_layout::style::FontFamily>,
 }
 fn read_rules(id: &str, dir: Option<&Path>) -> Result<Arc<StylesheetSource>> {
 	validate_id(id)?;
@@ -446,8 +446,8 @@ mod tests {
 		.unwrap();
 		let s = load(&["a".into(), "dark".into()], Some(tmp.path())).unwrap();
 		assert_eq!(
-			s.rule(markview_core::style::Condition::Body).color,
-			Some(markview_core::style::Color(0x123456ff))
+			s.rule(markview_layout::style::Condition::Body).color,
+			Some(markview_layout::style::Color(0x123456ff))
 		);
 	}
 }
@@ -471,7 +471,7 @@ mod cascade_tests {
 			load(&["dark".into(), "fonts".into()], Some(tmp.path())).unwrap();
 		assert_eq!(
 			sheet
-				.rule(markview_core::style::Condition::Em)
+				.rule(markview_layout::style::Condition::Em)
 				.font
 				.as_ref()
 				.unwrap()[0]
@@ -498,7 +498,7 @@ mod cascade_tests {
 #[cfg(test)]
 mod theme_tests {
 	use super::*;
-	use markview_core::style::{Color, Condition};
+	use markview_layout::style::{Color, Condition};
 
 	#[test]
 	fn fallback_is_hidden_reserved_and_beneath_explicit_rules() {
@@ -537,7 +537,7 @@ mod theme_tests {
 
 	#[test]
 	fn eight_bit_keeps_pixel_text_across_document_roles_and_ui() {
-		use markview_core::style::TextAppearance;
+		use markview_layout::style::TextAppearance;
 		for cjk in [CjkType::Sc, CjkType::Tc, CjkType::Jp, CjkType::None] {
 			let sheet =
 				load_with_cjk_type(&["8-bit".into()], None, cjk).unwrap();
@@ -592,7 +592,7 @@ mod theme_tests {
 #[cfg(test)]
 mod target_tests {
 	use super::*;
-	use markview_core::style::{Color, Condition};
+	use markview_layout::style::{Color, Condition};
 
 	fn write_style(dir: &Path, id: &str, targets: &str) {
 		fs::write(
@@ -697,7 +697,7 @@ mod target_tests {
 #[cfg(test)]
 mod paper_theme_tests {
 	use super::*;
-	use markview_core::style::{Color, Condition};
+	use markview_layout::style::{Color, Condition};
 
 	#[test]
 	fn bundled_paper_themes_are_export_only_and_inherit_readable_furniture() {
@@ -740,7 +740,7 @@ mod paper_theme_tests {
 #[cfg(test)]
 mod media_tests {
 	use super::*;
-	use markview_core::style::Condition;
+	use markview_layout::style::Condition;
 
 	#[test]
 	fn reader_and_pdf_load_media_and_reselect_after_paper_overrides() {

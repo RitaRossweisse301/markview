@@ -4,8 +4,8 @@ use crate::{
 	layout::{Draw, Paint, Rect},
 	state::{Command, PanelPage, TextField},
 };
-use markview_core::{
-	document::Document,
+use markview_document::Document;
+use markview_layout::{
 	search::{SearchIndex, SearchMatch, SearchOptions},
 	text_input::TextInput,
 };
@@ -557,7 +557,7 @@ impl<P: SendEvent> App<P> {
 		if !self.readers.session.search.open {
 			return vec![];
 		}
-		use markview_core::style::{ColorField as C, Condition};
+		use markview_layout::style::{ColorField as C, Condition};
 		let (width, height, _) = self.dimensions();
 		let search = &self.readers.session.search;
 		let lang = self.preferences.values.lang();
@@ -589,7 +589,7 @@ impl<P: SendEvent> App<P> {
 			),
 		];
 		self.ui.appearance = self.ui.stylesheet.text(
-			&markview_core::style::TextAppearance::default(),
+			&markview_layout::style::TextAppearance::default(),
 			Condition::Ui,
 		);
 		let rect = self.search_input_rect();
@@ -617,7 +617,7 @@ impl<P: SendEvent> App<P> {
 		out
 	}
 	pub(super) fn draw_search_highlights(&self) -> Vec<Draw> {
-		use markview_core::style::{ColorField as C, Condition};
+		use markview_layout::style::{ColorField as C, Condition};
 		let session = &self.readers.session;
 		let search = &session.search;
 		if !search.open

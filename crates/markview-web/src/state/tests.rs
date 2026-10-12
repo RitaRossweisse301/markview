@@ -4,9 +4,9 @@
 
 use crate::selection::Pointer;
 use crate::state::{Published, SelectionLength};
-use markview_core::layout::LayoutSnapshot;
-use markview_core::scene::{BlockLayout, PlacedBlock};
-use markview_core::text::{TextPosition, TextSelection};
+use markview_layout::layout::LayoutSnapshot;
+use markview_layout::scene::{BlockLayout, PlacedBlock};
+use markview_layout::text::{TextPosition, TextSelection};
 use markview_selection::Host;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -22,7 +22,7 @@ fn snapshot(text: &str) -> LayoutSnapshot {
 			y: 0.0,
 			layout: Arc::new(BlockLayout {
 				height: 100.0,
-				text: vec![markview_core::text::TextNode::new(
+				text: vec![markview_layout::text::TextNode::new(
 					text.to_string(),
 					"\n",
 				)],
@@ -51,14 +51,14 @@ fn selection_over(start: usize, end: usize) -> TextSelection {
 			block: 0,
 			node: 0,
 			offset: start,
-			affinity: markview_core::text::Affinity::Before,
+			affinity: markview_layout::text::Affinity::Before,
 		},
 		focus: TextPosition {
 			revision: 1,
 			block: 0,
 			node: 0,
 			offset: end,
-			affinity: markview_core::text::Affinity::After,
+			affinity: markview_layout::text::Affinity::After,
 		},
 	}
 }
@@ -126,14 +126,14 @@ fn published_and_selected(
 			block: 0,
 			node: 0,
 			offset: start,
-			affinity: markview_core::text::Affinity::Before,
+			affinity: markview_layout::text::Affinity::Before,
 		},
 		focus: TextPosition {
 			revision: published.revision,
 			block: 0,
 			node: 0,
 			offset: end,
-			affinity: markview_core::text::Affinity::After,
+			affinity: markview_layout::text::Affinity::After,
 		},
 	};
 	pointer.set_selection(Some(selection));
@@ -212,15 +212,14 @@ fn continues_names_only_the_same_source_and_pass() {
 
 #[test]
 fn disclosure_publication_invalidates_coordinates_and_retags_selection() {
-	use markview_core::{
-		document,
+	use markview_layout::{
 		fonts::FontConfig,
 		layout::{LayoutEngine, LayoutOptions},
 		source::SourceIndex,
 	};
 	use std::{collections::BTreeMap, time::Duration};
 
-	let document = document::parse(
+	let document = markview_commonmark::parse(
 		"<details>\n<summary>Summary</summary>\n\nHidden paragraph.\n\n</details>\n\nFollowing paragraph.\n",
 	);
 	let source_index = SourceIndex::new(&document);
@@ -229,7 +228,7 @@ fn disclosure_publication_invalidates_coordinates_and_retags_selection() {
 			0x776562,
 			vec![parley::fontique::Blob::new(Arc::new(
 				include_bytes!(
-					"../../../markview-core/tests/fonts/NotoSerif-Regular-subset.otf"
+					"../../../markview-layout/tests/fonts/NotoSerif-Regular-subset.otf"
 				)
 				.as_slice(),
 			))],
@@ -303,7 +302,7 @@ fn two_block_prefix() -> LayoutSnapshot {
 				y: 0.0,
 				layout: Arc::new(BlockLayout {
 					height: 100.0,
-					text: vec![markview_core::text::TextNode::new(
+					text: vec![markview_layout::text::TextNode::new(
 						"first".to_string(),
 						"\n",
 					)],
@@ -317,7 +316,7 @@ fn two_block_prefix() -> LayoutSnapshot {
 				y: 100.0,
 				layout: Arc::new(BlockLayout {
 					height: 100.0,
-					text: vec![markview_core::text::TextNode::new(
+					text: vec![markview_layout::text::TextNode::new(
 						"second".to_string(),
 						"\n",
 					)],

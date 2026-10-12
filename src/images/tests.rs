@@ -55,7 +55,7 @@ fn images(offline: bool) -> Images {
 /// Renders one Mermaid fence through the image scheduler and returns the
 /// scheduler with the fence's image source key.
 fn fence_images(code: &str) -> (Images, String) {
-	let doc = crate::document::parse(format!("```mermaid\n{code}\n```\n"));
+	let doc = markview_commonmark::parse(format!("```mermaid\n{code}\n```\n"));
 	let mut specs = Vec::new();
 	for block in &doc.blocks {
 		block.images(&mut specs);
@@ -201,13 +201,13 @@ fn bitmap_and_animation_formats_use_their_first_frame() {
 fn mermaid_fences_render_through_the_image_scheduler() {
 	// `--offline` still renders diagrams: they are local computation.
 	let source = "```mermaid\ngraph TD\n A[Start] --> B[End]\n```\n";
-	let doc = crate::document::parse(source);
+	let doc = markview_commonmark::parse(source);
 	let mut specs = Vec::new();
 	for block in &doc.blocks {
 		block.images(&mut specs);
 	}
 	let src = specs[0].src.clone();
-	assert!(src.starts_with(markview_core::image::MERMAID_SCHEME));
+	assert!(src.starts_with(markview_layout::image::MERMAID_SCHEME));
 	let mut images = images(true);
 	images.prepare(
 		&doc,
@@ -237,7 +237,7 @@ fn a_wobbling_demand_keeps_the_raster() {
 			images.snapshot.generation,
 			HashMap::from([(
 				src.clone(),
-				markview_core::image::ImageDemand {
+				markview_layout::image::ImageDemand {
 					size,
 					needs_pixels: false,
 				},
@@ -354,7 +354,7 @@ fn diagram_fonts_are_built_only_for_a_diagram() {
 	// A document without a diagram never scans the reader's font collection.
 	let mut plain = images(true);
 	plain.prepare(
-		&crate::document::parse("plain **text** and ![a](a.svg)"),
+		&markview_commonmark::parse("plain **text** and ![a](a.svg)"),
 		Path::new("note.md"),
 		1,
 		false,
@@ -365,7 +365,7 @@ fn diagram_fonts_are_built_only_for_a_diagram() {
 	// A document with a diagram builds them.
 	let mut diagram = images(true);
 	diagram.prepare(
-		&crate::document::parse("```mermaid\ngraph TD\n A-->B\n```\n"),
+		&markview_commonmark::parse("```mermaid\ngraph TD\n A-->B\n```\n"),
 		Path::new("note.md"),
 		1,
 		false,
@@ -389,7 +389,7 @@ fn a_private_font_directory_draws_a_diagram() {
 		 [mermaid]\ntheme='default'\nfont_family=['Noto Serif']",
 	)
 	.unwrap();
-	let doc = crate::document::parse(
+	let doc = markview_commonmark::parse(
 		"```mermaid\ngraph TD\n A[Wide label] --> B[Serif test]\n```\n",
 	);
 	let mut specs = Vec::new();
@@ -442,7 +442,7 @@ fn android_variable_font_draws_mermaid_labels() {
 		 [mermaid]\ntheme='dark'\nprimary_text_color='#ff0000'",
 	)
 	.unwrap();
-	let doc = crate::document::parse(
+	let doc = markview_commonmark::parse(
 		"```mermaid\nflowchart LR\n Markdown --> Layout --> GPU\n```\n",
 	);
 	let mut images = Images::with_cache_and_fonts(true, None, config.clone());
@@ -473,7 +473,7 @@ fn a_new_font_configuration_reaches_the_diagrams() {
 		revision: 1,
 		..crate::test_support::fonts()
 	};
-	let doc = crate::document::parse(
+	let doc = markview_commonmark::parse(
 		"```mermaid\ngraph TD\n A[Start] --> B[End]\n```\n",
 	);
 	let mut specs = Vec::new();
@@ -522,7 +522,7 @@ fn a_new_font_configuration_reaches_the_diagrams() {
 
 #[test]
 fn a_new_diagram_theme_redraws_the_diagram() {
-	let doc = crate::document::parse(
+	let doc = markview_commonmark::parse(
 		"```mermaid\ngraph TD\n A[Start] --> B[End]\n```\n",
 	);
 	let mut specs = Vec::new();
@@ -568,7 +568,7 @@ fn a_new_diagram_theme_redraws_the_diagram() {
 #[test]
 fn a_diagram_failure_does_not_outlive_its_theme() {
 	// A text size far past the pixel limit makes the drawing fail.
-	let doc = crate::document::parse(
+	let doc = markview_commonmark::parse(
 		"```mermaid\ngraph TD\n A[Start] --> B[End]\n```\n",
 	);
 	let mut specs = Vec::new();
@@ -616,7 +616,7 @@ fn a_failure_from_the_previous_theme_is_retried() {
 	// The test delivers completions itself, so no real job can race it.
 	let (send, recv) = mpsc::channel();
 	images.recv = recv;
-	let doc = crate::document::parse("```mermaid\ngraph TD\n A-->B\n```\n");
+	let doc = markview_commonmark::parse("```mermaid\ngraph TD\n A-->B\n```\n");
 	let mut specs = Vec::new();
 	for block in &doc.blocks {
 		block.images(&mut specs);
@@ -667,7 +667,7 @@ fn a_failure_from_the_previous_theme_is_retried() {
 fn broken_mermaid_diagram_becomes_an_error_placeholder() {
 	// An unclosed subgraph is invalid; it must not panic or blank the reader.
 	let source = "```mermaid\nflowchart LR\n subgraph S\n  A-->B\n```\n";
-	let doc = crate::document::parse(source);
+	let doc = markview_commonmark::parse(source);
 	let mut specs = Vec::new();
 	for block in &doc.blocks {
 		block.images(&mut specs);
@@ -687,7 +687,8 @@ fn broken_mermaid_diagram_becomes_an_error_placeholder() {
 	assert!(entry.error.is_some());
 	assert_eq!(entry.size, None);
 	assert!(!images.snapshot.decoded().contains_key(&src));
-	let doc = crate::document::parse("```mermaid\nflowchart LR\n A-->B\n```\n");
+	let doc =
+		markview_commonmark::parse("```mermaid\nflowchart LR\n A-->B\n```\n");
 	let mut specs = Vec::new();
 	for block in &doc.blocks {
 		block.images(&mut specs);
@@ -828,7 +829,7 @@ fn gpu_frame_draws_decoded_images() -> Result<()> {
 		dir.path().join("b.svg"),
 		br##"<svg xmlns="http://www.w3.org/2000/svg" width="40" height="30"><rect width="40" height="30" fill="#00ffff"/></svg>"##,
 	)?;
-	let doc = crate::document::parse(source.to_string());
+	let doc = markview_commonmark::parse(source.to_string());
 	let mut images = images(true);
 	images.prepare(
 		&doc,
@@ -927,7 +928,7 @@ fn loader_publishes_pixels_and_reports_failures() {
 	let source = "![a](a.png) ![b](missing.png)";
 	fs::write(&path, source).unwrap();
 	fs::write(dir.path().join("a.png"), png(6, 4, [9, 8, 7, 255])).unwrap();
-	let doc = crate::document::parse(source.to_string());
+	let doc = markview_commonmark::parse(source.to_string());
 	let mut images = images(true);
 	images.prepare(
 		&doc,
@@ -958,7 +959,7 @@ fn a_fifo_image_is_refused_without_blocking_the_scheduler() {
 	fs::write(&path, source).unwrap();
 	fs::write(dir.path().join("b.png"), png(6, 4, [9, 8, 7, 255])).unwrap();
 	markview_platform::test_support::fifo(dir.path().join("pipe.png"));
-	let doc = crate::document::parse(source.to_string());
+	let doc = markview_commonmark::parse(source.to_string());
 	let mut images = images(true);
 	images.prepare(
 		&doc,
@@ -989,7 +990,7 @@ fn a_changed_local_image_reloads_without_pixel_demand() {
 	fs::write(&file, png(2, 2, [1, 2, 3, 255])).unwrap();
 	let mut images = images(true);
 	images.prepare(
-		&crate::document::parse("![a](a.png)"),
+		&markview_commonmark::parse("![a](a.png)"),
 		&path,
 		1,
 		false,
@@ -1040,7 +1041,7 @@ fn a_changed_svg_aspect_updates_the_viewers_raster() {
 	fs::write(&file, svg(40, 30)).unwrap();
 	let mut images = images(true);
 	images.prepare(
-		&crate::document::parse("![a](a.svg)"),
+		&markview_commonmark::parse("![a](a.svg)"),
 		&path,
 		1,
 		false,
@@ -1053,7 +1054,7 @@ fn a_changed_svg_aspect_updates_the_viewers_raster() {
 			images.snapshot.generation,
 			HashMap::from([(
 				"a.svg".into(),
-				markview_core::image::ImageDemand {
+				markview_layout::image::ImageDemand {
 					size,
 					needs_pixels: false,
 				},
@@ -1097,7 +1098,7 @@ fn renamed_alias_reuses_pixels_and_removed_aliases_are_released() {
 	fs::write(dir.path().join("a.png"), png(6, 4, [1, 2, 3, 255])).unwrap();
 	let mut images = images(true);
 	images.prepare(
-		&crate::document::parse("![a](a.png)"),
+		&markview_commonmark::parse("![a](a.png)"),
 		&path,
 		1,
 		false,
@@ -1108,7 +1109,7 @@ fn renamed_alias_reuses_pixels_and_removed_aliases_are_released() {
 	let first = images.snapshot.decoded()["a.png"].clone();
 	let version = images.snapshot.entries["a.png"].version;
 	images.prepare(
-		&crate::document::parse("![a](./a.png)"),
+		&markview_commonmark::parse("![a](./a.png)"),
 		&path,
 		2,
 		false,
@@ -1127,7 +1128,7 @@ fn obsolete_completion_cannot_replace_a_readded_resource() {
 	let (send, recv) = mpsc::channel();
 	images.recv = recv;
 	let path = Path::new("/unused/note.md");
-	let doc = crate::document::parse("![a](a.png)");
+	let doc = markview_commonmark::parse("![a](a.png)");
 	images.prepare(
 		&doc,
 		path,
@@ -1139,7 +1140,7 @@ fn obsolete_completion_cannot_replace_a_readded_resource() {
 	let src = source("a.png", path).unwrap();
 	let old_ticket = images.entries[&src].ticket;
 	images.prepare(
-		&crate::document::parse("no image"),
+		&markview_commonmark::parse("no image"),
 		path,
 		2,
 		false,
@@ -1170,7 +1171,7 @@ fn obsolete_completion_cannot_replace_a_readded_resource() {
 
 #[test]
 fn pixel_budget_counts_allocations_and_evicts_even_when_all_are_visible() {
-	use markview_core::image::ImageDemand;
+	use markview_layout::image::ImageDemand;
 	let a = decode(&png(2, 2, [1, 0, 0, 255]), None).unwrap().pixels;
 	let b = decode(&png(2, 2, [2, 0, 0, 255]), None).unwrap().pixels;
 	let mut pixels =
@@ -1200,7 +1201,7 @@ fn pixel_budget_counts_allocations_and_evicts_even_when_all_are_visible() {
 
 #[test]
 fn vector_demand_merges_alias_sizes_and_gpu_residency_avoids_refetch() {
-	use markview_core::image::ImageDemand;
+	use markview_layout::image::ImageDemand;
 	let dir = tempfile::tempdir().unwrap();
 	let path = dir.path().join("note.md");
 	fs::write(
@@ -1210,7 +1211,7 @@ fn vector_demand_merges_alias_sizes_and_gpu_residency_avoids_refetch() {
 	.unwrap();
 	let mut images = images(true);
 	images.prepare(
-		&crate::document::parse("![a](a.svg) ![b](./a.svg)"),
+		&markview_commonmark::parse("![a](a.svg) ![b](./a.svg)"),
 		&path,
 		1,
 		false,
@@ -1315,7 +1316,7 @@ fn remote_images_are_capped_per_document_and_revision() {
 		for i in 0..count {
 			source.push_str(&format!("![a](http://192.0.2.1/{i}.png)\n\n"));
 		}
-		markview_core::document::parse(source)
+		markview_commonmark::parse(source)
 	};
 	let doc = many(130);
 	let path = std::path::Path::new("note.md");
@@ -1406,7 +1407,7 @@ fn offline_serves_a_cached_remote_image_and_fails_without_one() {
 	let path = dir.path().join("note.md");
 	let document = format!("![a]({url})");
 	fs::write(&path, &document).unwrap();
-	let doc = crate::document::parse(document);
+	let doc = markview_commonmark::parse(document);
 	let mut images = Images::with_cache(true, Some(root));
 	images.prepare(
 		&doc,
@@ -1425,7 +1426,7 @@ fn offline_serves_a_cached_remote_image_and_fails_without_one() {
 	let missing = "https://example.com/missing.png";
 	let document = format!("![a]({missing})");
 	fs::write(&path, &document).unwrap();
-	let doc = crate::document::parse(document);
+	let doc = markview_commonmark::parse(document);
 	let mut images = Images::with_cache(true, None);
 	images.prepare(
 		&doc,
@@ -1464,7 +1465,7 @@ fn non_utf8_grants_preserve_remote_image_loading_and_cache_isolation() {
 	let bytes = png(5, 3, [4, 5, 6, 255]);
 	assert_eq!(file.to_string_lossy(), other.to_string_lossy());
 	let url = "https://example.com/cached.png";
-	let doc = crate::document::parse(format!("![remote]({url})"));
+	let doc = markview_commonmark::parse(format!("![remote]({url})"));
 	for selected in [false, true] {
 		let grant = |path| {
 			if selected {
@@ -1514,7 +1515,7 @@ fn non_utf8_grants_preserve_remote_image_loading_and_cache_isolation() {
 #[test]
 fn evicted_image_pixels_reload_on_frame_demand() {
 	let src = data_uri("image/png", &png(4, 3, [255, 0, 0, 255]));
-	let doc = crate::document::parse(format!("![image]({src})"));
+	let doc = markview_commonmark::parse(format!("![image]({src})"));
 	let mut loader = images(true);
 	loader.prepare(
 		&doc,
@@ -1534,7 +1535,7 @@ fn evicted_image_pixels_reload_on_frame_demand() {
 		loader.snapshot.generation,
 		HashMap::from([(
 			src.clone(),
-			markview_core::image::ImageDemand {
+			markview_layout::image::ImageDemand {
 				size: (4, 3),
 				needs_pixels: true,
 			},
@@ -1547,12 +1548,14 @@ fn evicted_image_pixels_reload_on_frame_demand() {
 
 #[test]
 fn released_image_jobs_cannot_publish_into_a_reopened_document() {
-	struct Controlled(std::sync::mpsc::Sender<markview_core::background::Task>);
-	impl markview_core::background::Executor for Controlled {
+	struct Controlled(
+		std::sync::mpsc::Sender<markview_layout::background::Task>,
+	);
+	impl markview_layout::background::Executor for Controlled {
 		fn try_submit(
 			&self,
-			task: markview_core::background::Task,
-		) -> std::result::Result<(), markview_core::background::Task> {
+			task: markview_layout::background::Task,
+		) -> std::result::Result<(), markview_layout::background::Task> {
 			self.0.send(task).map_err(|error| error.0)
 		}
 	}
@@ -1572,7 +1575,7 @@ fn released_image_jobs_cannot_publish_into_a_reopened_document() {
 		}),
 	);
 	let src = data_uri("image/png", &png(2, 1, [20, 30, 40, 255]));
-	let doc = crate::document::parse(format!("![test]({src})"));
+	let doc = markview_commonmark::parse(format!("![test]({src})"));
 	let prepare = |images: &mut Images| {
 		images.prepare(
 			&doc,
@@ -1611,7 +1614,7 @@ fn repeated_document_release_reclaims_pixels_with_shared_services() {
 	let services = Arc::new(crate::services::Services::new(4));
 	let fonts = crate::test_support::fonts();
 	let src = data_uri("image/png", &png(64, 48, [20, 30, 40, 255]));
-	let doc = crate::document::parse(format!("![test]({src})"));
+	let doc = markview_commonmark::parse(format!("![test]({src})"));
 	let mut images = Images::shared(true, fonts.clone(), &services);
 	for index in 0..24 {
 		images.prepare(
@@ -1849,7 +1852,7 @@ fn a_queue_behind_held_pipelines_settles_boundedly() {
 		markdown.push_str(&format!("![{index}]({name})\n\n"));
 	}
 	fs::write(&path, &markdown).unwrap();
-	let doc = crate::document::parse(markdown);
+	let doc = markview_commonmark::parse(markdown);
 	let mut images = images(true);
 	// Every pipeline is held elsewhere, so no scheduled job can ever read.
 	let _held: Vec<_> = (0..4)
@@ -1912,7 +1915,7 @@ fn resource_authority_controls_local_reads_and_cached_bodies_including_offline()
 	super::cache::Cache::new(root.clone())
 		.with_security(&trusted)
 		.put(url, Default::default(), &bytes);
-	let document = crate::document::parse(format!("![image]({url})"));
+	let document = markview_commonmark::parse(format!("![image]({url})"));
 	let mut images = Images::with_cache(true, Some(root.clone()));
 	images.prepare(
 		&document,

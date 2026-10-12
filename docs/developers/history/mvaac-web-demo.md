@@ -7,7 +7,7 @@ record the initial demo and do not limit the subsequent iteration.
 
 ## What the work delivers
 
-1. A **resumable progressive layout API in `markview-core`**, so a front end can
+1. A **resumable progressive layout API in `markview-layout`**, so a front end can
    suspend a layout between blocks and resume it without re-scanning what it
    already laid out.
 2. `markview-web`, the `wasm-bindgen` front end, rebuilt on that API.
@@ -21,7 +21,7 @@ PDF export, search, outlines. Configuration is injected from JavaScript.
 ## Repository layout
 
 ```
-crates/markview-core/            Rust: the engine. Owns ProgressiveLayout.
+crates/markview-layout/            Rust: the engine. Owns ProgressiveLayout.
 crates/markview-web/             Rust: wasm-bindgen front end.
 scripts/build-web.py             cargo + wasm-bindgen -> the package's wasm/
 web/                             pnpm monorepo root (private)
@@ -53,8 +53,8 @@ no CDN. `web/serve.mjs` serves exactly that directory.
 
 ## Core: the resumable layout API (frozen)
 
-`crates/markview-core/src/layout/progressive.rs`, re-exported from
-`markview_core::layout::ProgressiveLayout`.
+`crates/markview-layout/src/layout/progressive.rs`, re-exported from
+`markview_layout::layout::ProgressiveLayout`.
 
 ```rust
 pub struct ProgressiveLayout { /* opaque */ }

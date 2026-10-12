@@ -10,7 +10,7 @@ use crate::{
 	layout::{Draw, Paint, Rect, TextShaper},
 	state::{Command, InteractionState, ReaderTab},
 };
-use markview_core::style::{Color, ColorField as C, Condition};
+use markview_layout::style::{Color, ColorField as C, Condition};
 
 pub(in crate::app) fn rect(width: f32, height: f32) -> Rect {
 	Rect {
@@ -394,7 +394,9 @@ mod tests {
 				.unwrap()
 		};
 		for dark in [false, true] {
-			ui.set_stylesheet(markview_core::style::Stylesheet::bundled(dark));
+			ui.set_stylesheet(markview_layout::style::Stylesheet::bundled(
+				dark,
+			));
 			let resting = first_label(draw(
 				&mut ui,
 				&tabs,

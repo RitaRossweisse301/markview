@@ -3,7 +3,7 @@ use crate::app::tab_metrics::TabMetrics;
 
 #[test]
 fn hovered_labels_mix_current_theme_colors_and_keep_the_background_highlight() {
-	use markview_core::style::Stylesheet;
+	use markview_layout::style::Stylesheet;
 	let mut ui = crate::test_support::shaper();
 	let strip = TabStrip::default();
 	let tabs: Vec<_> = (0..3)
@@ -105,7 +105,7 @@ fn cached_tab_end_follows_scroll_theme_and_document_changes() {
 	for count in [20, 2, 1, 0] {
 		tabs.truncate(count);
 		for size in [1.0, 1.5] {
-			let sheet = markview_core::style::Stylesheet::parse(&format!(
+			let sheet = markview_layout::style::Stylesheet::parse(&format!(
 				"format_version=2\nversion=1\n[[rule]]\nwhen=['ui','toolbar']\nsize={size}"
 			))
 			.unwrap();
@@ -241,7 +241,7 @@ fn measured_tabs_fit_minimum_window_and_styles_invalidate_widths() {
 	for (rect, (_, minimum)) in layout.rects.iter().zip(&metrics.widths) {
 		assert!((rect.w - minimum).abs() < 0.001);
 	}
-	let sheet = markview_core::style::Stylesheet::parse(
+	let sheet = markview_layout::style::Stylesheet::parse(
 		"format_version=2\nversion=1\n[[rule]]\nwhen=['ui','toolbar']\nsize = 1.5\n",
 	)
 	.unwrap();

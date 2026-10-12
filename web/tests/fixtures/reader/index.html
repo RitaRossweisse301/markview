@@ -34,7 +34,7 @@
 				autocapitalize="off" autocomplete="off" wrap="soft"># MarkView as a Component
 
 Markview lays out and paints Markdown **directly onto a canvas**. There is no
-DOM tree, no HTML renderer and no KaTeX: *markview-core* parses the source,
+DOM tree, no HTML renderer and no KaTeX: *markview-layout* parses the source,
 *markview-render* rasterises glyphs through the GPU, and this page only wires
 the two together.
 
@@ -48,8 +48,8 @@ the two together.
 
 | Stage | Crate | Output |
 | --- | --- | --- |
-| Parse | markview-core | block tree |
-| Layout | markview-core | line boxes |
+| Parse | markview-layout | block tree |
+| Layout | markview-layout | line boxes |
 | Raster | markview-render | glyph atlas |
 
 Inline math is typeset by the engine: $e^{i\pi} + 1 = 0$.

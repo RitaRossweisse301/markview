@@ -2,7 +2,7 @@
 use crate::cli::Mode;
 use crate::settings::{ReaderSettings, Setting};
 use crate::state::{Command, Modal, PanelPage, ScrollbarAxis, ScrollbarDrag};
-use markview_core::text::TextPosition;
+use markview_layout::text::TextPosition;
 use std::time::{Duration, Instant};
 
 use super::{App, Event, TOP};

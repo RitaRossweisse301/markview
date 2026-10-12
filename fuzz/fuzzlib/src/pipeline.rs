@@ -11,8 +11,8 @@ use std::{
 	sync::{Arc, Once},
 };
 
-use markview_core::{
-	document,
+use markview_document as document;
+use markview_layout::{
 	fonts::FontConfig,
 	image::ImageSnapshot,
 	layout::{LayoutEngine, LayoutOptions, LayoutSnapshot},
@@ -30,7 +30,7 @@ pub fn pinned_fonts() -> FontConfig {
 		ignore_system_fonts: true,
 		directories: vec![
 			Path::new(env!("CARGO_MANIFEST_DIR"))
-				.join("../../crates/markview-core/tests/fonts")
+				.join("../../crates/markview-layout/tests/fonts")
 				.to_path_buf(),
 		],
 		..Default::default()
@@ -65,7 +65,7 @@ pub fn options_for(md: &str) -> LayoutOptions {
 /// fingerprints compare the same highlight state regardless of scheduling.
 pub fn differential_engine() -> LayoutEngine {
 	LayoutEngine::with_executor(
-		Arc::new(markview_core::background::Direct),
+		Arc::new(markview_layout::background::Direct),
 		Arc::new(|| {}),
 	)
 }
@@ -80,7 +80,8 @@ pub fn warmup() {
 		// A fenced block makes this one-time pass pay for fontconfig's cold
 		// caches and the syntax-set build, which are warm-up costs, not input
 		// costs, so the layout-family targets run it before their guard starts.
-		let doc = document::parse(Arc::from("```rust\nlet x = 1;\n```\n"));
+		let doc =
+			markview_commonmark::parse(Arc::from("```rust\nlet x = 1;\n```\n"));
 		let mut engine = LayoutEngine::new();
 		let mut snapshot = engine.layout(&doc, &options_for("warm"));
 		if engine.wait_highlights() {
@@ -90,7 +91,7 @@ pub fn warmup() {
 		// The syntax-state build above covers the warm languages; the rest
 		// of the set would otherwise cost its first input ~200 ms inside
 		// the worker, where the input budget would see it.
-		markview_core::prewarm_highlight();
+		markview_layout::prewarm_highlight();
 	});
 }
 
@@ -99,7 +100,7 @@ pub fn warmup() {
 pub fn parse_layout(
 	md: &str,
 ) -> (document::Document, LayoutOptions, LayoutSnapshot) {
-	let doc = document::parse(md.to_string());
+	let doc = markview_commonmark::parse(md.to_string());
 	let options = options_for(md);
 	let mut engine = LayoutEngine::new();
 	let mut snapshot = engine.layout(&doc, &options);
@@ -125,7 +126,7 @@ pub fn export_pdf(
 		sheet.set_cjk_type(CjkType::Sc);
 		Arc::new(sheet)
 	};
-	let document = document::parse(md.to_string());
+	let document = markview_commonmark::parse(md.to_string());
 	let geometry =
 		PageGeometry::from_style(sheet.page()).expect("print page is valid");
 	// The derived `Limits` keep the export's degradation paths reachable;
@@ -180,14 +181,16 @@ pub fn export_pdf(
 /// behind it is never exercised. The image's content is not what the PDF
 /// oracles check; its presence on the page is.
 fn synthetic_images(snapshot: &LayoutSnapshot) -> ImageSnapshot {
-	use markview_core::image::{ImageInfo, ImagePixels, Pixels};
+	use markview_layout::image::{ImageInfo, ImagePixels, Pixels};
 
 	let sources: std::collections::HashSet<&str> = snapshot
 		.blocks
 		.iter()
 		.flat_map(|block| block.layout.draws.iter())
 		.filter_map(|draw| match draw {
-			markview_core::scene::Draw::Image { src, .. } => Some(src.as_str()),
+			markview_layout::scene::Draw::Image { src, .. } => {
+				Some(src.as_str())
+			}
 			_ => None,
 		})
 		.collect();

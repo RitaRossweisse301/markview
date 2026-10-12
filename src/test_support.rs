@@ -2,10 +2,10 @@
 //!
 //! Layout asserts exact geometry, so it must not shape with whatever fonts the
 //! machine happens to have installed. These are the committed subsets in
-//! `crates/markview-core/tests/fonts`, registered with the system set off, so
+//! `crates/markview-layout/tests/fonts`, registered with the system set off, so
 //! every platform shapes the same faces.
-use markview_core::fonts::FontConfig;
-use markview_core::layout::{LayoutOptions, TextShaper};
+use markview_layout::fonts::FontConfig;
+use markview_layout::layout::{LayoutOptions, TextShaper};
 
 #[path = "../tests/support/render_goldens.rs"]
 pub(crate) mod render_goldens;
@@ -16,7 +16,7 @@ pub(crate) fn fonts() -> FontConfig {
 		ignore_system_fonts: true,
 		directories: vec![
 			std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-				.join("crates/markview-core/tests/fonts"),
+				.join("crates/markview-layout/tests/fonts"),
 		],
 		..Default::default()
 	}

@@ -1,6 +1,6 @@
 //! Versioned image textures, GPU budget and per-frame demand publication.
 use crate::gpu::Gpu;
-use markview_core::{
+use markview_layout::{
 	image::{ImageDemand, ImageSnapshot, raster_size},
 	scene::Rect,
 };
@@ -157,7 +157,7 @@ impl ImageTextures {
 #[cfg(test)]
 mod tests {
 	use crate::{Renderer, Theme, View};
-	use markview_core::{
+	use markview_layout::{
 		image::{ImageInfo, ImagePixels, ImageSnapshot},
 		scene::{BlockLayout, Draw, LayoutSnapshot, PlacedBlock, Rect},
 	};

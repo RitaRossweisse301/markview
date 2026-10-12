@@ -143,8 +143,8 @@ impl Preferences {
 		}
 		ui.set_stylesheet(settings.stylesheet.clone());
 		ui.appearance = settings.stylesheet.text(
-			&markview_core::style::TextAppearance::default(),
-			markview_core::style::Condition::Ui,
+			&markview_layout::style::TextAppearance::default(),
+			markview_layout::style::Condition::Ui,
 		);
 		let export = settings_store.export();
 		Self {
@@ -194,11 +194,11 @@ impl Preferences {
 						let old_codeblock_theme = self
 							.values
 							.stylesheet
-							.rule(markview_core::style::Condition::CodeBlock)
+							.rule(markview_layout::style::Condition::CodeBlock)
 							.theme
 							.clone();
 						let new_codeblock_theme = sheet
-							.rule(markview_core::style::Condition::CodeBlock)
+							.rule(markview_layout::style::Condition::CodeBlock)
 							.theme
 							.clone();
 						let reflow = sheet.layout_key()
@@ -212,8 +212,8 @@ impl Preferences {
 						self.values.stylesheet = sheet.clone();
 						ui.set_stylesheet(sheet.clone());
 						ui.appearance = sheet.text(
-							&markview_core::style::TextAppearance::default(),
-							markview_core::style::Condition::Ui,
+							&markview_layout::style::TextAppearance::default(),
+							markview_layout::style::Condition::Ui,
 						);
 						self.style_warning = None;
 						return Some(reflow);

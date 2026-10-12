@@ -11,8 +11,9 @@ use crate::{
 	state::{Published, SelectionLength},
 	stylesheets::Stylesheets,
 };
-use markview_core::{
-	document::{Document, parse},
+use markview_commonmark::parse;
+use markview_document::Document;
+use markview_layout::{
 	fonts::FontConfig,
 	image::Pixels,
 	layout::{LayoutEngine, LayoutOptions, ProgressiveLayout, Viewport},
@@ -1063,7 +1064,7 @@ impl Markview {
 				self.options.force_open,
 			);
 		}
-		self.scrolling.offset = markview_core::layout::anchored_scroll(
+		self.scrolling.offset = markview_layout::layout::anchored_scroll(
 			&old,
 			&self.published.snapshot,
 			self.scrolling.offset,
@@ -1076,7 +1077,7 @@ impl Markview {
 
 	fn activate_document_link(&mut self, link: &str) -> bool {
 		self.scrolling.cancel();
-		if let Some(id) = markview_core::document::details_id(link) {
+		if let Some(id) = markview_document::details_id(link) {
 			let expanded =
 				self.options.details_open.get(&id).copied().unwrap_or_else(
 					|| {
@@ -1099,19 +1100,17 @@ impl Markview {
 			self.set_scroll(0.0);
 			return true;
 		}
-		if let Some(label) =
-			markview_core::document::footnote::back_label(&fragment)
+		if let Some(label) = markview_document::footnote::back_label(&fragment)
 		{
 			if let Some((origin, offset)) = &self.jump_origin
-				&& markview_core::document::footnote::label(origin)
-					== Some(label)
+				&& markview_document::footnote::label(origin) == Some(label)
 			{
 				let offset = *offset;
 				self.set_scroll(f64::from(offset));
 				return true;
 			}
 			self.pending_anchor =
-				Some(markview_core::document::footnote::reference(label));
+				Some(markview_document::footnote::reference(label));
 		} else {
 			self.jump_origin = Some((fragment.clone(), self.visible_scroll()));
 			self.pending_anchor = Some(fragment);

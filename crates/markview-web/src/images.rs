@@ -1,7 +1,7 @@
 //! Host-supplied image pixels and the geometry used for scheduling hints.
 
-use markview_core::{
-	document::Document,
+use markview_document::Document;
+use markview_layout::{
 	image::{ImageInfo, ImageSnapshot, MERMAID_SCHEME, Pixels},
 	scene::{Draw, LayoutSnapshot, Rect},
 };
@@ -250,10 +250,8 @@ fn collect(
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use markview_core::{
-		document::parse,
-		scene::{BlockLayout, PlacedBlock},
-	};
+	use markview_commonmark::parse;
+	use markview_layout::scene::{BlockLayout, PlacedBlock};
 
 	fn pixels() -> Pixels {
 		Pixels {
@@ -384,7 +382,7 @@ mod tests {
 							draws: vec![image("b", 40.)],
 						},
 					],
-					overflow: vec![markview_core::scene::Overflow {
+					overflow: vec![markview_layout::scene::Overflow {
 						rect: Rect {
 							x: 0.,
 							y: 0.,

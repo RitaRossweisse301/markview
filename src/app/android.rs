@@ -70,7 +70,7 @@ impl<P: super::SendEvent> App<P> {
 			"font_catalog": self.font_panel.view().catalog.len(),
 			"styles":self.preferences.style_entries.iter().map(|e|e.id.clone()).collect::<Vec<_>>(),
 			"font_revision":self.fonts_config.revision,
-			"font_families":markview_core::fonts::families(&self.fonts_config,false).len(),
+			"font_families":markview_layout::fonts::families(&self.fonts_config,false).len(),
 			"panel":format!("{:?}",self.interaction.panel), "buttons":buttons,
 			"panel_rect":[panel.x, panel.y, panel.w, panel.h],
 			"dimensions":self.dimensions(), "insets":self.insets(),

@@ -136,7 +136,7 @@ Object.assign(window,{packageSmoke:true});
 				body: readFileSync(
 					join(
 						root,
-						"../crates/markview-core/tests/fonts/NotoSerif-Regular-subset.otf",
+						"../crates/markview-layout/tests/fonts/NotoSerif-Regular-subset.otf",
 					),
 				),
 			});

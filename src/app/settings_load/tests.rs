@@ -3,7 +3,7 @@ use crate::{
 	cli::{LaunchOptions, Mode},
 	state::{PanelPage, PanelTab},
 };
-use markview_core::background::{Executor, Task};
+use markview_layout::background::{Executor, Task};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::time::Duration;
 
@@ -241,7 +241,7 @@ fn downloaded_face_cache_tracks_changed_and_removed_files() {
 	let dir = tempfile::tempdir().unwrap();
 	let path = dir.path().join("font.otf");
 	let bytes = include_bytes!(
-		"../../../crates/markview-core/tests/fonts/NotoSerif-Regular-subset.otf"
+		"../../../crates/markview-layout/tests/fonts/NotoSerif-Regular-subset.otf"
 	);
 	std::fs::write(&path, bytes).unwrap();
 	let mut cache = FaceCache::default();
@@ -321,7 +321,7 @@ fn settings_feedback_measurement() {
 			crate::stylesheet::directory().as_deref(),
 			app.preferences.values.style.as_deref(),
 		);
-		let builtin = markview_core::style::Stylesheet::builtin();
+		let builtin = markview_layout::style::Stylesheet::builtin();
 		let sheets =
 			std::iter::once(("builtin", builtin.font_families.as_slice()))
 				.chain(entries.iter().map(|entry| {
@@ -379,7 +379,7 @@ fn symlinked_fonts_and_styles_follow_target_changes() {
 	std::fs::write(
 		&font,
 		include_bytes!(
-			"../../../crates/markview-core/tests/fonts/NotoSerif-Regular-subset.otf"
+			"../../../crates/markview-layout/tests/fonts/NotoSerif-Regular-subset.otf"
 		),
 	)
 	.unwrap();
@@ -391,7 +391,7 @@ fn symlinked_fonts_and_styles_follow_target_changes() {
 	std::fs::write(
 		&font,
 		include_bytes!(
-			"../../../crates/markview-core/tests/fonts/NotoSans-Regular-subset.otf"
+			"../../../crates/markview-layout/tests/fonts/NotoSans-Regular-subset.otf"
 		),
 	)
 	.unwrap();

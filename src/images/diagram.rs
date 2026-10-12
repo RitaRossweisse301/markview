@@ -7,7 +7,7 @@
 //! `mermaid-rs-renderer` discovers system fonts lazily on its first text
 //! measurement, so importing it costs nothing until a diagram is rendered.
 use anyhow::{Result, anyhow, bail};
-use markview_core::style::{Color, Stylesheet};
+use markview_layout::style::{Color, Stylesheet};
 use std::{
 	borrow::Borrow,
 	collections::{HashMap, VecDeque},
@@ -311,7 +311,7 @@ pub(super) fn within_nesting_budget(code: &str) -> bool {
 /// The parsed diagram for `code`, parsing it on first use.
 fn parsed(code: &str) -> Result<Arc<mermaid_rs_renderer::ParseOutput>> {
 	if let Some(parsed) =
-		markview_core::sync::cache(parsed_cache(), "Mermaid parse cache")
+		markview_layout::sync::cache(parsed_cache(), "Mermaid parse cache")
 			.get(code)
 	{
 		return Ok(parsed.clone());
@@ -321,7 +321,7 @@ fn parsed(code: &str) -> Result<Arc<mermaid_rs_renderer::ParseOutput>> {
 			.map_err(|e| anyhow!("Mermaid: {e}"))?,
 	);
 	let mut cache =
-		markview_core::sync::cache(parsed_cache(), "Mermaid parse cache");
+		markview_layout::sync::cache(parsed_cache(), "Mermaid parse cache");
 	if let Some(existing) = cache.get(code) {
 		return Ok(existing.clone());
 	}
@@ -371,13 +371,13 @@ fn render_bounded(code: &str, theme: &DiagramTheme) -> Result<String> {
 pub(super) fn svg(code: &str, theme: &DiagramTheme) -> Result<Arc<str>> {
 	let key = (theme.fingerprint(), code.to_owned());
 	if let Some(svg) =
-		markview_core::sync::cache(svg_cache(), "Mermaid SVG cache").get(&key)
+		markview_layout::sync::cache(svg_cache(), "Mermaid SVG cache").get(&key)
 	{
 		return Ok(svg.clone());
 	}
 	let svg: Arc<str> = render_bounded(code, theme)?.into();
 	let mut cache =
-		markview_core::sync::cache(svg_cache(), "Mermaid SVG cache");
+		markview_layout::sync::cache(svg_cache(), "Mermaid SVG cache");
 	if let Some(existing) = cache.get(&key) {
 		return Ok(existing.clone());
 	}

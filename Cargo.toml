@@ -32,7 +32,9 @@ eula = false
 
 [workspace]
 members = [
-	"crates/markview-core",
+	"crates/markview-commonmark",
+	"crates/markview-document",
+	"crates/markview-layout",
 	"crates/markview-i18n",
 	"crates/markview-icon",
 	"crates/markview-pdf",
@@ -118,6 +120,8 @@ wgpu = { version = "29.0.4", default-features = false, features = ["std", "parki
 winit = { version = "0.30.13", default-features = false, features = ["rwh_06", "x11", "wayland", "wayland-dlopen"] }
 
 [dependencies]
+markview-commonmark = { path = "crates/markview-commonmark" }
+markview-document = { path = "crates/markview-document" }
 dom_smoothie = "0.18.2"
 dom_query = "0.28"
 comrak.workspace = true
@@ -137,7 +141,7 @@ percent-encoding = "2"
 base64 = "0.22"
 getrandom = { version = "0.4", features = ["std"] }
 toml_edit = { version = "0.25", features = ["serde"] }
-markview-core = { path = "crates/markview-core", features = ["font-directories"] }
+markview-layout = { path = "crates/markview-layout", features = ["font-directories"] }
 markview-i18n = { path = "crates/markview-i18n" }
 markview-icon = { path = "crates/markview-icon" }
 markview-pdf = { path = "crates/markview-pdf" }

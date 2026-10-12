@@ -1,5 +1,5 @@
 These fixtures derive from the pinned Noto subsets in
-`crates/markview-core/tests/fonts` and retain the license in
+`crates/markview-layout/tests/fonts` and retain the license in
 `licenses/Noto-OFL.txt`. They are test data, never package assets.
 
 Generated with fontTools 4.66.1: load each original with `TTFont`, set

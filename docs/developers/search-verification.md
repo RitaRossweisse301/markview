@@ -18,7 +18,7 @@ cargo test --workspace
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test -p markview app::search::tests::search_bar_and_highlight_gpu_frames -- --nocapture
-cargo test --release -p markview-core --test search large_document_search_measurement -- --ignored --nocapture
+cargo test --release -p markview-layout --test search large_document_search_measurement -- --ignored --nocapture
 ```
 
 The GPU check writes `artifacts/search/*.png` for English, Simplified Chinese,

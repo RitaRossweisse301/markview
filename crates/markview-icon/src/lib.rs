@@ -1,7 +1,7 @@
 //! Compile-time SVG icons for the reader's chrome.
 //!
 //! [`icon!`] reads an SVG file next to the calling crate's manifest, parses it
-//! at compile time, and expands to a `&'static [markview_core::scene::IconPath]`
+//! at compile time, and expands to a `&'static [markview_layout::scene::IconPath]`
 //! normalized to a unit box. The reader keeps its icons as editable SVG files
 //! without parsing, allocating or retaining any SVG runtime.
 //!
@@ -38,13 +38,13 @@ pub fn icon(input: TokenStream) -> TokenStream {
 	let figures = figures.iter().map(|figure| {
 		let commands = figure.commands.iter().map(|command| match command {
 			svg::Command::MoveTo { x, y } => {
-				quote!(::markview_core::scene::PathCommand::MoveTo { x: #x, y: #y })
+				quote!(::markview_layout::scene::PathCommand::MoveTo { x: #x, y: #y })
 			}
 			svg::Command::LineTo { x, y } => {
-				quote!(::markview_core::scene::PathCommand::LineTo { x: #x, y: #y })
+				quote!(::markview_layout::scene::PathCommand::LineTo { x: #x, y: #y })
 			}
 			svg::Command::QuadTo { x1, y1, x, y } => quote!(
-				::markview_core::scene::PathCommand::QuadTo {
+				::markview_layout::scene::PathCommand::QuadTo {
 					x1: #x1, y1: #y1, x: #x, y: #y,
 				}
 			),
@@ -56,17 +56,17 @@ pub fn icon(input: TokenStream) -> TokenStream {
 				x,
 				y,
 			} => quote!(
-				::markview_core::scene::PathCommand::CubicTo {
+				::markview_layout::scene::PathCommand::CubicTo {
 					x1: #x1, y1: #y1, x2: #x2, y2: #y2, x: #x, y: #y,
 				}
 			),
 			svg::Command::Close => {
-				quote!(::markview_core::scene::PathCommand::Close)
+				quote!(::markview_layout::scene::PathCommand::Close)
 			}
 		});
 		let (fill, stroke_width) = (figure.fill, figure.stroke_width);
 		quote!(
-			::markview_core::scene::IconPath {
+			::markview_layout::scene::IconPath {
 				commands: &[#(#commands),*],
 				fill: #fill,
 				stroke_width: #stroke_width,

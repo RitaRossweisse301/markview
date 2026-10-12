@@ -21,7 +21,7 @@
 #![no_main]
 
 use libfuzzer_sys::{fuzz_mutator, fuzz_target};
-use markview_core::document::{Block, BlockKind, Document};
+use markview_document::{Block, BlockKind, Document};
 use mvfuzz::{budget, mutators, oracle, seam};
 use std::sync::Arc;
 
@@ -86,7 +86,7 @@ fuzz_target!(|data: &[u8]| {
 	// oracle below is only meaningful when one is present.
 	let guard = budget::InputGuard::new();
 	let source: Arc<str> = Arc::from(md.as_str());
-	let doc = markview_core::document::parse(source.clone());
+	let doc = markview_commonmark::parse(source.clone());
 	oracle::assert_source_ranges(&doc);
 	seam::assert_details_structure(&doc, &md);
 

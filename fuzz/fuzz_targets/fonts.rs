@@ -5,7 +5,7 @@
 #![no_main]
 
 use libfuzzer_sys::fuzz_target;
-use markview_core::fonts::{self, FontConfig};
+use markview_layout::fonts::{self, FontConfig};
 use mvfuzz::{budget, oracle};
 
 fuzz_target!(|data: &[u8]| {

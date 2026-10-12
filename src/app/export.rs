@@ -10,7 +10,7 @@ use crate::{
 	settings::{ExportFormat, ExportSettings, FontDefOverride},
 	state::Command,
 };
-use markview_core::{
+use markview_layout::{
 	fonts::FontConfig,
 	paginate::PT_PER_PX,
 	style::{CjkType, PageStyle, Stylesheet},
@@ -672,7 +672,7 @@ fn run(
 				export::page_style(settings).paper_mm().unwrap();
 			sheet.set_media(
 				crate::stylesheet::media_context(
-					markview_core::style::StyleTarget::Pdf,
+					markview_layout::style::StyleTarget::Pdf,
 				)
 				.with_size(width, height),
 			);

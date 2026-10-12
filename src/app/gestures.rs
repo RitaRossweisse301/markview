@@ -132,7 +132,7 @@ impl<P: super::SendEvent> App<P> {
 								<= rect.h.max(44.0) / 2.0
 					})
 					.min_by(|a, b| {
-						let distance = |rect: markview_core::scene::Rect| {
+						let distance = |rect: markview_layout::scene::Rect| {
 							(x - (rect.x + rect.w / 2.0))
 								.hypot(y - (rect.y + rect.h / 2.0))
 						};

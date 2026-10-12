@@ -384,9 +384,9 @@ fn compiled_icons_stay_inside_the_unit_box() {
 	}
 }
 fn coordinates(
-	commands: &[markview_core::scene::PathCommand],
+	commands: &[markview_layout::scene::PathCommand],
 ) -> Vec<(f64, f64)> {
-	use markview_core::scene::PathCommand as P;
+	use markview_layout::scene::PathCommand as P;
 	commands
 		.iter()
 		.flat_map(|command| match *command {
@@ -509,7 +509,7 @@ fn about_tab_keeps_navigation_and_scrolls_on_short_windows() {
 		4,
 		"both pages and both halves of the book"
 	);
-	assert!(icons::APP[1].commands.iter().any(|command| matches!(command, markview_core::scene::PathCommand::MoveTo { x, .. } if *x > 0.5)));
+	assert!(icons::APP[1].commands.iter().any(|command| matches!(command, markview_layout::scene::PathCommand::MoveTo { x, .. } if *x > 0.5)));
 	let mut ui = crate::test_support::shaper();
 	let settings = ReaderSettings::default();
 	let interaction = InteractionState {

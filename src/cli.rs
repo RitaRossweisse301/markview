@@ -82,7 +82,7 @@ pub(crate) struct LaunchOptions {
 	pub(crate) scroll: f32,
 	pub(crate) theme: Option<Theme>,
 	pub(crate) style: Option<Vec<String>>,
-	pub(crate) cjk_type: Option<markview_core::style::CjkType>,
+	pub(crate) cjk_type: Option<markview_layout::style::CjkType>,
 	pub(crate) install: Option<(PathBuf, bool)>,
 	pub(crate) validate: Option<PathBuf>,
 	pub(crate) list_stylesheets: bool,
@@ -613,7 +613,7 @@ fn apply_command(out: &mut LaunchOptions, command: Command) -> Result<()> {
 			out.watch = args.watch;
 			out.page.landscape = args.landscape;
 			if let Some(paper) = args.paper {
-				if markview_core::style::parse_paper_size(&paper).is_none() {
+				if markview_layout::style::parse_paper_size(&paper).is_none() {
 					bail!(
 						"Invalid paper {paper:?}; use a3, a4, a5, a6, b5, letter, legal, tabloid or WIDTHxHEIGHT in millimetres"
 					);
@@ -772,10 +772,11 @@ fn apply_reading(out: &mut LaunchOptions, reading: &Reading) -> Result<()> {
 		out.overrides.push(Setting::ParagraphIndent);
 	}
 	if let Some(name) = &reading.cjk_type {
-		out.cjk_type =
-			Some(markview_core::style::CjkType::from_name(name).with_context(
+		out.cjk_type = Some(
+			markview_layout::style::CjkType::from_name(name).with_context(
 				|| format!("Invalid CJK type {name}; use SC, TC, JP or none"),
-			)?);
+			)?,
+		);
 		out.overrides.push(Setting::CjkType);
 	}
 	if reading.left {
@@ -827,7 +828,7 @@ fn parse_margin(value: &str) -> Result<[f32; 4]> {
 
 /// A page-furniture slot may only name the placeholders the page writer knows.
 fn template(flag: &str, value: &str) -> Result<()> {
-	if !markview_core::paginate::template_is_valid(value) {
+	if !markview_layout::paginate::template_is_valid(value) {
 		bail!(
 			"{flag}: unknown placeholder; use {{page}}, {{pages}}, {{title}} or {{path}}"
 		);
@@ -1406,7 +1407,7 @@ mod tests {
 	#[test]
 	fn font_flags_choose_which_faces_are_loaded() {
 		let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-		let fonts = root.join("crates/markview-core/tests/fonts");
+		let fonts = root.join("crates/markview-layout/tests/fonts");
 		let args = parse(&[
 			"a.md",
 			"--fonts",
@@ -1431,10 +1432,10 @@ mod tests {
 	#[test]
 	fn cjk_type_is_parsed_case_insensitively() {
 		for (name, expected) in [
-			("sc", markview_core::style::CjkType::Sc),
-			("TC", markview_core::style::CjkType::Tc),
-			("Jp", markview_core::style::CjkType::Jp),
-			("none", markview_core::style::CjkType::None),
+			("sc", markview_layout::style::CjkType::Sc),
+			("TC", markview_layout::style::CjkType::Tc),
+			("Jp", markview_layout::style::CjkType::Jp),
+			("none", markview_layout::style::CjkType::None),
 		] {
 			let args = parse(&["a.md", "--cjk-type", name]);
 			assert_eq!(args.cjk_type, Some(expected), "{name}");

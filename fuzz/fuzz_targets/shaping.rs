@@ -4,7 +4,7 @@
 #![no_main]
 
 use libfuzzer_sys::fuzz_target;
-use markview_core::{scene::Paint, shaping::TextShaper, style::Stylesheet};
+use markview_layout::{scene::Paint, shaping::TextShaper, style::Stylesheet};
 use mvfuzz::{budget, oracle, pipeline};
 
 fuzz_target!(|data: &[u8]| {
@@ -69,7 +69,7 @@ fuzz_target!(|data: &[u8]| {
 		shaper.label_measured(&text, size, 0.0, 10.0, Paint::Text);
 	check("label.width", width, size_ok, no_overflow, bounded);
 	for d in &draws {
-		if let markview_core::scene::Draw::Glyph(g) = d {
+		if let markview_layout::scene::Draw::Glyph(g) = d {
 			check("glyph.x", g.x, size_ok, no_overflow, bounded);
 			check("glyph.y", g.y, size_ok, no_overflow, bounded);
 		}

@@ -18,7 +18,7 @@ use crate::{
 };
 use anyhow::{Context, Result};
 use log::{info, warn};
-use markview_core::style::{PageStyle, Stylesheet};
+use markview_layout::style::{PageStyle, Stylesheet};
 use markview_pdf::{Export, Renderer};
 use std::{
 	path::{Path, PathBuf},
@@ -54,7 +54,7 @@ pub fn styled(sheet: Arc<Stylesheet>, page: &PageOverrides) -> Arc<Stylesheet> {
 	let (width, height) = sheet.page.paper_mm().unwrap();
 	sheet.set_media(
 		crate::stylesheet::media_context(
-			markview_core::style::StyleTarget::Pdf,
+			markview_layout::style::StyleTarget::Pdf,
 		)
 		.with_size(width, height),
 	);
@@ -264,10 +264,11 @@ impl Exporter {
 			}
 			let source: Arc<str> = text.into();
 			let document = match &self.document {
-				Some(previous) => {
-					Arc::new(document::reparse(previous, source.clone()))
-				}
-				None => Arc::new(document::parse(source.clone())),
+				Some(previous) => Arc::new(markview_commonmark::reparse(
+					previous,
+					source.clone(),
+				)),
+				None => Arc::new(markview_commonmark::parse(source.clone())),
 			};
 			self.source = Some(source);
 			self.document = Some(document);
@@ -372,7 +373,7 @@ fn write_pdf(output: &Path, bytes: &[u8]) -> Result<()> {
 /// left out rather than invented.
 fn metadata_of(
 	overrides: &MetadataOverrides,
-	document: &markview_core::document::Document,
+	document: &markview_document::Document,
 	path: &Path,
 ) -> markview_pdf::Metadata {
 	let title = overrides
@@ -393,12 +394,11 @@ fn metadata_of(
 
 /// The document's own title: its first heading, or the file's name.
 fn title_of(
-	document: &markview_core::document::Document,
+	document: &markview_document::Document,
 	path: &Path,
 ) -> Option<String> {
 	for block in &document.blocks {
-		if let markview_core::document::BlockKind::Heading { text, .. } =
-			&block.kind
+		if let markview_document::BlockKind::Heading { text, .. } = &block.kind
 		{
 			let title = document::plain_text(text);
 			if !title.trim().is_empty() {
@@ -414,7 +414,7 @@ fn title_of(
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use markview_core::style::Stylesheet;
+	use markview_layout::style::Stylesheet;
 	use std::fs;
 
 	fn options(path: &Path, output: &Path) -> PdfRequest {

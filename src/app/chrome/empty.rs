@@ -4,7 +4,7 @@ use super::{
 	ui_appearance,
 };
 use crate::state::{InteractionState, TextField};
-use markview_core::style::{ColorField as C, Condition};
+use markview_layout::style::{ColorField as C, Condition};
 
 struct Layout {
 	rect: Rect,
@@ -377,7 +377,7 @@ mod tests {
 		std::fs::create_dir_all(&output)?;
 		let mut renderer = pollster::block_on(Renderer::new(None))?;
 		for dark in [false, true] {
-			let sheet = markview_core::style::Stylesheet::bundled(dark);
+			let sheet = markview_layout::style::Stylesheet::bundled(dark);
 			renderer.set_stylesheet(sheet.clone());
 			let mut ui = crate::test_support::shaper();
 			ui.set_stylesheet(sheet);
@@ -405,7 +405,7 @@ mod tests {
 						);
 					}
 					let mut input =
-						markview_core::text_input::TextInput::default();
+						markview_layout::text_input::TextInput::default();
 					if focused {
 						input.set_text(&mut ui, "https://example.com/article");
 					}

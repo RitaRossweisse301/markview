@@ -42,7 +42,7 @@ use crate::{
 	worker::{Update, Worker},
 };
 use anyhow::Result;
-use markview_core::fonts::FontConfig;
+use markview_layout::fonts::FontConfig;
 use std::{path::PathBuf, sync::Arc, time::Instant};
 use winit::{event_loop::EventLoopProxy, window::Window};
 
@@ -95,7 +95,7 @@ enum Event {
 	Parsed {
 		path: PathBuf,
 		content_version: u64,
-		document: Arc<markview_core::document::Document>,
+		document: Arc<markview_document::Document>,
 	},
 	Changed(PathBuf),
 	SettingsChanged,
@@ -126,7 +126,7 @@ enum ExportOutcome {
 		path: PathBuf,
 		/// What the strips render with; the shared renderer borrows it and
 		/// then takes the reading view's sheet back.
-		stylesheet: Arc<markview_core::style::Stylesheet>,
+		stylesheet: Arc<markview_layout::style::Stylesheet>,
 	},
 	Failed(String),
 	Cancelled,
@@ -182,10 +182,10 @@ struct Button {
 	/// Names the button; drawn only when it has no icon.
 	label: Label,
 	/// Drawn centered in place of the label when set.
-	icon: Option<&'static [markview_core::scene::IconPath]>,
+	icon: Option<&'static [markview_layout::scene::IconPath]>,
 	/// Drawn after the label, which makes room for it. It marks what the
 	/// button does beyond naming it, such as opening a list.
-	marker: Option<&'static [markview_core::scene::IconPath]>,
+	marker: Option<&'static [markview_layout::scene::IconPath]>,
 	/// Whether this button is the current choice in its row.
 	active: bool,
 	action: Command,
@@ -255,7 +255,7 @@ struct App<P = EventLoopProxy<Event>> {
 	services: Arc<crate::services::Services>,
 	clipboard: markview_platform::Clipboard,
 	text_input: text_input::InputState,
-	url_input: markview_core::text_input::TextInput,
+	url_input: markview_layout::text_input::TextInput,
 	paste_dir: tempfile::TempDir,
 	paste_serial: u32,
 	/// A temporary document path, or `None` while its URL is downloading.
@@ -453,7 +453,7 @@ impl<P: SendEvent> App<P> {
 			}
 		}
 		if markview_platform::touch_layout() {
-			use markview_core::style::{ColorField, Condition};
+			use markview_layout::style::{ColorField, Condition};
 			let [r, g, b, _] = self
 				.ui
 				.stylesheet
@@ -485,7 +485,7 @@ impl<P: SendEvent> App<P> {
 		})
 	}
 	fn update_media(&mut self) -> bool {
-		use markview_core::style::{Condition, StyleTarget, TextAppearance};
+		use markview_layout::style::{Condition, StyleTarget, TextAppearance};
 		let (width, height) =
 			self.window.as_ref().map_or((1200.0, 800.0), |window| {
 				let size = window.inner_size();
@@ -523,9 +523,9 @@ impl<P: SendEvent> App<P> {
 		}
 		[0.0; 4]
 	}
-	pub(super) fn view_geometry(&self) -> markview_core::scene::Viewport {
+	pub(super) fn view_geometry(&self) -> markview_layout::scene::Viewport {
 		let (width, height, _) = self.dimensions();
-		markview_core::scene::Viewport {
+		markview_layout::scene::Viewport {
 			width,
 			height,
 			left: ((width - self.readers.session.snapshot.width) / 2.0)

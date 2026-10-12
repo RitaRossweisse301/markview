@@ -1,6 +1,6 @@
 //! Application-owned I/O and bounded CPU capacity.
 use anyhow::{Result, bail};
-use markview_core::background::{Executor, Task, ThreadExecutor};
+use markview_layout::background::{Executor, Task, ThreadExecutor};
 use std::{future::Future, pin::Pin, sync::Arc, thread, time::Duration};
 use tokio::sync::{Notify, Semaphore, mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
@@ -16,7 +16,7 @@ pub(crate) struct Handle {
 	pub transfers: Arc<Semaphore>,
 	pub cancel: CancellationToken,
 	available: Arc<Notify>,
-	_available_wake: markview_core::background::Wake,
+	_available_wake: markview_layout::background::Wake,
 	send: mpsc::UnboundedSender<Operation>,
 	pub jobs: usize,
 	http_headers: Arc<std::sync::Mutex<reqwest::header::HeaderMap>>,
@@ -31,7 +31,7 @@ impl Services {
 		let cpu = Arc::new(ThreadExecutor::new(Some(32 * 1024 * 1024)));
 		let available = Arc::new(Notify::new());
 		let wake = available.clone();
-		let available_wake: markview_core::background::Wake =
+		let available_wake: markview_layout::background::Wake =
 			Arc::new(move || wake.notify_waiters());
 		cpu.on_available(available_wake.clone());
 		let cancel = CancellationToken::new();
@@ -102,12 +102,12 @@ impl Drop for Services {
 }
 impl Handle {
 	pub fn configure_http(&self, settings: &crate::settings::ReaderSettings) {
-		*markview_core::sync::cache(&self.http_headers, "HTTP headers") =
+		*markview_layout::sync::cache(&self.http_headers, "HTTP headers") =
 			crate::net::browser_headers(settings)
 				.expect("validated HTTP headers");
 	}
 	pub fn http_headers(&self) -> reqwest::header::HeaderMap {
-		markview_core::sync::cache(&self.http_headers, "HTTP headers").clone()
+		markview_layout::sync::cache(&self.http_headers, "HTTP headers").clone()
 	}
 
 	pub fn submit(

@@ -1,8 +1,8 @@
 //! Reader preferences, isolated from launch flags and document state.
 use crate::{lang::Lang, layout::LayoutOptions, render::Theme};
 use anyhow::{Result, bail};
-use markview_core::JustificationLimits;
-use markview_core::style::CjkType;
+use markview_layout::JustificationLimits;
+use markview_layout::style::CjkType;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 mod store;
@@ -64,7 +64,7 @@ pub struct ReaderSettings {
 	/// Optional `Accept-Language` override; absent follows `lang()`.
 	pub accept_language: Option<String>,
 	pub fontdef_overrides: Vec<FontDefOverride>,
-	pub stylesheet: std::sync::Arc<markview_core::style::Stylesheet>,
+	pub stylesheet: std::sync::Arc<markview_layout::style::Stylesheet>,
 	pub font_size: f32,
 	pub width: f32,
 	pub justify: bool,
@@ -95,7 +95,7 @@ impl Default for ReaderSettings {
 			user_agent: None,
 			accept_language: None,
 			fontdef_overrides: Vec::new(),
-			stylesheet: markview_core::style::Stylesheet::bundled(false),
+			stylesheet: markview_layout::style::Stylesheet::bundled(false),
 			font_size: 18.0,
 			width: 760.0,
 			justify: true,
@@ -220,7 +220,7 @@ impl Default for ExportSettings {
 			paragraph_indent: 0.0,
 			paper: "a4".into(),
 			landscape: false,
-			margin: markview_core::style::PageStyle::DEFAULT_MARGIN_MM,
+			margin: markview_layout::style::PageStyle::DEFAULT_MARGIN_MM,
 			scale: 2.0,
 			style: vec!["print".into()],
 		}
@@ -229,7 +229,7 @@ impl Default for ExportSettings {
 impl ExportSettings {
 	/// The body size an export defaults to: 12 pt on paper. A layout pixel is a
 	/// ninety-sixth of an inch and a PDF point a seventy-second, so the two
-	/// differ by [`markview_core::paginate::PT_PER_PX`].
+	/// differ by [`markview_layout::paginate::PT_PER_PX`].
 	pub const DEFAULT_FONT_SIZE_PX: f32 = 16.0;
 
 	pub fn validate(&self) -> Result<()> {
@@ -243,7 +243,7 @@ impl ExportSettings {
 		{
 			bail!("Export settings are out of range");
 		}
-		if markview_core::style::parse_paper_size(&self.paper).is_none() {
+		if markview_layout::style::parse_paper_size(&self.paper).is_none() {
 			bail!("Export paper {:?} is not a size", self.paper);
 		}
 		for id in &self.style {
@@ -267,7 +267,7 @@ impl ReaderSettings {
 	/// keeps the two from drifting apart.
 	pub(crate) fn styled(
 		&self,
-	) -> std::sync::Arc<markview_core::style::Stylesheet> {
+	) -> std::sync::Arc<markview_layout::style::Stylesheet> {
 		if self.stylesheet.cjk_type() == self.cjk_type {
 			return self.stylesheet.clone();
 		}
@@ -280,7 +280,7 @@ impl ReaderSettings {
 		&self,
 		viewport_width: f32,
 		greedy: bool,
-		fonts: &markview_core::fonts::FontConfig,
+		fonts: &markview_layout::fonts::FontConfig,
 	) -> LayoutOptions {
 		LayoutOptions {
 			width: self.width.min(viewport_width - 40.0).max(80.0),
@@ -298,7 +298,7 @@ impl ReaderSettings {
 			force_open: false,
 			front_matter_label: self.lang().front_matter().into(),
 			hide_front_matter: false,
-			limits: markview_core::limits::Limits::default(),
+			limits: markview_layout::limits::Limits::default(),
 		}
 	}
 	pub fn validate(&self) -> Result<()> {

@@ -5,7 +5,7 @@
 #![no_main]
 
 use libfuzzer_sys::{fuzz_mutator, fuzz_target};
-use markview_core::style::{Condition, Stylesheet};
+use markview_layout::style::{Condition, Stylesheet};
 use mvfuzz::{budget, mutators};
 
 fuzz_mutator! { |data: &mut [u8], size: usize, max_size: usize, seed: u32| {
@@ -28,10 +28,10 @@ fuzz_target!(|data: &[u8]| {
 				let _ = sheet.rule(*condition);
 				let _ = sheet.element_rule(u128::MAX, *condition);
 			}
-			let _ = sheet.paint(markview_core::scene::Paint::Background);
+			let _ = sheet.paint(markview_layout::scene::Paint::Background);
 			let _ = sheet.color(
 				Condition::Body,
-				markview_core::style::ColorField::Color,
+				markview_layout::style::ColorField::Color,
 			);
 			let _ = sheet.scrollbar_metrics();
 			let _ = sheet.scrollbar_gutter();

@@ -1,4 +1,4 @@
-The subsets under crates/markview-core/tests/fonts are derived from the Noto
+The subsets under crates/markview-layout/tests/fonts are derived from the Noto
 fonts and remain under the SIL Open Font License 1.1. They are test fixtures
 and are not distributed with the reader.
 

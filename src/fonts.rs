@@ -6,7 +6,7 @@
 //! family is called is decided by the font files themselves; the only state
 //! kept here is what is on disk.
 use anyhow::{Context, Result, bail};
-use markview_core::{
+use markview_layout::{
 	fonts::{FontConfig, is_font_file},
 	style::{FontArchive, FontFamily, FontFile, FontSource},
 };
@@ -273,7 +273,8 @@ fn state_of(
 	if !files.is_empty() {
 		return State::Downloaded;
 	}
-	if markview_core::fonts::provided_family(config, &family.lookfor).is_some()
+	if markview_layout::fonts::provided_family(config, &family.lookfor)
+		.is_some()
 	{
 		return State::Provided;
 	}
@@ -1263,7 +1264,7 @@ fn stage(
 			bail!("sha256 mismatch for {source_name}");
 		}
 	}
-	if !markview_core::fonts::is_font(&bytes) {
+	if !markview_layout::fonts::is_font(&bytes) {
 		bail!("{source_name} is not a font file");
 	}
 	Ok(Staged {
@@ -1320,7 +1321,7 @@ pub fn local_name(family: &str, source_name: &str, bytes: &[u8]) -> String {
 }
 
 fn outline_extension(bytes: &[u8]) -> &'static str {
-	if markview_core::fonts::is_postscript_outline(bytes) {
+	if markview_layout::fonts::is_postscript_outline(bytes) {
 		"otf"
 	} else {
 		"ttf"
@@ -1688,7 +1689,7 @@ mod tests {
 		let read = |name: &str| {
 			std::fs::read(
 				Path::new(env!("CARGO_MANIFEST_DIR"))
-					.join("crates/markview-core/tests/fonts")
+					.join("crates/markview-layout/tests/fonts")
 					.join(name),
 			)
 			.unwrap()
@@ -1719,7 +1720,7 @@ mod tests {
 	fn a_face_is_described_from_its_own_tables() {
 		let dir = tempfile::tempdir().unwrap();
 		let bytes = std::fs::read(Path::new(env!("CARGO_MANIFEST_DIR")).join(
-			"crates/markview-core/tests/fonts/NotoSerif-Regular-subset.otf",
+			"crates/markview-layout/tests/fonts/NotoSerif-Regular-subset.otf",
 		))
 		.unwrap();
 		std::fs::write(dir.path().join("face.ttf"), &bytes).unwrap();
@@ -1746,7 +1747,7 @@ mod tests {
 	/// A real face, so the "is a font" check is exercised rather than stubbed.
 	fn font_bytes() -> Vec<u8> {
 		fs::read(Path::new(env!("CARGO_MANIFEST_DIR")).join(
-			"crates/markview-core/tests/fonts/NotoSerif-Regular-subset.otf",
+			"crates/markview-layout/tests/fonts/NotoSerif-Regular-subset.otf",
 		))
 		.unwrap()
 	}
@@ -2169,7 +2170,7 @@ mod tests {
 	fn a_bitmap_color_emoji_is_a_downloadable_font() {
 		let dir = tempfile::tempdir().unwrap();
 		let emoji = fs::read(Path::new(env!("CARGO_MANIFEST_DIR")).join(
-			"crates/markview-core/tests/fonts/NotoColorEmoji-subset.ttf",
+			"crates/markview-layout/tests/fonts/NotoColorEmoji-subset.ttf",
 		))
 		.unwrap();
 		let mut fake = Fake::default();

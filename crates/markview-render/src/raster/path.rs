@@ -1,6 +1,7 @@
 use super::{Entry, RasterCache, RasterKey};
 use crate::{View, intersect};
-use markview_core::{document::fingerprint, scene::Rect};
+use markview_document::fingerprint;
+use markview_layout::scene::Rect;
 use ratex_types::PathCommand;
 /// The number of device-grid phases an icon raster bakes in. Four steps bound
 /// the cache to a handful of bitmaps per icon while leaving the placement

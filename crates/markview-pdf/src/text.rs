@@ -10,8 +10,8 @@ use krilla::{
 	surface::Surface,
 	text::{Font, GlyphId, KrillaGlyph, Tag},
 };
-use markview_core::layout::Glyph;
-use markview_core::style::SYNTHETIC_ITALIC_ANGLE_DEG;
+use markview_layout::layout::Glyph;
+use markview_layout::style::SYNTHETIC_ITALIC_ANGLE_DEG;
 use parley::FontData;
 use skrifa::MetadataProvider;
 use std::{collections::HashMap, ops::Range};

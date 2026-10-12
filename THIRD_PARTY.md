@@ -42,7 +42,7 @@ Font License is reproduced in `licenses/KaTeX-OFL.txt`; keep that file with
 redistributed binaries. Markview does not bundle the JavaScript KaTeX runtime.
 Body/UI fonts are discovered from the operating system and are not distributed
 with this repository. Unit tests shape with the pinned Noto subsets under
-`crates/markview-core/tests/fonts`; their SIL Open Font License is reproduced in
+`crates/markview-layout/tests/fonts`; their SIL Open Font License is reproduced in
 `licenses/Noto-OFL.txt`. The WOFF/WOFF2 and collection test fixtures under
 `crates/markview-web/tests/fonts` derive from those same Noto subsets. The Lucide icon geometry under `assets/ui` is ISC
 licensed; its license is reproduced in `licenses/Lucide-ISC.txt`.

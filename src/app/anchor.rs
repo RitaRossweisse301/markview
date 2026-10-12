@@ -8,7 +8,7 @@
 //! references and a note's number use the same fragments; the number's
 //! `fnback:` fragment is answered here from where the reader jumped from.
 use super::App;
-use markview_core::document::footnote;
+use markview_document::footnote;
 use std::time::{Duration, Instant};
 
 /// A link's document part, without its fragment.

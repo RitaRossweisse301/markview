@@ -5,7 +5,7 @@
 //! families themselves are named by the files they contain.
 use crate::{cli::FontsCommand, logging::report};
 use anyhow::{Context, Result, bail};
-use markview_core::{
+use markview_layout::{
 	fonts::FontConfig,
 	style::{FontFamily, Stylesheet},
 };

@@ -15,7 +15,7 @@ pub(crate) struct Figure {
 	pub(crate) stroke_width: f32,
 }
 
-/// An absolute outline command, mirroring `markview_core::scene::PathCommand`.
+/// An absolute outline command, mirroring `markview_layout::scene::PathCommand`.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) enum Command {
 	MoveTo {

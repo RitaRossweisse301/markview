@@ -8,7 +8,7 @@
 
 use std::ops::Range;
 
-use markview_core::document::{
+use markview_document::{
 	Block, BlockKind, Document, Inline, InlineKind, RichText,
 };
 
@@ -1248,10 +1248,10 @@ impl InlineRef {
 }
 
 /// The plain reading text of a rich run — the same projection
-/// `markview_core::document::plain_text` performs, re-exported here so the
+/// `markview_document::plain_text` performs, re-exported here so the
 /// targets do not each import it.
 pub fn plain_text(text: &[Inline]) -> String {
-	markview_core::document::plain_text(text)
+	markview_document::plain_text(text)
 }
 
 /// The raw `<details …>` tag text that begins `range` in `doc`'s source, when
@@ -1312,10 +1312,10 @@ mod tests {
 	use std::sync::Arc;
 
 	use super::*;
-	use markview_core::document::Link;
+	use markview_document::Link;
 
 	fn parse(source: &str) -> Document {
-		markview_core::document::parse(Arc::from(source))
+		markview_commonmark::parse(Arc::from(source))
 	}
 
 	#[test]

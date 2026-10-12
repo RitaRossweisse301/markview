@@ -14,7 +14,7 @@ def fields(source, name):
 
 
 def check():
-    source = (ROOT / "crates/markview-core/src/style/types.rs").read_text()
+    source = (ROOT / "crates/markview-layout/src/style/types.rs").read_text()
     fixtures = list((ROOT / "crates/markview-render/tests/fixtures").glob("*.mvss.toml"))
     fixtures += list((ROOT / "tests/fixtures").rglob("*.mvss.toml"))
     covered = {name: set() for name in (
@@ -41,7 +41,7 @@ def check():
             failures.append(f"{name}: missing visual fixtures for {sorted(missing)}")
     if failures:
         raise SystemExit("\n".join(failures))
-    media_source = (ROOT / "crates/markview-core/src/style/media.rs").read_text()
+    media_source = (ROOT / "crates/markview-layout/src/style/media.rs").read_text()
     media_body = media_source.split("pub enum Media {", 1)[1].split("\n}", 1)[0]
     missing_media = {name.lower() for name in re.findall(r"\t(\w+),", media_body)} - media
     if missing_media:

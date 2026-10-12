@@ -9,7 +9,7 @@ use krilla::{
 	destination::{Destination, XyzDestination},
 	geom::{Point, Rect},
 };
-use markview_core::paginate::{PT_PER_PX, PageGeometry, Pagination};
+use markview_layout::paginate::{PT_PER_PX, PageGeometry, Pagination};
 
 /// The annotation for one link, or `None` when the target cannot be reached.
 /// `rect` is in page points, y measured down from the page's top edge.

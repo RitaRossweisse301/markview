@@ -259,7 +259,7 @@ fn clipboard_shortcuts_replace_selection_and_undo_without_a_desktop_clipboard()
 #[test]
 fn text_input_frames() -> anyhow::Result<()> {
 	use crate::render::{Renderer, Theme, View};
-	use markview_core::style::Stylesheet;
+	use markview_layout::style::Stylesheet;
 	let mut app = app();
 	let mut renderer = pollster::block_on(Renderer::new(None))?;
 	let directory =

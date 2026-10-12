@@ -4,7 +4,7 @@
 //! SVG rasterizer, so both stages need the same faces or the labels would not
 //! fit the boxes around them. [`DiagramFonts`] resolves only the MVSS-selected
 //! faces through the shaper's collection, and hands them to the rasterizer.
-use markview_core::fonts::{DiagramFace, DiagramFonts as Policy, FontConfig};
+use markview_layout::fonts::{DiagramFace, DiagramFonts as Policy, FontConfig};
 use std::{
 	collections::HashMap,
 	sync::{Arc, Mutex, OnceLock},
@@ -61,7 +61,7 @@ impl DiagramFonts {
 		);
 		let slot = {
 			let mut cache =
-				markview_core::sync::cache(cache, "Diagram font cache");
+				markview_layout::sync::cache(cache, "Diagram font cache");
 			if let Some((_, slot)) =
 				cache.iter().find(|(other, _)| *other == key)
 			{

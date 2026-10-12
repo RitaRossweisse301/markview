@@ -3,7 +3,7 @@
 //! it directly.
 
 use crate::selection::Pointer;
-use markview_core::layout::LayoutSnapshot;
+use markview_layout::layout::LayoutSnapshot;
 use markview_selection::Host;
 use std::cell::Cell;
 use std::collections::BTreeMap;

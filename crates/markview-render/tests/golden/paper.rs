@@ -1,8 +1,7 @@
 use anyhow::{Result, ensure};
 use image::RgbaImage;
-use markview_core::{
+use markview_layout::{
 	background::Direct,
-	document,
 	fonts::FontConfig,
 	image::ImageSnapshot,
 	layout::LayoutEngine,
@@ -41,7 +40,7 @@ pub fn frames(
 	options.force_open = true;
 	options.hide_front_matter = true;
 	options.stylesheet = Arc::new(sheet);
-	let doc = document::parse(fs::read_to_string(
+	let doc = markview_commonmark::parse(fs::read_to_string(
 		root.join("tests/fixtures/theme-sampler.md"),
 	)?);
 	let mut engine =

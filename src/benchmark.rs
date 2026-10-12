@@ -188,7 +188,7 @@ pub fn run(
 		let text = read_document(path)?;
 		let read_ms = start.elapsed().as_secs_f64() * 1000.0;
 		let t = Instant::now();
-		let doc = document::parse(text);
+		let doc = markview_commonmark::parse(text);
 		let parse_ms = t.elapsed().as_secs_f64() * 1000.0;
 		let image_start = Instant::now();
 		images.set_security(crate::security::Security::local(
@@ -245,13 +245,13 @@ pub fn run(
 			total_ms: start.elapsed().as_secs_f64() * 1000.0,
 		})
 	};
-	let profiling = markview_core::profile::requested();
+	let profiling = markview_layout::profile::requested();
 	if profiling {
-		markview_core::profile::enable();
-		markview_core::profile::reset();
+		markview_layout::profile::enable();
+		markview_layout::profile::reset();
 	}
 	let first_open = sample(false)?;
-	let profile_ms = profiling.then(markview_core::profile::totals);
+	let profile_ms = profiling.then(markview_layout::profile::totals);
 	let full_layout_samples = (0..iterations)
 		.map(|_| sample(false))
 		.collect::<Result<Vec<_>>>()?;

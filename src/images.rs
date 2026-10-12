@@ -12,8 +12,8 @@ mod tests;
 use anyhow::Result;
 use decode::{Decoded, decode};
 use fonts::DiagramFonts;
-use markview_core::{
-	document::Document,
+use markview_document::Document;
+use markview_layout::{
 	fonts::FontConfig,
 	image::{ImageInfo, ImageSnapshot},
 	style::Stylesheet,
@@ -94,7 +94,7 @@ struct Loaded {
 	intrinsic: (u32, u32),
 	raster: (u32, u32),
 	svg: bool,
-	pixels: Option<Arc<markview_core::image::Pixels>>,
+	pixels: Option<Arc<markview_layout::image::Pixels>>,
 	pdf: Option<markview_pdf::PreparedImage>,
 }
 
@@ -183,14 +183,14 @@ pub struct Images {
 	entries: HashMap<Source, Entry>,
 	/// Keep bounded intrinsic sizes across tabs, without retaining decoded pixels.
 	intrinsic: Vec<Intrinsic>,
-	resident: HashMap<String, Arc<markview_core::image::Pixels>>,
-	demand: HashMap<String, markview_core::image::ImageDemand>,
+	resident: HashMap<String, Arc<markview_layout::image::Pixels>>,
+	demand: HashMap<String, markview_layout::image::ImageDemand>,
 	done: mpsc::Sender<Finished>,
 	services: crate::services::Handle,
 	_owner: Option<Arc<crate::services::Services>>,
 	cache: Option<cache::Cache>,
 	offline: bool,
-	wake: markview_core::background::Wake,
+	wake: markview_layout::background::Wake,
 	pipelines: Arc<tokio::sync::Semaphore>,
 	recv: mpsc::Receiver<Finished>,
 	generation: u64,
@@ -284,7 +284,7 @@ impl Images {
 		fonts: FontConfig,
 		services: crate::services::Handle,
 		owner: Option<Arc<crate::services::Services>>,
-		wake: markview_core::background::Wake,
+		wake: markview_layout::background::Wake,
 	) -> Self {
 		let (done, recv) = mpsc::channel();
 		Self {
@@ -352,7 +352,7 @@ impl Images {
 		// A document without a diagram never pays for the reader's font
 		// collection, which a diagram's measurement and drawing need.
 		let has_diagram = specs.iter().any(|spec| {
-			spec.src.starts_with(markview_core::image::MERMAID_SCHEME)
+			spec.src.starts_with(markview_layout::image::MERMAID_SCHEME)
 		});
 		let han: Vec<String> = sheet
 			.cjk_families()

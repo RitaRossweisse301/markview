@@ -8,7 +8,7 @@
 #            which include the table, strikethrough, tasklist, and
 #            autolink extension examples
 #   math/    LaTeX inputs from KaTeX's parser and builder test suite
-#   mvss/    the built-in stylesheets of `markview-core`
+#   mvss/    the built-in stylesheets of `markview-layout`
 #
 # Seeds are inputs, not run artifacts: they live with the corpus, stay out of
 # the repository (`fuzz/corpus` is gitignored), and are rebuilt on demand.
@@ -43,7 +43,7 @@ fetch \
 	https://raw.githubusercontent.com/KaTeX/KaTeX/master/test/katex-spec.ts \
 	"$tmp/katex-spec.ts"
 
-python3 - "$tmp" "$out" "$root/crates/markview-core/styles" <<'PY'
+python3 - "$tmp" "$out" "$root/crates/markview-layout/styles" <<'PY'
 import pathlib, re, sys
 
 tmp, out, styles = (

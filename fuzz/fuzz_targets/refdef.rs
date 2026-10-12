@@ -25,9 +25,7 @@
 use std::sync::Arc;
 
 use libfuzzer_sys::{fuzz_mutator, fuzz_target};
-use markview_core::document::{
-	Block, BlockKind, Document, InlineKind, RichText,
-};
+use markview_document::{Block, BlockKind, Document, InlineKind, RichText};
 use mvfuzz::{budget, mutators, oracle, seam};
 
 fuzz_mutator! { |data: &mut [u8], size: usize, max_size: usize, seed: u32| {
@@ -118,7 +116,7 @@ fuzz_target!(|data: &[u8]| {
 	}
 	let guard = budget::InputGuard::new();
 	let source: Arc<str> = Arc::from(md.as_str());
-	let doc = markview_core::document::parse(source.clone());
+	let doc = markview_commonmark::parse(source.clone());
 	oracle::assert_source_ranges(&doc);
 
 	// 1. Every definition the independent scan is sure of must resolve to its
@@ -209,8 +207,7 @@ fuzz_target!(|data: &[u8]| {
 	}
 	let marker = format!("\n[fuzz-inert-{len}]: /inert-{len}\n");
 	let extended = format!("{md}{marker}");
-	let with_suffix =
-		markview_core::document::parse(Arc::from(extended.as_str()));
+	let with_suffix = markview_commonmark::parse(Arc::from(extended.as_str()));
 	oracle::assert_source_ranges(&with_suffix);
 	// The append was absorbed if its bytes show up anywhere in the extended
 	// tree: a list or quote item still open at EOF takes the line into its

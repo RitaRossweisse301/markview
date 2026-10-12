@@ -1,7 +1,7 @@
 # Fuzzing harness for the Markview libraries
 
 A `cargo-fuzz` + libFuzzer crate (nightly) covering the three library crates —
-`markview-core`, `markview-pdf`, `markview-render`. This directory is its own
+`markview-layout`, `markview-pdf`, `markview-render`. This directory is its own
 workspace and is deliberately **not** a member of the root workspace, so
 `cargo test`/`cargo dist` at the root never see it.
 
@@ -133,7 +133,7 @@ a tree against an independent scan of the same bytes.
 - `pipeline.rs` — shared parse/layout plumbing. `warmup()` runs once per
   process before any layout-family input's guard starts: a fenced code
   block pays fontconfig's cold caches and the syntax-set build, and
-  `prewarm_highlight` (a `fuzz`-only markview-core API) pays each
+  `prewarm_highlight` (a `fuzz`-only markview-layout API) pays each
   syntax's one-time parse-state build, so none of that warm-up cost
   lands on an input's account. `export_pdf` supplies a synthetic one-pixel
   snapshot for every image the layout drew, so an input containing an image
@@ -161,7 +161,7 @@ a tree against an independent scan of the same bytes.
   Character boundaries are deliberately not asserted: a `<details>` body and
   the blocks its closing block spills to the top level are parsed as
   snippets, so their ranges are snippet-relative by construction. Layout
-  options **pin the committed test fonts** (`crates/markview-core/tests/fonts`),
+  options **pin the committed test fonts** (`crates/markview-layout/tests/fonts`),
   never the host's font set, so snapshots compare equal across machines.
 - `seam.rs` — the structural differentials the `G1` Tier-3 targets share:
   source ranges against the text they address (`assert_rich_text_covered`
@@ -182,7 +182,7 @@ a tree against an independent scan of the same bytes.
   not an export defect.
 - `ratex.rs` — the `\char` overflow allowance. `ratex-parser` 0.1.14
   accumulates the argument without a width check, and `libfuzzer-sys` aborts
-  on the panic before the `catch_unwind` in `markview-core` can absorb it, so
+  on the panic before the `catch_unwind` in `markview-layout` can absorb it, so
   the four targets that reach ratex call `allow_char_overflow()`, which swaps
   that one hook for a non-aborting one. Every other panic still aborts, so the
   oracle stays strict.

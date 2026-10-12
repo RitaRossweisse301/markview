@@ -10,7 +10,7 @@
 //!
 //! It is still fatal to a campaign. `libfuzzer-sys` installs a panic hook
 //! that aborts before unwinding, so the `catch_unwind` in
-//! `markview_core::math` cannot absorb the panic and libFuzzer reports a
+//! `markview_layout::math` cannot absorb the panic and libFuzzer reports a
 //! crash. Replacing that hook with one that lets exactly this panic unwind
 //! puts `catch_unwind` back in service; every other panic still aborts, so
 //! the oracle stays strict.

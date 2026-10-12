@@ -1,7 +1,7 @@
 //! Clipped quads and reusable frame vertex storage.
 use crate::{View, intersect, raster::ATLAS_SIZE};
 use bytemuck::{Pod, Zeroable};
-use markview_core::scene::Rect;
+use markview_layout::scene::Rect;
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
 pub(super) struct Vertex {
@@ -22,7 +22,7 @@ impl Geometry {
 	pub(super) fn decorated(
 		&mut self,
 		r: Rect,
-		decoration: markview_core::scene::BoxDecoration,
+		decoration: markview_layout::scene::BoxDecoration,
 		background: [f32; 4],
 		border: [f32; 4],
 		clip: Rect,
@@ -34,9 +34,10 @@ impl Geometry {
 		let Some(visible) = r.intersect(clip) else {
 			return;
 		};
-		let corners = markview_core::scene::fit_corners(r, decoration.corners);
+		let corners =
+			markview_layout::scene::fit_corners(r, decoration.corners);
 		let [t, right, b, l] =
-			markview_core::scene::fit_edges(r, decoration.edges);
+			markview_layout::scene::fit_edges(r, decoration.edges);
 		let inner = Rect {
 			x: r.x + l,
 			y: r.y + t,
@@ -68,7 +69,7 @@ impl Geometry {
 			}
 			return;
 		}
-		let inner_corners = markview_core::scene::fit_corners(
+		let inner_corners = markview_layout::scene::fit_corners(
 			inner,
 			[
 				(corners[0] - t.max(l)).max(0.0),

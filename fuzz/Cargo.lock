@@ -1286,20 +1286,51 @@ dependencies = [
 ]
 
 [[package]]
-name = "markview-core"
+name = "markview-commonmark"
+version = "0.3.0"
+dependencies = [
+ "comrak",
+ "html-escape",
+ "markview-document",
+ "percent-encoding",
+]
+
+[[package]]
+name = "markview-document"
+version = "0.3.0"
+dependencies = [
+ "serde",
+]
+
+[[package]]
+name = "markview-fuzz"
+version = "0.0.0"
+dependencies = [
+ "arbitrary",
+ "libfuzzer-sys",
+ "lopdf",
+ "markview-commonmark",
+ "markview-document",
+ "markview-layout",
+ "markview-pdf",
+ "markview-render",
+ "mvfuzz",
+ "tempfile",
+]
+
+[[package]]
+name = "markview-layout"
 version = "0.3.0"
 dependencies = [
  "anyhow",
  "codex",
- "comrak",
- "html-escape",
  "hypher",
  "icu_properties",
  "icu_segmenter",
  "log",
+ "markview-document",
  "memmap2",
  "parley",
- "percent-encoding",
  "ratex-layout",
  "ratex-parser",
  "ratex-types",
@@ -1316,27 +1347,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "markview-fuzz"
-version = "0.0.0"
-dependencies = [
- "arbitrary",
- "libfuzzer-sys",
- "lopdf",
- "markview-core",
- "markview-pdf",
- "markview-render",
- "mvfuzz",
- "tempfile",
-]
-
-[[package]]
 name = "markview-pdf"
 version = "0.3.0"
 dependencies = [
  "anyhow",
  "krilla",
  "log",
- "markview-core",
+ "markview-layout",
  "parley",
  "percent-encoding",
  "ratex-font",
@@ -1353,7 +1370,8 @@ version = "0.3.0"
 dependencies = [
  "anyhow",
  "bytemuck",
- "markview-core",
+ "markview-document",
+ "markview-layout",
  "parley",
  "ratex-font",
  "ratex-katex-fonts",
@@ -1449,7 +1467,9 @@ version = "0.0.0"
 dependencies = [
  "libfuzzer-sys",
  "lopdf",
- "markview-core",
+ "markview-commonmark",
+ "markview-document",
+ "markview-layout",
  "markview-pdf",
  "percent-encoding",
  "ratex-layout",

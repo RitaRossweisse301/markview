@@ -22,9 +22,9 @@ This page records threat details, implementation controls, and historical findin
 
 ### T1: process abort from unbounded recursion
 
-**Fixed.** `Reader::inlines` in `crates/markview-core/src/document/parse.rs` used to recurse once per inline AST node with no depth budget, while the sibling `Reader::blocks` capped recursion. A 12 KB file of nested emphasis aborted the process with a stack overflow on the 8 MiB stack the layout worker requests, and `--watch` or following a link could reach it a second time.
+**Fixed.** `Reader::inlines` in `crates/markview-commonmark/src/parse.rs` used to recurse once per inline AST node with no depth budget, while the sibling `Reader::blocks` capped recursion. A 12 KB file of nested emphasis aborted the process with a stack overflow on the 8 MiB stack the layout worker requests, and `--watch` or following a link could reach it a second time.
 
-`inlines` now takes a depth and, at `Limits::inline_depth`, collects the remaining subtree with an iterative walk and keeps it as plain text. Content is never lost, only its styling. The bound is 256; the original investigation estimated about 128 KB of the 8 MiB stack: it exists to stop pathological input, not to restrict nested documents. `crates/markview-core/src/document/tests.rs` keeps the 12 KB input as a regression test.
+`inlines` now takes a depth and, at `Limits::inline_depth`, collects the remaining subtree with an iterative walk and keeps it as plain text. Content is never lost, only its styling. The bound is 256; the original investigation estimated about 128 KB of the 8 MiB stack: it exists to stop pathological input, not to restrict nested documents. `crates/markview-commonmark/src/tests.rs` keeps the 12 KB input as a regression test.
 
 ### T2: hang or CPU exhaustion
 
@@ -32,10 +32,10 @@ This page records threat details, implementation controls, and historical findin
 
 | Hot spot | Bound |
 | --- | --- |
-| `crates/markview-core/src/highlight.rs`, syntect | A single line longer than `highlight_line_bytes` (64 KiB) is not handed to the regex engine at all, and only `highlight_bytes` (16 MiB) of code per layout pass is highlighted. The remainder renders uncolored. |
-| `crates/markview-core/src/math.rs`, ratex | `math_formula_bytes` (256 KiB) per formula and `math_bytes` (8 MiB) per layout pass. A formula over budget renders through the existing math-error path. |
-| `crates/markview-core/src/linebreak.rs`, `greedy` | The greedy fallback now observes the same `linebreak_evaluations` budget as the optimal pass, and always terminates: when the budget runs out it keeps the best candidate found, or advances one unit. |
-| `crates/markview-core/src/layout/table.rs`, wide tables | `table_columns` (256), `table_rows` (16384), and `table_cells` (131072) truncate the grid before it is shaped. |
+| `crates/markview-layout/src/highlight.rs`, syntect | A single line longer than `highlight_line_bytes` (64 KiB) is not handed to the regex engine at all, and only `highlight_bytes` (16 MiB) of code per layout pass is highlighted. The remainder renders uncolored. |
+| `crates/markview-layout/src/math.rs`, ratex | `math_formula_bytes` (256 KiB) per formula and `math_bytes` (8 MiB) per layout pass. A formula over budget renders through the existing math-error path. |
+| `crates/markview-layout/src/linebreak.rs`, `greedy` | The greedy fallback now observes the same `linebreak_evaluations` budget as the optimal pass, and always terminates: when the budget runs out it keeps the best candidate found, or advances one unit. |
+| `crates/markview-layout/src/layout/table.rs`, wide tables | `table_columns` (256), `table_rows` (16384), and `table_cells` (131072) truncate the grid before it is shaped. |
 
 Shaping also explicitly disables Parley's intermediate line-height ceiling.
 The six-byte `shaping-raw-size-hang` fuzz input derives a finite font size of
@@ -46,7 +46,7 @@ styles are ignored and front matter remains source. A user-selected MVSS rule
 can reach it because validation accepts any finite positive `size` (for
 example, `size=1.716e37` for `p` hangs on `ab` before the fix). The shared shaper
 now sets the height ceiling to infinity before breaking lines. Regression
-coverage is in `crates/markview-core/tests/shaping.rs`; this ensures termination,
+coverage is in `crates/markview-layout/tests/shaping.rs`; this ensures termination,
 while extreme sizes can still overflow geometry.
 
 The defaults are chosen so that ordinary documents never reach them; a pasted 10K-character formula is well inside `math_formula_bytes` even when every character is three bytes wide, and a code-heavy document fits inside `highlight_bytes`.
@@ -105,7 +105,7 @@ Documents have no scripts or response-reading API. Local image loading does not 
 
 ## Resource limits
 
-`crates/markview-core/src/limits.rs` defines one `Limits` value for core parsing and layout depth, iteration, and byte allowances. `document::parse` uses the default, and layout reads it from `LayoutOptions::limits`, so styling, math, highlighting, table layout, and line breaking all take their budget from the same place.
+`crates/markview-commonmark/src/limits.rs` owns the default parsing depth and HTML scope budgets. `crates/markview-layout/src/limits.rs` owns the work and byte allowances read from `LayoutOptions::limits` by math, highlighting, table layout and line breaking. The split preserves every default allowance.
 
 | Field | Default | Governs |
 | --- | --- | --- |

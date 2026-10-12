@@ -2,28 +2,47 @@
 
 This document explains what the major parts of Markview own and why the boundaries exist. It is intended for someone reading the implementation, not for someone trying to add a feature; procedural guidance lives in [the development guide](development.md).
 
-## The three-layer pipeline
+## Document processing and rendering
 
-Markview is a read-only desktop application organized around a core and two rendering backends:
+Markview separates source parsing, semantic representation and layout:
 
 ```text
-Markdown / assets
-        │
-        ▼
-markview-core: semantic document → immutable layout snapshot
-        │
-        ├── markview-render: snapshot → GPU frame
-        │
-        ├── markview-pdf: snapshot + pages → PDF content streams
-        │
-        └── markview application: files, settings, input, and lifecycle
+Markdown → markview-commonmark → markview-document::Document
+                                      │
+                                      ▼
+                               markview-layout
+                                      │
+                               LayoutSnapshot
+                                      │
+                   ┌──────────────────┴──────────────────┐
+             markview-render                       markview-pdf
+                GPU frame                           PDF pages
 ```
 
-`markview-core` is window- and GPU-independent. It parses Markdown and the supported raw HTML subset, represents semantic blocks and inline content, shapes text, lays out paragraphs, measures math and images, and exposes reading text, selection geometry, links, and draw instructions.
+`markview-document` owns semantic blocks, inline content, links, image source
+specifications, colors and stable reading identities. It depends only on the
+standard library and `serde` for the existing color representation. It contains
+no source parser, font engine or drawing geometry.
+
+`markview-commonmark` converts CommonMark, Markview's extensions and the
+supported embedded HTML subset into that document. It owns full, prefix and
+incremental parsing, front matter and heading anchor assignment.
+
+`markview-layout` consumes a document with layout options and resource metadata.
+It shapes text, lays out paragraphs, measures math and images, and exposes
+reading text, selection geometry, links, search, source navigation, pagination
+and drawing instructions. Its bundled themes, fonts and immutable snapshots
+remain window- and GPU-independent.
+
+The Cargo production dependency graph is `markview-commonmark →
+markview-document ← markview-layout`. Both transformations depend on the same
+representation; neither depends on the other. Layout tests use CommonMark as a
+development dependency. The renderer, PDF backend and selection engine have no
+production dependency on the CommonMark parser.
 
 `markview-render` consumes those instructions. It owns the wgpu device and surface, glyph and image resources, clipping, colors that can be changed without reflow, and headless output. It does not contain a second document layout engine.
 
-`markview-pdf` consumes the same snapshot for paper. It re-lays the document at the page's text measure, breaks the column into pages, and writes vector content through `krilla`: text as glyph runs with subset fonts and a character map, math, rules, boxes, images, and link annotations. It owns no window, no GPU, and no source parsing.
+`markview-pdf` consumes the same snapshot for paper. The application's exporter lays the document out at the page's text measure and uses `markview-layout::paginate` to break the column into pages. The PDF backend writes vector content through `krilla`: text as glyph runs with subset fonts and a character map, math, rules, boxes, images, and link annotations. It owns no window, no GPU, and no source parsing.
 
 The root package owns reader policy: launch parsing, settings persistence, file content validation, file watching, image loading, single-instance communication, UI geometry and asynchronous scheduling. The UI translates gestures into commands; it does not define document semantics.
 
@@ -32,7 +51,7 @@ clipboard, file and export dialogs, external opening, error dialogs, system
 appearance, wheel settings, process detachment, configuration directories,
 system locale, file-open flags and permissions, icons, window attributes and
 native window/input adapters. It depends on `winit` and system libraries, with
-no dependency on the application, core, renderer or selection engine. GPU
+no dependency on the application, document pipeline, renderer or selection engine. GPU
 backend features and final executable/library build settings stay with their
 existing owners.
 
@@ -50,7 +69,37 @@ only use test/debug conditional compilation; the final executable's subsystem
 attribute is exempt. CI enforces this with
 [`check_platform_boundary.py`](../../scripts/check_platform_boundary.py).
 
-The separation matters because the same core layout is used by the interactive window, the renderer tests, and the offscreen render and benchmark modes.
+The separation matters because the same document layout is used by the interactive window, the renderer tests, and the offscreen render and benchmark modes.
+
+## Pipeline scheduling
+
+The host owns input selection and orchestration. The native application's
+`Worker` reads source, calls `markview_commonmark::parse`, `parse_prefix` or
+`reparse`, prepares image resources, and calls the layout engine. It retains an
+`Arc<Document>` across reflows, maintains content and request versions, cancels
+superseded work, and publishes only current snapshots. Layout options or
+resource changes reuse the document instead of parsing again.
+
+`markview-web` owns the browser adapter's document and pending layout state.
+JavaScript drives its existing `beginUpdate` / `stepUpdate` interfaces and
+animation frames; the adapter calls `begin_layout` / `advance` and publishes
+completed prefixes. The host supplies image results. Synchronous updates keep
+the existing `setMarkdown` path.
+
+The native PNG and PDF export flows drive parsing, resource preparation and
+layout themselves, waiting for images and syntax highlighting before rendering
+or writing output. External Rust consumers can compose the same functions and
+engine with their own scheduling.
+
+`LayoutEngine` owns geometry caches and resumable layout state. Its background
+highlight tasks use the existing injected `Executor`, or its default executor
+when none is supplied. Source parsing remains an ordinary function call, and
+the document representation schedules no work.
+
+A future input crate can produce the same `Document` for the host to pass into
+layout. The current experimental web article reader still converts extracted
+content into Markdown; this split preserves its behavior and the existing
+source coordinate model.
 
 ## Application feature boundaries
 
@@ -151,7 +200,7 @@ Justification and line breaking share one microtypographic model, in `microtype`
 
 East Asian punctuation gives back the blank half of its em box at a line start or end, and Han text is spaced a quarter em from Latin, both following the W3C Requirements for Chinese Text Layout. Which half a mark gives up depends on the reader's `cjk-type`, since the mainland, Taiwanese and Japanese conventions place the comma-like marks differently. A closing mark also hangs part of its advance into the end margin, which is what makes a justified line read as flush, and a CJK quotation mark may take the line edge its convention asks for even though UAX #14 forbids a break on either side of one. Because the same numbers drive measurement and painting, a drawn line is the line the optimizer chose.
 
-Page breaking is the one layout step that exists only for paper. `markview-core::paginate` collects each block's drawn lines into bands, records the space each band needs together with the lines widow and orphan control refuses to separate from it, and distributes the bands over fixed-height regions, following the model Typst uses for flow layout. A block owns its whole vertical extent, so a fragment that opens a page starts at the block's top edge while a continuation starts at its first line. The reader never runs this pass.
+Page breaking is the one layout step that exists only for paper. `markview-layout::paginate` collects each block's drawn lines into bands, records the space each band needs together with the lines widow and orphan control refuses to separate from it, and distributes the bands over fixed-height regions, following the model Typst uses for flow layout. A block owns its whole vertical extent, so a fragment that opens a page starts at the block's top edge while a continuation starts at its first line. The reader never runs this pass.
 
 Math is laid out as an atomic display list and images as atomic inline boxes. This keeps their baseline and height in the line model. Images do not create a float band: text never wraps around their sides. An image-only paragraph is centered and may receive a caption; mixed content remains an inline paragraph.
 

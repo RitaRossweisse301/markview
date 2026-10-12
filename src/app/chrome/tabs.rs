@@ -3,16 +3,16 @@ use crate::app::tab_strip::{GAP, TabLayout, TabStrip};
 use crate::layout::{Draw, Paint, Rect, TextShaper};
 use crate::settings::TabStyle;
 use crate::state::ReaderTab;
-use markview_core::style::{ColorField as C, Condition};
+use markview_layout::style::{ColorField as C, Condition};
 use unicode_segmentation::UnicodeSegmentation;
 
-const LEFT: &[markview_core::scene::IconPath] =
+const LEFT: &[markview_layout::scene::IconPath] =
 	markview_icon::icon!("assets/ui/tab-left.svg");
-const RIGHT: &[markview_core::scene::IconPath] =
+const RIGHT: &[markview_layout::scene::IconPath] =
 	markview_icon::icon!("assets/ui/tab-right.svg");
-const ACTIVE_LEFT: &[markview_core::scene::IconPath] =
+const ACTIVE_LEFT: &[markview_layout::scene::IconPath] =
 	markview_icon::icon!("assets/ui/tab-active-left.svg");
-const ACTIVE_RIGHT: &[markview_core::scene::IconPath] =
+const ACTIVE_RIGHT: &[markview_layout::scene::IconPath] =
 	markview_icon::icon!("assets/ui/tab-active-right.svg");
 const RADIUS: f32 = 8.0;
 

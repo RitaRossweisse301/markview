@@ -4,7 +4,7 @@
 //! that machine reads and writes, and turns a canvas-local point into a
 //! reading position through the published snapshot.
 
-use markview_core::{
+use markview_layout::{
 	layout::LayoutSnapshot,
 	scene::Viewport,
 	text::{TextPosition, TextSelection},

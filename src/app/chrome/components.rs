@@ -6,7 +6,9 @@ use crate::{
 	layout::{Draw, Paint, Rect, Scrollbar, ScrollbarMetrics, TextShaper},
 	state::{Command, Dropdown, DropdownId, InteractionState, PanelTab},
 };
-use markview_core::style::{Color, ColorField as C, Condition, TextAppearance};
+use markview_layout::style::{
+	Color, ColorField as C, Condition, TextAppearance,
+};
 
 pub(in crate::app) const CONTROL: f32 = 32.0;
 pub(super) const INSET: f32 = 24.0;
@@ -511,7 +513,7 @@ pub(in crate::app) fn action(
 	}
 }
 pub(super) struct Row {
-	icon: Option<&'static [markview_core::scene::IconPath]>,
+	icon: Option<&'static [markview_layout::scene::IconPath]>,
 	pub label: String,
 	input: Option<crate::state::TextField>,
 	pub actions: Vec<Action>,
@@ -559,7 +561,7 @@ impl Row {
 		self.menu = Some(RowMenu { id, entries });
 		self
 	}
-	pub fn icon(paths: &'static [markview_core::scene::IconPath]) -> Self {
+	pub fn icon(paths: &'static [markview_layout::scene::IconPath]) -> Self {
 		Self {
 			icon: Some(paths),
 			..Self::new("", vec![])

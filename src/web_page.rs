@@ -37,7 +37,8 @@ pub(crate) fn shared_url(text: &str) -> Option<String> {
 }
 
 fn plain_share_title(title: &str) -> bool {
-	use crate::document::{BlockKind, InlineKind, parse, plain_text};
+	use markview_commonmark::parse;
+	use markview_document::{BlockKind, InlineKind, plain_text};
 	let document = parse(title.to_owned());
 	let [block] = document.blocks.as_slice() else {
 		return false;
@@ -48,7 +49,9 @@ fn plain_share_title(title: &str) -> bool {
 	plain_text(text) == title.trim()
 		&& text.iter().all(|inline| {
 			matches!(inline.kind, InlineKind::Text(_))
-				&& inline.style.conditions().next().is_none()
+				&& markview_layout::style::text_conditions(&inline.style)
+					.next()
+					.is_none()
 		})
 }
 
@@ -349,7 +352,7 @@ mod tests {
 		)
 		.unwrap();
 		assert!(!markdown.contains("MARKVIEWPRESERVED"));
-		let document = crate::document::parse(markdown);
+		let document = markview_commonmark::parse(markdown);
 		let math: Vec<_> = document
 			.blocks
 			.iter()
@@ -444,7 +447,7 @@ mod tests {
 		assert!(markdown.contains("&#40;`rustup default beta`&#41;"));
 		assert!(markdown.contains(r"\(keep code\)"));
 		assert!(markdown.contains("&#91;literal brackets&#93;"));
-		let document = crate::document::parse(markdown.clone());
+		let document = markview_commonmark::parse(markdown.clone());
 		assert_eq!(document.source.as_ref(), markdown);
 		assert!(!document.blocks.is_empty());
 		for block in &document.blocks {
@@ -464,7 +467,7 @@ mod tests {
 		let title = "Rust_Blog [2024] &amp; $5 &lt;notes&gt;";
 		let html = html.replace("Native web reading", title);
 		let markdown = extract(&html, "https://example.org/").unwrap();
-		let document = crate::document::parse(markdown.clone());
+		let document = markview_commonmark::parse(markdown.clone());
 		let crate::document::BlockKind::Heading { text, .. } =
 			&document.blocks[0].kind
 		else {

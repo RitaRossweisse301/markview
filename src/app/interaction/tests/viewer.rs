@@ -1,7 +1,7 @@
 use super::*;
 use crate::app::frame::Caption;
 use crate::layout::{Draw, Rect};
-use markview_core::image::{ImageInfo, ImageSnapshot, Pixels};
+use markview_layout::image::{ImageInfo, ImageSnapshot, Pixels};
 use winit::event::{Ime, MouseScrollDelta, TouchPhase};
 use winit::keyboard::{Key, NamedKey};
 
@@ -350,7 +350,7 @@ fn loaded_images_without_selectable_text_open_on_click() {
 		("![](a.png)".to_owned(), "a.png".to_owned()),
 		(
 			format!("```mermaid\n{code}```"),
-			markview_core::image::mermaid_source(code),
+			markview_layout::image::mermaid_source(code),
 		),
 	] {
 		let mut app = image_reader(&source, &src, true);

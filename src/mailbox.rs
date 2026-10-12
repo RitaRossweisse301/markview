@@ -27,7 +27,7 @@ impl<R, C: Default> Inbox<R, C> {
 		lock: &'a Mutex<Self>,
 		result: LockResult<MutexGuard<'a, Self>>,
 	) -> MutexGuard<'a, Self> {
-		markview_core::sync::recover(lock, result, "Worker inbox", |state| {
+		markview_layout::sync::recover(lock, result, "Worker inbox", |state| {
 			state.pending = None;
 			state.control = C::default();
 		})

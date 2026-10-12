@@ -10,9 +10,9 @@ mod cases;
 #[path = "golden/paper.rs"]
 mod paper;
 
-use markview_core::{
+use markview_document as document;
+use markview_layout::{
 	background::Direct,
-	document,
 	fonts::FontConfig,
 	image::{ImageInfo, ImageSnapshot, Pixels},
 	layout::LayoutEngine,
@@ -28,7 +28,7 @@ fn markdown_matches_rendering_baselines() -> Result<()> {
 		root.join("tests/goldens"),
 		root.join("../../artifacts/render-goldens"),
 	)?;
-	let mut files = fs::read_dir(root.join("../markview-core/tests/fonts"))?
+	let mut files = fs::read_dir(root.join("../markview-layout/tests/fonts"))?
 		.chain(fs::read_dir(root.join("tests/fonts"))?)
 		.collect::<std::io::Result<Vec<_>>>()?;
 	files.sort_by_key(|file| file.file_name());
@@ -94,7 +94,7 @@ fn markdown_matches_rendering_baselines() -> Result<()> {
 		let name = &case.name;
 		assert!(names.insert(name.clone()), "Duplicate case {name}");
 		let (width, height, scale) = (case.width, case.height, case.scale);
-		let doc = document::parse(fs::read_to_string(
+		let doc = markview_commonmark::parse(fs::read_to_string(
 			root.join(format!("tests/fixtures/{}.md", case.fixture)),
 		)?);
 		let mut options = case.options(root)?;
@@ -130,20 +130,21 @@ fn markdown_matches_rendering_baselines() -> Result<()> {
 			LayoutEngine::with_executor(Arc::new(Direct), Arc::new(|| {}));
 		if matches!(
 			case.cjk,
-			markview_core::style::CjkType::Tc
-				| markview_core::style::CjkType::Jp
+			markview_layout::style::CjkType::Tc
+				| markview_layout::style::CjkType::Jp
 		) {
 			let region = format!("{:?}", case.cjk).to_lowercase();
 			let expected = fs::read(root.join(format!(
 				"tests/fonts/NotoSansMonoCJK{region}-Regular-subset.otf"
 			)))?;
-			let probe = engine.layout(&document::parse("`中文`"), &options);
+			let probe =
+				engine.layout(&markview_commonmark::parse("`中文`"), &options);
 			let glyphs: Vec<_> = probe
 				.blocks
 				.iter()
 				.flat_map(|block| &block.layout.draws)
 				.filter_map(|draw| match draw {
-					markview_core::scene::Draw::Glyph(glyph) => Some(glyph),
+					markview_layout::scene::Draw::Glyph(glyph) => Some(glyph),
 					_ => None,
 				})
 				.collect();
@@ -234,8 +235,8 @@ fn markdown_matches_rendering_baselines() -> Result<()> {
 			"{name}: frame is empty"
 		);
 		baselines.record(name, &actual)?;
-		if markview_core::style::Stylesheet::PDF_THEMES.contains(&case.theme)
-			&& case.device == markview_core::style::Media::Desktop
+		if markview_layout::style::Stylesheet::PDF_THEMES.contains(&case.theme)
+			&& case.device == markview_layout::style::Media::Desktop
 			&& case.variant != "mvss-media"
 		{
 			for (name, actual) in paper::frames(

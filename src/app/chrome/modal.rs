@@ -7,7 +7,7 @@ use crate::{
 	layout::{Draw, Paint, Rect, TextShaper},
 	state::{Command, InteractionState, Modal},
 };
-use markview_core::style::{ColorField as C, Condition, TextAppearance};
+use markview_layout::style::{ColorField as C, Condition, TextAppearance};
 use std::path::{Component, Path, PathBuf};
 
 /// The path size in the confirmation, in logical pixels.

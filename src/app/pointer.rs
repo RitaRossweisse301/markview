@@ -1,6 +1,6 @@
 use crate::state::Selection;
 use crate::{link, state};
-use markview_core::document::footnote;
+use markview_document::footnote;
 use std::{
 	path::PathBuf,
 	time::{Duration, Instant},
@@ -306,7 +306,7 @@ impl<P: super::SendEvent> App<P> {
 	/// name textures.
 	pub(super) fn image_at_cursor(
 		&self,
-	) -> Option<(String, markview_core::scene::Rect)> {
+	) -> Option<(String, markview_layout::scene::Rect)> {
 		self.document_interaction()
 			.image(markview_selection::Point::new(
 				self.interaction.cursor.0,
@@ -385,7 +385,7 @@ impl<P: super::SendEvent> App<P> {
 		// Activating a link is direct input, so nothing keeps easing behind it.
 		self.readers.session.cancel_scroll_animation();
 		// A `<details>` summary is hit like a link but toggles its element.
-		if let Some(id) = markview_core::document::details_id(url) {
+		if let Some(id) = markview_document::details_id(url) {
 			self.toggle_details(id);
 			return;
 		}

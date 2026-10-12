@@ -1,7 +1,7 @@
 //! Settings catalogues are built in the CPU service and published as snapshots.
 use super::{App, Event, SendEvent, font_panel::Choices};
 use crate::{fonts::FaceInfo, state::Command};
-use markview_core::{fonts::FontConfig, style::StyleTarget};
+use markview_layout::{fonts::FontConfig, style::StyleTarget};
 use std::{
 	path::PathBuf,
 	sync::{Arc, Mutex},
@@ -139,7 +139,7 @@ struct FaceCache {
 }
 impl FaceCache {
 	fn read(&mut self, dir: Option<&std::path::Path>) -> Vec<FaceInfo> {
-		let stamps = files(dir, markview_core::fonts::is_font_file);
+		let stamps = files(dir, markview_layout::fonts::is_font_file);
 		let mut old = std::mem::take(&mut self.entries);
 		self.entries = stamps
 			.into_iter()
@@ -328,7 +328,7 @@ impl<P: SendEvent> App<P> {
 							Snapshot::Choices(choices)
 						}
 						_ => {
-							let mut cache = markview_core::sync::cache(
+							let mut cache = markview_layout::sync::cache(
 								&cache,
 								"Settings catalogue cache",
 							);
@@ -349,7 +349,8 @@ impl<P: SendEvent> App<P> {
 									.faces
 									.read(crate::fonts::directory().as_deref());
 								let builtin =
-									markview_core::style::Stylesheet::builtin();
+									markview_layout::style::Stylesheet::builtin(
+									);
 								let sheets = std::iter::once((
 									"builtin",
 									builtin.font_families.as_slice(),

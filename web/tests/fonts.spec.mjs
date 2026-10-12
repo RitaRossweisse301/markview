@@ -3,7 +3,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 const site = fileURLToPath(new URL("../dist/", import.meta.url));
-const fontDir = fileURLToPath(new URL("../../crates/markview-core/tests/fonts/", import.meta.url));
+const fontDir = fileURLToPath(new URL("../../crates/markview-layout/tests/fonts/", import.meta.url));
 const assets = readdirSync(`${site}/assets`);
 const fontUrl = (name) => `/assets/${assets.find((file) => file.startsWith(`${name}-subset-`))}`;
 

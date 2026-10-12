@@ -1,7 +1,6 @@
 //! Bounded glyph/path atlas and reusable rasterization resources.
-use markview_core::{
-	document::fingerprint, scene::Glyph, style::SYNTHETIC_ITALIC_ANGLE_DEG,
-};
+use markview_document::fingerprint;
+use markview_layout::{scene::Glyph, style::SYNTHETIC_ITALIC_ANGLE_DEG};
 use parley::FontData;
 use serde::Serialize;
 use std::{collections::HashMap, time::Duration};

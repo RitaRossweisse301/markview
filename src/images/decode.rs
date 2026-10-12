@@ -1,7 +1,7 @@
 //! Raster and vector decoding with pixel limits.
 use anyhow::{Context, Result, bail};
 use image::{AnimationDecoder, ImageDecoder};
-use markview_core::image::Pixels;
+use markview_layout::image::Pixels;
 use std::{collections::VecDeque, io::Cursor, sync::Arc};
 const MAX_PIXELS: u64 = 16_000_000;
 const SVG_FONT_CACHE_CAP: usize = 4;
@@ -59,7 +59,7 @@ fn svg_fonts(
 	static CACHE: std::sync::OnceLock<Cache> = std::sync::OnceLock::new();
 	let fonts = CACHE.get_or_init(|| std::sync::Mutex::new(VecDeque::new()));
 	let slot = {
-		let mut fonts = markview_core::sync::cache(fonts, "SVG font cache");
+		let mut fonts = markview_layout::sync::cache(fonts, "SVG font cache");
 		if let Some((_, slot)) =
 			fonts.iter().find(|(key, _)| key == generic_families)
 		{
@@ -310,7 +310,7 @@ mod tests {
 		let mut database = resvg::usvg::fontdb::Database::new();
 		database.load_font_data(
 			include_bytes!(
-				"../../crates/markview-core/tests/fonts/NotoSansMono-Regular-subset.otf"
+				"../../crates/markview-layout/tests/fonts/NotoSansMono-Regular-subset.otf"
 			)
 			.to_vec(),
 		);

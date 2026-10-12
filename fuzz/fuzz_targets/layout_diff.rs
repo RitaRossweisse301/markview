@@ -4,7 +4,6 @@
 #![no_main]
 
 use libfuzzer_sys::fuzz_target;
-use markview_core::document;
 use mvfuzz::{budget, oracle, pipeline, ratex};
 
 fuzz_target!(|data: &[u8]| {
@@ -17,9 +16,9 @@ fuzz_target!(|data: &[u8]| {
 	ratex::allow_char_overflow();
 	pipeline::warmup();
 	let guard = budget::InputGuard::new();
-	let doc = document::parse(md.to_string());
+	let doc = markview_commonmark::parse(md.to_string());
 	let options = pipeline::options_for(&md);
-	let images = markview_core::image::ImageSnapshot::default();
+	let images = markview_layout::image::ImageSnapshot::default();
 
 	// O5.1: the second pass over a warm cache and a cold engine must agree.
 	let mut warm = pipeline::differential_engine();

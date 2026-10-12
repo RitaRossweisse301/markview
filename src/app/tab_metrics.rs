@@ -1,6 +1,6 @@
 //! Cache filename measurements so pointer motion never shapes offscreen tabs.
 use crate::{layout::TextShaper, state::ReaderTab};
-use markview_core::style::{Condition, Stylesheet, TextAppearance};
+use markview_layout::style::{Condition, Stylesheet, TextAppearance};
 use std::{collections::HashMap, path::PathBuf, sync::Arc};
 use unicode_segmentation::UnicodeSegmentation;
 

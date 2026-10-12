@@ -1,8 +1,8 @@
 use std::sync::{Arc, Mutex};
 
-use markview_core::{
+use markview_document as document;
+use markview_layout::{
 	background::{Executor, Task},
-	document,
 	layout::LayoutEngine,
 	scene::Draw,
 };
@@ -22,7 +22,7 @@ impl Executor for Deferred {
 fn code_highlights_change_only_paint_and_differentials_start_settled() {
 	for code in ["~\0~", "\0", "let value = 42;"] {
 		let md = format!("```rust\n{code}\n```\n");
-		let doc = document::parse(md.clone());
+		let doc = markview_commonmark::parse(md.clone());
 		let options = pipeline::options_for(&md);
 		let executor = Arc::new(Deferred::default());
 		let mut delayed =

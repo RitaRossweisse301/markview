@@ -7,7 +7,7 @@
 
 use arbitrary::Arbitrary;
 use libfuzzer_sys::fuzz_target;
-use markview_core::scene::{Rect, Viewport};
+use markview_layout::scene::{Rect, Viewport};
 use markview_render::fuzz_api;
 use mvfuzz::budget;
 

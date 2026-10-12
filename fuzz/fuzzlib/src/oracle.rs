@@ -11,10 +11,8 @@ use std::{
 	hash::{Hash, Hasher},
 };
 
-use markview_core::{
-	document::{Block, BlockKind, Document, Inline},
-	scene::{BlockLayout, Draw, LayoutSnapshot, Rect},
-};
+use markview_document::{Block, BlockKind, Document, Inline};
+use markview_layout::scene::{BlockLayout, Draw, LayoutSnapshot, Rect};
 
 /// A three-way digest: field-by-field equality up to a ~2^-192 collision.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -558,12 +556,9 @@ pub fn derive(data: &[u8]) -> u128 {
 }
 /// The `Limits` shrunk toward their floors, derived from `seed`, so the
 /// degradation paths are reachable at small inputs.
-pub fn shrunk_limits(seed: u128) -> markview_core::limits::Limits {
+pub fn shrunk_limits(seed: u128) -> markview_layout::limits::Limits {
 	let pick = |shift: u32, n: u128| (seed >> shift) % n;
-	markview_core::limits::Limits {
-		inline_depth: 32 + pick(64, 512) as usize,
-		block_depth: 8 + pick(68, 260) as usize,
-		html_scopes: 4 + pick(66, 512) as usize,
+	markview_layout::limits::Limits {
 		linebreak_evaluations: 1000 + pick(72, 3_000_000) as usize,
 		highlight_line_bytes: 64 + pick(76, 65_536) as usize,
 		highlight_bytes: 4096 + pick(80, 16 * 1024 * 1024) as usize,
@@ -599,6 +594,6 @@ mod tests {
 	/// bits 64..128 zero and pinned them there).
 	#[test]
 	fn shrunk_limits_uses_high_seed_bits() {
-		assert!(shrunk_limits(u128::MAX).inline_depth > 32);
+		assert!(shrunk_limits(u128::MAX).highlight_line_bytes > 64);
 	}
 }

@@ -6,7 +6,7 @@ use crate::{
 	render::{Renderer, Theme, View},
 };
 use anyhow::{Result, ensure};
-use markview_core::{
+use markview_layout::{
 	background::Direct,
 	fonts::FontConfig,
 	image::{ImageInfo, ImageSnapshot},
@@ -73,7 +73,7 @@ fn diagrams_match_rendering_baselines() -> Result<()> {
 		for kind in ["flowchart", "sequence", "git", "pie", "svg"] {
 			let name = format!("{kind}-{preset}");
 			let path = root.join(format!("tests/fixtures/diagrams/{kind}.md"));
-			let doc = document::parse(fs::read_to_string(&path)?);
+			let doc = markview_commonmark::parse(fs::read_to_string(&path)?);
 			let image_snapshot = if kind == "svg" {
 				svg_snapshot(&doc, &path, &sheet, &svg_fonts)?
 			} else {

@@ -24,10 +24,10 @@ fuzz_target!(|data: &[u8]| {
 	let md1 = edit.md1;
 
 	let guard = budget::InputGuard::new();
-	let doc0 = markview_core::document::parse(md0);
+	let doc0 = markview_commonmark::parse(md0);
 	let len = md1.len();
-	let full = markview_core::document::parse(md1.clone());
-	let incr = markview_core::document::reparse(&doc0, Arc::from(md1));
+	let full = markview_commonmark::parse(md1.clone());
+	let incr = markview_commonmark::reparse(&doc0, Arc::from(md1));
 	assert_eq!(
 		oracle::document(&full),
 		oracle::document(&incr),

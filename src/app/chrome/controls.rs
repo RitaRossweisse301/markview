@@ -11,7 +11,7 @@ use crate::{
 	state::{Command, DropdownId, InteractionState, PanelPage, PanelTab},
 };
 pub(super) use components::{draw_button, panel_rect};
-use markview_core::style::{
+use markview_layout::style::{
 	CjkType, ColorField as C, Condition, TextAppearance,
 };
 pub(super) const ICON_BUTTON: f32 = 28.0;

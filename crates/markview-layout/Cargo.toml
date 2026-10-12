@@ -1,0 +1,54 @@
+[package]
+name = "markview-layout"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+markview-document = { path = "../markview-document" }
+regex.workspace = true
+regex-automata.workspace = true
+codex.workspace = true
+unicode-segmentation.workspace = true
+syntect.workspace = true
+two-face.workspace = true
+hypher.workspace = true
+icu_properties.workspace = true
+icu_segmenter.workspace = true
+parley.workspace = true
+ratex-layout.workspace = true
+ratex-parser.workspace = true
+ratex-types.workspace = true
+
+
+serde.workspace = true
+anyhow.workspace = true
+log.workspace = true
+toml_edit = { version = "0.25", features = ["serde"] }
+swash.workspace = true
+skrifa.workspace = true
+web-time.workspace = true
+memmap2 = { workspace = true, optional = true }
+
+[features]
+# Reading faces out of directories needs a filesystem, so it is off by
+# default: the plain build is the one a front end without one links against,
+# and it supplies its faces as bytes through `FontConfig::from_faces`.
+# A native caller that scans a directory opts in.
+default = []
+font-directories = ["dep:memmap2"]
+# Harness-only: relaxes visibility for `fuzz/`; never changes default behavior.
+fuzz = []
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+markview-commonmark = { path = "../markview-commonmark" }
+# The tests shape with the committed subset faces, so they need the
+# directory scanning that production builds leave to the caller.
+markview-layout = { path = ".", features = ["font-directories"] }
+ratex-katex-fonts.workspace = true
+tempfile.workspace = true

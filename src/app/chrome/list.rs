@@ -8,7 +8,7 @@ use crate::{
 	layout::{Draw, Rect, Scrollbar, TextShaper},
 	state::InteractionState,
 };
-use markview_core::style::{ColorField as C, Condition};
+use markview_layout::style::{ColorField as C, Condition};
 
 /// Equal-height rows inside a clipped viewport, optionally behind a block of
 /// content that scrolls ahead of them.

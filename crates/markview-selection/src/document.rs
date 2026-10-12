@@ -1,6 +1,6 @@
 //! Document hit testing and hover, independent of a host's chrome.
 use crate::Point;
-use markview_core::{
+use markview_layout::{
 	layout::LayoutSnapshot,
 	scene::{Rect, Scrollbar, ScrollbarMetrics, Viewport},
 	text::TextPosition,

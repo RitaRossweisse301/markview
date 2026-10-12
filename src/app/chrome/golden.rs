@@ -5,7 +5,7 @@ use crate::{
 	state::{PanelPage, PanelTab},
 };
 use anyhow::{Result, ensure};
-use markview_core::style::{CjkType, Stylesheet};
+use markview_layout::style::{CjkType, Stylesheet};
 use std::{collections::HashMap, fs, path::Path, sync::Arc};
 
 #[test]

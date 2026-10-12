@@ -47,9 +47,9 @@ fn settings_labels_and_buttons_center_visible_text_in_their_bands() {
 		"[[rule]]\nwhen=['ui']\nsize=1.4\nbaseline=-0.1\ndecoration=['underline']",
 	] {
 		let mut style =
-			(*markview_core::style::Stylesheet::bundled(false)).clone();
+			(*markview_layout::style::Stylesheet::bundled(false)).clone();
 		style.merge(
-			&markview_core::style::Stylesheet::parse(&format!(
+			&markview_layout::style::Stylesheet::parse(&format!(
 				"format_version=2\nversion=1\n{rules}"
 			))
 			.unwrap(),
@@ -72,7 +72,7 @@ fn settings_labels_and_buttons_center_visible_text_in_their_bands() {
 			.iter()
 			.any(|draw| matches!(draw, Draw::Glyph(_)))
 	);
-	ui.set_stylesheet(markview_core::style::Stylesheet::bundled(false));
+	ui.set_stylesheet(markview_layout::style::Stylesheet::bundled(false));
 	for (width, height) in [(360.0, 740.0), (800.0, 600.0), (1200.0, 800.0)] {
 		let form = Form::new(width, height, 0.0, vec![], None, true, Lang::En);
 		let draws = form.draw(
@@ -178,7 +178,7 @@ fn every_form_action_is_reachable_without_clicking_through_the_clip() {
 fn button_feedback_distinguishes_hover_press_selection_and_keyboard_focus() {
 	for dark in [false, true] {
 		let mut ui = crate::test_support::shaper();
-		ui.set_stylesheet(markview_core::style::Stylesheet::bundled(dark));
+		ui.set_stylesheet(markview_layout::style::Stylesheet::bundled(dark));
 		for (kind, selected) in [
 			(ButtonKind::Standard, false),
 			(ButtonKind::Standard, true),

@@ -40,7 +40,7 @@ impl Harness {
 		app.ui = crate::test_support::shaper();
 		app.preferences.values = crate::settings::ReaderSettings::default();
 		app.readers.open(path, Instant::now());
-		let document = Arc::new(markview_core::document::parse(source));
+		let document = Arc::new(markview_commonmark::parse(source));
 		let options = app.options();
 		let mut engine = LayoutEngine::new();
 		let mut snapshot = engine.layout(&document, &options);
@@ -440,7 +440,7 @@ fn parsed_full_document_searches_before_layout_and_rejects_stale_results() {
 	}
 	h.app.readers.session.content_version += 1;
 	assert!(h.app.draw_search_highlights().is_empty());
-	let document = Arc::new(markview_core::document::parse("needle needle"));
+	let document = Arc::new(markview_commonmark::parse("needle needle"));
 	h.app.readers.session.search.document = Some(document);
 	h.app.search_changed();
 	h.app.search_tick();
@@ -523,7 +523,7 @@ fn worker_latest_request_wins_after_cancellation() {
 		let _ = tx.send(result);
 	});
 	let document =
-		Arc::new(markview_core::document::parse("needle ".repeat(20000)));
+		Arc::new(markview_commonmark::parse("needle ".repeat(20000)));
 	let old = worker.cancel();
 	worker.submit(Request {
 		path: "one".into(),
@@ -564,7 +564,7 @@ fn worker_latest_request_wins_after_cancellation() {
 		path: "one".into(),
 		content: 2,
 		sequence: reloaded,
-		document: Arc::new(markview_core::document::parse("needle")),
+		document: Arc::new(markview_commonmark::parse("needle")),
 		query: "needle".into(),
 		options: SearchOptions::default(),
 	});
@@ -592,9 +592,9 @@ fn search_states_match_rendering_baselines() -> anyhow::Result<()> {
 			"# Find in this document\n\nSearch for **needle** in this paragraph. Another needle is here.\n\n```rust\nlet needle = 42;\n```\n\n| Name | Value |\n|---|---|\n| needle | 42 |\n\n<details>\n<summary>Collapsed content</summary>\n\nneedle\n\n</details>\n",
 		);
 		let mut stylesheet =
-			(*markview_core::style::Stylesheet::bundled(dark)).clone();
-		stylesheet.set_cjk_type(markview_core::style::CjkType::Sc);
-		stylesheet.merge(&markview_core::style::Stylesheet::parse("format_version=2\nversion=1\n[[rule]]\nwhen=['search']\nbackground='#E9BA4550'\n[[rule]]\nwhen=['search_current']\nbackground='#E49B2390'\n[[rule]]\nwhen=['selection']\nbackground='#315D8650'")?);
+			(*markview_layout::style::Stylesheet::bundled(dark)).clone();
+		stylesheet.set_cjk_type(markview_layout::style::CjkType::Sc);
+		stylesheet.merge(&markview_layout::style::Stylesheet::parse("format_version=2\nversion=1\n[[rule]]\nwhen=['search']\nbackground='#E9BA4550'\n[[rule]]\nwhen=['search_current']\nbackground='#E49B2390'\n[[rule]]\nwhen=['selection']\nbackground='#315D8650'")?);
 		let stylesheet = Arc::new(stylesheet);
 		h.app.preferences.values.stylesheet = stylesheet.clone();
 		h.app.preferences.values.lang = Some(lang);
@@ -686,9 +686,7 @@ fn poisoned_search_inbox_accepts_new_requests_and_shuts_down() {
 		path: PathBuf::from("note.md"),
 		content: 1,
 		sequence: worker.cancel(),
-		document: Arc::new(markview_core::document::parse(
-			"A recovered search.",
-		)),
+		document: Arc::new(markview_commonmark::parse("A recovered search.")),
 		query: "recovered".into(),
 		options: SearchOptions::default(),
 	});

@@ -21,7 +21,7 @@ import struct
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-FONTS = os.path.join(ROOT, "crates", "markview-core", "tests", "fonts")
+FONTS = os.path.join(ROOT, "crates", "markview-layout", "tests", "fonts")
 # The SPA keeps its samples as template literals in `documents.ts`.
 DEMO_JS = os.path.join(ROOT, "web", "apps", "demo", "src", "documents.ts")
 DEMO_HTML = os.path.join(ROOT, "web", "apps", "demo", "index.html")

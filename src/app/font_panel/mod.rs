@@ -24,21 +24,21 @@ pub(super) enum Message {
 #[derive(Clone, Default)]
 pub(super) struct Choices {
 	pub(super) generation: u64,
-	config: Option<markview_core::fonts::FontConfig>,
+	config: Option<markview_layout::fonts::FontConfig>,
 	latin: Arc<[Arc<str>]>,
 	han: Arc<[Arc<str>]>,
 }
 impl Choices {
 	pub(super) fn refresh(
 		&mut self,
-		config: &markview_core::fonts::FontConfig,
+		config: &markview_layout::fonts::FontConfig,
 	) {
 		if self.config.as_ref() == Some(config) {
 			return;
 		}
 		self.generation += 1;
-		self.latin = markview_core::fonts::families(config, false);
-		self.han = markview_core::fonts::families(config, true);
+		self.latin = markview_layout::fonts::families(config, false);
+		self.han = markview_layout::fonts::families(config, true);
 		self.config = Some(config.clone());
 	}
 	fn families(&self, role: crate::settings::FontRole) -> &[Arc<str>] {
@@ -99,7 +99,7 @@ impl FontPanel {
 	#[cfg(test)]
 	pub(super) fn refresh_choices(
 		&mut self,
-		config: &markview_core::fonts::FontConfig,
+		config: &markview_layout::fonts::FontConfig,
 	) {
 		self.choices.refresh(config);
 	}
@@ -241,7 +241,7 @@ impl FontPanel {
 			.filter(|id| !self.font_jobs.contains_key(*id))
 			.cloned()
 			.collect();
-		let missing: Vec<markview_core::style::FontFamily> =
+		let missing: Vec<markview_layout::style::FontFamily> =
 			crate::fonts::select(&self.font_catalog, &ids, scope)
 				.into_iter()
 				.cloned()
@@ -322,7 +322,7 @@ mod tests {
 	use super::*;
 
 	fn panel() -> FontPanel {
-		let sheet = markview_core::style::Stylesheet::builtin();
+		let sheet = markview_layout::style::Stylesheet::builtin();
 		FontPanel {
 			font_catalog: sheet
 				.font_families

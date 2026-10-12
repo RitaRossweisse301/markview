@@ -1,4 +1,4 @@
-use markview_core::scene::{
+use markview_layout::scene::{
 	BlockLayout, Draw, LayoutSnapshot, LinkRect, Overflow, PlacedBlock, Rect,
 	ScrollbarMetrics, Viewport,
 };

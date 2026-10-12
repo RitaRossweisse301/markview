@@ -1,7 +1,6 @@
 use crate::state::{Command, Modal};
 use crate::state::{PanelPage, PanelTab};
 use crate::{
-	document,
 	layout::LayoutEngine,
 	render::{Renderer, Theme, View},
 };
@@ -67,13 +66,13 @@ fn settings_and_selection_frame() -> Result<()> {
 	] {
 		let settings = ReaderSettings {
 			theme,
-			stylesheet: markview_core::style::Stylesheet::bundled(
+			stylesheet: markview_layout::style::Stylesheet::bundled(
 				theme == Theme::Dark,
 			),
 			lang: restart_pending.then_some(Lang::ZhHans),
 			..Default::default()
 		};
-		let document = document::parse(
+		let document = markview_commonmark::parse(
 			"# Reading selections\n\nSelect **English**, 中文 and $x^2$ across lines.\n\n```rust\n\tlet answer = 42;\n```\n\n| A | B |\n|---|---|\n| one | two |\n",
 		);
 		let snapshot = LayoutEngine::new().layout(
@@ -98,7 +97,7 @@ fn settings_and_selection_frame() -> Result<()> {
 			}),
 			..Default::default()
 		};
-		let counts = markview_core::text::TextCounts::of(
+		let counts = markview_layout::text::TextCounts::of(
 			&snapshot.extract_text(snapshot.select_all(1).unwrap(), 1),
 		);
 		let mut overlay = vec![
@@ -252,11 +251,11 @@ fn notice_strip_and_confirmation_frames() -> Result<()> {
 	for (theme, dark) in [(Theme::Light, false), (Theme::Dark, true)] {
 		let settings = ReaderSettings {
 			theme,
-			stylesheet: markview_core::style::Stylesheet::bundled(dark),
+			stylesheet: markview_layout::style::Stylesheet::bundled(dark),
 			..Default::default()
 		};
 		renderer.set_stylesheet(settings.stylesheet.clone());
-		let document = document::parse(
+		let document = markview_commonmark::parse(
 			"# Remote images\n\nThe loader requested a bounded number of these.\n\n![one](https://example.com/one.png)\n\nText continues below the notice strip.\n",
 		);
 		let snapshot = LayoutEngine::new().layout_with_images(
@@ -500,7 +499,7 @@ fn tab_strip_frames_clip_overflow_at_fractional_dpi() -> Result<()> {
 			} else {
 				crate::settings::TabStyle::Connected
 			},
-			stylesheet: markview_core::style::Stylesheet::bundled(dark),
+			stylesheet: markview_layout::style::Stylesheet::bundled(dark),
 			..Default::default()
 		};
 		renderer.set_stylesheet(settings.stylesheet.clone());
@@ -721,7 +720,7 @@ fn icons_keep_their_optical_centre_at_fractional_dpi() -> Result<()> {
 	const SCALE: f32 = 1.25;
 	const HEIGHT: f32 = 300.0;
 	let settings = ReaderSettings {
-		stylesheet: markview_core::style::Stylesheet::bundled(false),
+		stylesheet: markview_layout::style::Stylesheet::bundled(false),
 		..Default::default()
 	};
 	let horizontal = HashMap::new();
@@ -830,16 +829,16 @@ fn a_whole_document_png_export_stitches_its_tiles() -> Result<()> {
 	let geometry = crate::export::geometry(&settings)?;
 	let mut renderer = pollster::block_on(Renderer::new(None))?;
 	renderer.set_ui_origin((0.0, 48.0));
-	let mut sheet = markview_core::style::Stylesheet::bundled_print();
+	let mut sheet = markview_layout::style::Stylesheet::bundled_print();
 	// The band crosses a tile boundary and the top text margin.
 	std::sync::Arc::make_mut(&mut sheet).page.header.rule_width = Some(810.0);
 	std::sync::Arc::make_mut(&mut sheet).page.header.rule_color =
-		Some(markview_core::style::Color(0x244C80FF));
+		Some(markview_layout::style::Color(0x244C80FF));
 	std::sync::Arc::make_mut(&mut sheet).page.footer.rule_width = Some(810.0);
 	std::sync::Arc::make_mut(&mut sheet).page.footer.rule_color =
-		Some(markview_core::style::Color(0xCC3322FF));
+		Some(markview_layout::style::Color(0xCC3322FF));
 	renderer.set_stylesheet(sheet.clone());
-	let document = document::parse(
+	let document = markview_commonmark::parse(
 		"# Exporting\n\nA paragraph with 中文 and **bold** text.\n\n- one\n- two\n\n"
 			.repeat(30),
 	);
@@ -870,7 +869,7 @@ fn a_whole_document_png_export_stitches_its_tiles() -> Result<()> {
 			&stylesheet,
 			tile,
 			settings.scale,
-			geometry.margin_pt[3] / markview_core::paginate::PT_PER_PX,
+			geometry.margin_pt[3] / markview_layout::paginate::PT_PER_PX,
 			Theme::Light,
 			&mut rgba,
 		)?;
@@ -920,9 +919,9 @@ fn export_panel_frames() -> Result<()> {
 		),
 	] {
 		let theme = if dark { Theme::Dark } else { Theme::Light };
-		let sheet = markview_core::style::Stylesheet::bundled(dark);
+		let sheet = markview_layout::style::Stylesheet::bundled(dark);
 		renderer.set_stylesheet(sheet.clone());
-		let document = document::parse(
+		let document = markview_commonmark::parse(
 			"# Exporting\n\nA paragraph behind the panel.\n\n- one\n- two\n",
 		);
 		let snapshot = LayoutEngine::new().layout(
@@ -935,7 +934,7 @@ fn export_panel_frames() -> Result<()> {
 			},
 		);
 		let mut ui = crate::test_support::shaper();
-		ui.set_stylesheet(markview_core::style::Stylesheet::bundled(dark));
+		ui.set_stylesheet(markview_layout::style::Stylesheet::bundled(dark));
 		let mut overlay = vec![
 			Draw::Rect(
 				Rect {
@@ -1371,7 +1370,7 @@ fn dismissed_pages_stop_drawing_and_answering_pointers() {
 
 /// A few families for the Fonts page, one in each state.
 fn font_samples() -> Vec<crate::fonts::Family> {
-	use markview_core::style::{FontFamily, FontFile, FontSource};
+	use markview_layout::style::{FontFamily, FontFile, FontSource};
 	let family = |id: &str, name: &str, license: &str| FontFamily {
 		id: id.into(),
 		lookfor: vec![name.into()],
@@ -1447,7 +1446,7 @@ fn redesigned_chrome_frames() -> Result<()> {
 	std::fs::create_dir_all(&output)?;
 	let mut renderer = pollster::block_on(Renderer::new(None))?;
 	let fonts = crate::test_support::fonts();
-	let document = document::parse(
+	let document = markview_commonmark::parse(
 		"# Reading, without distractions\n\nA native home for **Markdown**, 中文 and $x^2$.\n\n## A clear view\n\n- Publication-quality typography\n- Fast, lightweight reading\n\n```rust\nlet reader = Markview::open(\"notes.md\");\n```\n",
 	);
 	let tabs = vec![
@@ -1456,7 +1455,7 @@ fn redesigned_chrome_frames() -> Result<()> {
 	];
 	let strip = TabStrip::default();
 	for dark in [false, true] {
-		let sheet = markview_core::style::Stylesheet::bundled(dark);
+		let sheet = markview_layout::style::Stylesheet::bundled(dark);
 		let settings = ReaderSettings {
 			stylesheet: sheet.clone(),
 			theme: if dark { Theme::Dark } else { Theme::Light },
@@ -1721,7 +1720,7 @@ fn redesigned_chrome_frames() -> Result<()> {
 							height,
 							settings.lang(),
 						);
-						markview_core::text_input::TextInput::default().draw(
+						markview_layout::text_input::TextInput::default().draw(
 							&mut ui,
 							buttons[1].rect,
 							false,
@@ -1856,7 +1855,7 @@ fn button_feedback_frames() -> Result<()> {
 	let mut renderer = pollster::block_on(Renderer::new(None))?;
 	for dark in [false, true] {
 		let theme = if dark { Theme::Dark } else { Theme::Light };
-		let sheet = markview_core::style::Stylesheet::bundled(dark);
+		let sheet = markview_layout::style::Stylesheet::bundled(dark);
 		renderer.set_stylesheet(sheet.clone());
 		let mut ui = crate::test_support::shaper();
 		ui.set_stylesheet(sheet);
@@ -1989,7 +1988,7 @@ fn button_feedback_frames() -> Result<()> {
 
 #[test]
 fn cjk_ui_weight_comparison() -> Result<()> {
-	use markview_core::style::{CjkType, Stylesheet, TextAppearance};
+	use markview_layout::style::{CjkType, Stylesheet, TextAppearance};
 	let directory =
 		PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("artifacts/cjk-weight");
 	std::fs::create_dir_all(&directory)?;
@@ -2096,7 +2095,7 @@ fn outline_drawer_frames() -> Result<()> {
 	std::fs::create_dir_all(&directory)?;
 	let mut renderer = pollster::block_on(Renderer::new(None))?;
 	let (width, height) = (820.0_f32, 600.0_f32);
-	let document = document::parse(
+	let document = markview_commonmark::parse(
 		"# Reading, without distractions\n\nIntroductory text.\n\n## A clear view\n\n> ### Quoted section\n\n#### A deeper entry\n\n## Another section\n\nBody.\n",
 	);
 	for (dark, collapsed) in
@@ -2106,7 +2105,7 @@ fn outline_drawer_frames() -> Result<()> {
 		if collapsed {
 			tree.toggle(1);
 		}
-		let sheet = markview_core::style::Stylesheet::bundled(dark);
+		let sheet = markview_layout::style::Stylesheet::bundled(dark);
 		let settings = ReaderSettings {
 			stylesheet: sheet.clone(),
 			theme: if dark { Theme::Dark } else { Theme::Light },

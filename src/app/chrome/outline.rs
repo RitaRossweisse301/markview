@@ -10,8 +10,8 @@ use crate::{
 	layout::{Draw, Paint, Rect, TextShaper},
 	state::{Command, InteractionState, OutlineTree},
 };
-use markview_core::document::OutlineEntry;
-use markview_core::style::{ColorField as C, Condition};
+use markview_document::OutlineEntry;
+use markview_layout::style::{ColorField as C, Condition};
 
 /// The drawer's width, flush with the right window edge.
 pub(in crate::app) const WIDTH: f32 = 300.0;

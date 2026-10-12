@@ -30,6 +30,7 @@ at the same level, without `[brackets]`.
 
 ### Changed
 
+- Split source parsing, semantic documents and layout into `markview-commonmark`, `markview-document` and `markview-layout`, preserving host scheduling and reader behavior.
 - Skip vertex emission during a glyph prewarm pass, which only prepares atlases for a frame it discards.
 - Reuse the per-frame paint order buffers instead of allocating them on every frame.
 - Centralize native platform services in `markview-platform`, keeping reader behavior and settings compatible.

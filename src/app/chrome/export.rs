@@ -8,7 +8,7 @@ use crate::{
 	settings::{ExportFormat, ExportSettings},
 	state::{Command, InteractionState},
 };
-use markview_core::style::ColorField as C;
+use markview_layout::style::ColorField as C;
 
 fn rows(settings: &ExportSettings, lang: Lang) -> Vec<Row> {
 	let mut rows = vec![

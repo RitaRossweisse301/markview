@@ -18,7 +18,7 @@ to distinguish this Android subproject from the Markview desktop app and MVaaC.
 | Tabs and reading positions | `src/state`, `src/app/tab_strip.rs`, `src/app/tab_metrics.rs` |
 | Font catalogue, downloads and family selection | `src/fonts.rs`, `src/app/font_panel`, shared font configuration |
 | Images, SVG and Mermaid | `src/images`, including bounded decoding and the persistent HTTP cache |
-| Markdown, CJK and mathematics | `markview-core`, the desktop worker and layout pipeline |
+| Markdown, CJK and mathematics | `markview-layout`, the desktop worker and layout pipeline |
 | Search, outline, gestures and image viewer | The desktop application controllers |
 | PDF and PNG export | `src/app/export.rs`, `markview-pdf`, the desktop renderer |
 

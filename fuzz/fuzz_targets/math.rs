@@ -4,8 +4,8 @@
 #![no_main]
 
 use libfuzzer_sys::fuzz_target;
-use markview_core::limits::Limits;
-use markview_core::math::MathEngine;
+use markview_layout::limits::Limits;
+use markview_layout::math::MathEngine;
 use mvfuzz::{budget, mutators, oracle, ratex};
 
 fuzz_target!(|data: &[u8]| {

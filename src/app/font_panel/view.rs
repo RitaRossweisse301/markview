@@ -20,8 +20,8 @@ use crate::{
 	settings::{FontRole, ReaderSettings},
 	state::{Command, Dropdown, DropdownId, InteractionState, PanelTab},
 };
-use markview_core::fonts::FontConfig;
-use markview_core::style::{
+use markview_layout::fonts::FontConfig;
+use markview_layout::style::{
 	CjkType, ColorField as C, Condition, TextAppearance,
 };
 use std::collections::HashMap;
@@ -952,8 +952,8 @@ mod tests {
 	use super::*;
 	use crate::fonts::{Family, State};
 	use crate::settings::ReaderSettings;
-	use markview_core::style::CjkType;
-	use markview_core::style::{FontFamily, FontSource};
+	use markview_layout::style::CjkType;
+	use markview_layout::style::{FontFamily, FontSource};
 
 	/// The chooser rows the default settings show: a CJK variant is in force,
 	/// so all six roles are drawn.
@@ -1347,7 +1347,9 @@ mod tests {
 	fn bulk_buttons_respond_to_hover_even_without_pending_downloads() {
 		let mut ui = crate::test_support::shaper();
 		for dark in [false, true] {
-			ui.set_stylesheet(markview_core::style::Stylesheet::bundled(dark));
+			ui.set_stylesheet(markview_layout::style::Stylesheet::bundled(
+				dark,
+			));
 			for shown in [1, 0] {
 				for button in fonts_controls(
 					list(820., 600., shown, 0.0, false, CHOOSERS),
@@ -1499,8 +1501,8 @@ mod tests {
 	#[test]
 	fn each_font_row_offers_the_families_its_role_can_shape_with() {
 		let fonts = crate::test_support::fonts();
-		let latin = markview_core::fonts::families(&fonts, false);
-		let han = markview_core::fonts::families(&fonts, true);
+		let latin = markview_layout::fonts::families(&fonts, false);
+		let han = markview_layout::fonts::families(&fonts, true);
 		assert!(!latin.is_empty(), "the machine has families");
 		// A Han family is a subset of them all, so a face that covers no Han
 		// text is offered to no Han role and a Latin-only family cannot be
@@ -1563,7 +1565,7 @@ mod tests {
 	#[test]
 	fn a_font_row_shows_the_family_in_force() {
 		let fonts = crate::test_support::fonts();
-		let families = markview_core::fonts::families(&fonts, false);
+		let families = markview_layout::fonts::families(&fonts, false);
 		let jobs = HashMap::new();
 		let view = super::super::View {
 			choices: {
@@ -1642,7 +1644,7 @@ mod tests {
 		let mut sheet = (*ReaderSettings::default().stylesheet).clone();
 		sheet.set_cjk_type(CjkType::Sc);
 		let mut custom = sheet.clone();
-		custom.merge(&markview_core::style::Stylesheet::parse(
+		custom.merge(&markview_layout::style::Stylesheet::parse(
 			"format_version=2\nversion=1\n[[fontdef]]\nid='monospace[cjk]'\ntype='JP'\nlookfor=['Custom Han Mono']",
 		).unwrap());
 		for (sheet, cjk_type, han_mono) in [

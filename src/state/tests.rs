@@ -1,6 +1,6 @@
 use super::*;
-use markview_core::image::raster_size;
-use markview_core::text::{Affinity, TextPosition};
+use markview_layout::image::raster_size;
+use markview_layout::text::{Affinity, TextPosition};
 use markview_selection::{
 	SCROLL_MAX, SCROLL_MIN, ScrollAnimation, ease_out_cubic,
 };
@@ -21,7 +21,7 @@ fn position_in(block: usize, offset: usize) -> TextPosition {
 	}
 }
 fn snapshot_of(source: &str) -> LayoutSnapshot {
-	let document = Arc::new(document::parse(source));
+	let document = Arc::new(markview_commonmark::parse(source));
 	crate::layout::LayoutEngine::new()
 		.layout(&document, &crate::test_support::options())
 }
@@ -199,7 +199,7 @@ fn repeated_presses_within_the_interval_cycle_word_and_block_click() {
 }
 #[test]
 fn identical_content_with_a_new_version_keeps_the_selection() {
-	let document = Arc::new(document::parse("Hello"));
+	let document = Arc::new(markview_commonmark::parse("Hello"));
 	let mut engine = crate::layout::LayoutEngine::new();
 	let mut session = ReaderSession::default();
 	let layout = engine.layout(&document, &crate::test_support::options());
@@ -294,7 +294,7 @@ fn scrolling_past_the_end_keeps_two_thirds_of_a_page_blank() {
 fn heading_anchors_queue_until_their_heading_is_laid_out() {
 	let mut engine = crate::layout::LayoutEngine::new();
 	let options = crate::test_support::options();
-	let document = Arc::new(document::parse(
+	let document = Arc::new(markview_commonmark::parse(
 		"# Intro\n\nParagraph.\n\n# Details\n\nMore.\n",
 	));
 	let layout = engine.layout(&document, &options);
@@ -349,7 +349,7 @@ fn heading_anchors_queue_until_their_heading_is_laid_out() {
 
 #[test]
 fn a_jump_into_a_collapsed_body_expands_its_containers_first() {
-	let document = Arc::new(document::parse(
+	let document = Arc::new(markview_commonmark::parse(
 		"# Intro\n\n<details>\n<summary>More</summary>\n\n## Hidden\n\n</details>\n",
 	));
 	let id = document.blocks[1].id;
@@ -413,7 +413,8 @@ fn a_jump_into_a_collapsed_body_expands_its_containers_first() {
 fn partial_reload_waits_for_anchor_and_keeps_the_old_snapshot() {
 	let mut engine = crate::layout::LayoutEngine::new();
 	let options = crate::test_support::options();
-	let document = Arc::new(document::parse("Paragraph.\n\n".repeat(100)));
+	let document =
+		Arc::new(markview_commonmark::parse("Paragraph.\n\n".repeat(100)));
 	let full = engine.layout(&document, &options);
 	let mut session = ReaderSession::default();
 	session.accept(
@@ -449,7 +450,8 @@ fn partial_reload_waits_for_anchor_and_keeps_the_old_snapshot() {
 
 #[test]
 fn completing_a_prefix_preserves_scroll_and_selection_and_finishes_counts() {
-	let document = Arc::new(document::parse("Paragraph.\n\n".repeat(100)));
+	let document =
+		Arc::new(markview_commonmark::parse("Paragraph.\n\n".repeat(100)));
 	let mut engine = crate::layout::LayoutEngine::new();
 	let mut prefix = None;
 	let layout = engine
@@ -509,7 +511,7 @@ fn completing_a_prefix_preserves_scroll_and_selection_and_finishes_counts() {
 }
 #[test]
 fn text_and_layout_are_accepted_together_and_reflow_is_not_new_content() {
-	let document = Arc::new(document::parse("Hello"));
+	let document = Arc::new(markview_commonmark::parse("Hello"));
 	let mut engine = crate::layout::LayoutEngine::new();
 	let mut session = ReaderSession::default();
 	let reader = crate::worker::ReaderSnapshot {
@@ -580,8 +582,9 @@ fn a_footnote_returns_to_the_reference_it_was_opened_from() {
 
 #[test]
 fn the_outline_caches_per_document_and_its_entries_queue_heading_anchors() {
-	let document =
-		Arc::new(document::parse("# One\n\nBody.\n\n> ## Two\n\n# Three\n"));
+	let document = Arc::new(markview_commonmark::parse(
+		"# One\n\nBody.\n\n> ## Two\n\n# Three\n",
+	));
 	let layout = crate::layout::LayoutEngine::new()
 		.layout(&document, &crate::test_support::options());
 	let mut session = ReaderSession::default();
@@ -641,7 +644,7 @@ fn an_outline_jump_into_the_reserved_blank_lifts_the_heading() {
 			width: 600.0,
 			..crate::test_support::options()
 		};
-		let document = Arc::new(document::parse(source.as_str()));
+		let document = Arc::new(markview_commonmark::parse(source.as_str()));
 		let layout =
 			crate::layout::LayoutEngine::new().layout(&document, &options);
 		let y = layout.anchor_y("last").unwrap();
@@ -675,7 +678,7 @@ fn an_outline_jump_into_the_reserved_blank_lifts_the_heading() {
 
 #[test]
 fn a_footnote_reference_between_headings_keeps_the_later_heading_current() {
-	let document = Arc::new(document::parse(
+	let document = Arc::new(markview_commonmark::parse(
 		"# One\n\nBody[^a].\n\n# Two\n\n[^a]: Note.\n",
 	));
 	let layout = crate::layout::LayoutEngine::new()
@@ -879,7 +882,7 @@ fn a_long_outline_resolves_the_reading_position_in_one_pass() {
 	let source: String = (0..1000)
 		.map(|i| format!("# Heading {i}\n\nBody {i}.\n\n"))
 		.collect();
-	let document = Arc::new(document::parse(source));
+	let document = Arc::new(markview_commonmark::parse(source));
 	let layout = crate::layout::LayoutEngine::new()
 		.layout(&document, &crate::test_support::options());
 	let mut session = ReaderSession::default();
@@ -911,7 +914,8 @@ fn a_long_outline_resolves_the_reading_position_in_one_pass() {
 
 #[test]
 fn a_heading_nested_in_a_container_is_part_of_the_outline() {
-	let document = Arc::new(document::parse("- ### Listed\n\n> ## Quoted\n"));
+	let document =
+		Arc::new(markview_commonmark::parse("- ### Listed\n\n> ## Quoted\n"));
 	let mut session = ReaderSession {
 		document: Some(document),
 		..Default::default()
@@ -1589,7 +1593,7 @@ fn every_panel_transition_clears_transient_input() {
 #[test]
 fn outline_collapse_is_per_session_and_resets_on_new_content() {
 	let mut session = ReaderSession {
-		document: Some(Arc::new(document::parse(
+		document: Some(Arc::new(markview_commonmark::parse(
 			"# Parent\n## Child\n# Next\n",
 		))),
 		accepted_content_id: 1,

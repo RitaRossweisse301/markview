@@ -22,7 +22,7 @@
 use std::sync::Arc;
 
 use libfuzzer_sys::{fuzz_mutator, fuzz_target};
-use markview_core::document::{Block, BlockKind, Document};
+use markview_document::{Block, BlockKind, Document};
 use mvfuzz::{budget, mutators, oracle, seam};
 
 fuzz_mutator! { |data: &mut [u8], size: usize, max_size: usize, seed: u32| {
@@ -130,7 +130,7 @@ fn walk(
 /// belongs to the document rather than to a snippet.
 fn check_rich(
 	doc: &Document,
-	text: &[markview_core::document::Inline],
+	text: &[markview_document::Inline],
 	block: &std::ops::Range<usize>,
 	what: &str,
 	assert_containment: bool,
@@ -159,7 +159,7 @@ fuzz_target!(|data: &[u8]| {
 	}
 	let guard = budget::InputGuard::new();
 	let source: Arc<str> = Arc::from(md.as_str());
-	let doc = markview_core::document::parse(source.clone());
+	let doc = markview_commonmark::parse(source.clone());
 	oracle::assert_source_ranges(&doc);
 	seam::assert_rich_text_covered(&doc);
 	walk(&doc, &doc.blocks, None);

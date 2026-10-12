@@ -2,7 +2,7 @@
 //!
 //! Each constant is parsed from its SVG file at compile time, so the sources
 //! stay editable and no SVG runtime reaches the reader.
-use markview_core::scene::IconPath;
+use markview_layout::scene::IconPath;
 
 pub(super) const SEARCH: &[IconPath] =
 	markview_icon::icon!("assets/ui/search.svg");

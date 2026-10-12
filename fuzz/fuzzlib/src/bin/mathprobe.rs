@@ -383,7 +383,7 @@ fn run_one(label: &str, latex: &str) {
 	println!("   input: {:?}", truncate(latex, 96));
 
 	// The reader's own entry point: what Markview actually calls.
-	let mut engine = markview_core::math::MathEngine::default();
+	let mut engine = markview_layout::math::MathEngine::default();
 	let (result, m) = measure(bytes, || engine.layout(latex, true, 18.0));
 	println!("   MathEngine::layout   {}", summary(&m));
 	match &result {

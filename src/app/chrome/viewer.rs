@@ -1,6 +1,6 @@
 //! The full-size image viewer: a scrim over the window and the picture.
 use crate::state::Viewer;
-use markview_core::scene::{Draw, Paint, Rect};
+use markview_layout::scene::{Draw, Paint, Rect};
 
 /// The version the page currently knows the picture by, so the viewer shows
 /// the same raster the images pipeline has produced — and a re-raster for a

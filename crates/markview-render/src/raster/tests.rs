@@ -75,7 +75,7 @@ fn whole_pixel_translation_reuses_raster_phase() {
 fn a_color_bitmap_emoji_decodes_to_color() {
 	use swash::scale::{Render, ScaleContext, Source, image::Content};
 	let data: &[u8] = include_bytes!(
-		"../../../markview-core/tests/fonts/NotoColorEmoji-subset.ttf"
+		"../../../markview-layout/tests/fonts/NotoColorEmoji-subset.ttf"
 	);
 	let font = swash::FontRef::from_index(data, 0).unwrap();
 	let glyph = font.charmap().map('\u{1f600}');
@@ -95,10 +95,8 @@ fn a_color_bitmap_emoji_decodes_to_color() {
 fn color_glyphs_preserve_rgb_and_share_paint_order() {
 	use super::{Entry, RasterKey, color::ColorAtlas};
 	use crate::{Renderer, Theme, View};
-	use markview_core::{
-		document::fingerprint,
-		scene::{Draw, Glyph, LayoutSnapshot, Paint, Rect},
-	};
+	use markview_document::fingerprint;
+	use markview_layout::scene::{Draw, Glyph, LayoutSnapshot, Paint, Rect};
 	let mut renderer = pollster::block_on(Renderer::new(None)).unwrap();
 	assert_eq!(renderer.raster.color_bytes(), 0);
 	let mut atlas =
@@ -198,7 +196,7 @@ fn color_glyphs_preserve_rgb_and_share_paint_order() {
 			Draw::Glyph(glyph.clone()),
 			Draw::Glyph(Glyph {
 				x: 6.,
-				paint: Paint::Color(markview_core::style::Color(0xff000000)),
+				paint: Paint::Color(markview_layout::style::Color(0xff000000)),
 				..glyph.clone()
 			}),
 			Draw::Rect(
@@ -208,7 +206,7 @@ fn color_glyphs_preserve_rgb_and_share_paint_order() {
 					w: 1.,
 					h: 1.,
 				},
-				Paint::Color(markview_core::style::Color(0x000000ff)),
+				Paint::Color(markview_layout::style::Color(0x000000ff)),
 			),
 		];
 		let submission = renderer
@@ -243,7 +241,7 @@ fn color_glyphs_preserve_rgb_and_share_paint_order() {
 #[test]
 fn prewarm_prepares_the_next_screenful_before_the_frame_needs_it() {
 	use crate::{RasterStats, Renderer, Theme, View};
-	use markview_core::scene::{
+	use markview_layout::scene::{
 		BlockLayout, Draw, Glyph, LayoutSnapshot, Paint, PlacedBlock,
 	};
 	use std::{collections::HashMap, sync::Arc, time::Duration};
@@ -349,7 +347,7 @@ fn prewarm_prepares_the_next_screenful_before_the_frame_needs_it() {
 #[test]
 fn prewarming_leaves_the_visible_image_demand_alone() {
 	use crate::{Renderer, Theme, View};
-	use markview_core::{
+	use markview_layout::{
 		image::{ImageInfo, ImagePixels, ImageSnapshot},
 		scene::{BlockLayout, Draw, LayoutSnapshot, PlacedBlock, Rect},
 	};

@@ -6,8 +6,8 @@ use super::{
 use crate::lang::Lang;
 use crate::render::Theme;
 use anyhow::{Context, Result, bail};
-use markview_core::JustificationLimits;
-use markview_core::style::CjkType;
+use markview_layout::JustificationLimits;
+use markview_layout::style::CjkType;
 use serde::{Deserialize, Serialize};
 use std::{fs, io::Write, path::PathBuf};
 

@@ -13,9 +13,9 @@ fn main() {
 	let md1 = edit.md1;
 	eprintln!("edit: {}", edit.description);
 
-	let doc0 = markview_core::document::parse(md0);
-	let full = markview_core::document::parse(md1.clone());
-	let incr = markview_core::document::reparse(&doc0, Arc::from(md1));
+	let doc0 = markview_commonmark::parse(md0);
+	let full = markview_commonmark::parse(md1.clone());
+	let incr = markview_commonmark::reparse(&doc0, Arc::from(md1));
 
 	println!(
 		"content_id full={:#x} incr={:#x}",

@@ -34,7 +34,7 @@
 use std::{collections::BTreeMap, sync::Arc};
 
 use libfuzzer_sys::{fuzz_mutator, fuzz_target};
-use markview_core::{
+use markview_layout::{
 	layout::LayoutSnapshot,
 	paginate::{PageGeometry, paginate},
 };
@@ -74,7 +74,7 @@ fuzz_target!(|data: &[u8]| {
 	ratex::allow_char_overflow();
 	pipeline::warmup();
 	let guard = budget::InputGuard::new();
-	let doc = markview_core::document::parse(md.to_string());
+	let doc = markview_commonmark::parse(md.to_string());
 	oracle::assert_source_ranges(&doc);
 
 	let targets = seam::fragment_targets(&doc);

@@ -35,7 +35,8 @@ pub(super) fn resolve(
 	if src.is_empty() {
 		bail!("Missing image source");
 	}
-	if let Some(code) = src.strip_prefix(markview_core::image::MERMAID_SCHEME) {
+	if let Some(code) = src.strip_prefix(markview_layout::image::MERMAID_SCHEME)
+	{
 		return Ok(Source::Diagram(code.to_owned()));
 	}
 	if let Ok(url) = url::Url::parse(src) {

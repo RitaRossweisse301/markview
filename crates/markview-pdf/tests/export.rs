@@ -1,7 +1,6 @@
 //! End-to-end export tests: the bytes a viewer would open, checked with a PDF
 //! reader rather than with the writer's own bookkeeping.
-use markview_core::{
-	document,
+use markview_layout::{
 	fonts::FontConfig,
 	image::ImageSnapshot,
 	layout::{LayoutEngine, LayoutOptions, LayoutSnapshot},
@@ -52,7 +51,7 @@ fn fonts() -> FontConfig {
 		ignore_system_fonts: true,
 		directories: vec![
 			std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-				.join("../markview-core/tests/fonts"),
+				.join("../markview-layout/tests/fonts"),
 		],
 		..Default::default()
 	}
@@ -106,7 +105,7 @@ fn inputs(
 	sheet: Arc<Stylesheet>,
 	geometry: PageGeometry,
 ) -> Inputs {
-	let document = document::parse(source.to_owned());
+	let document = markview_commonmark::parse(source.to_owned());
 	let options = LayoutOptions {
 		width: geometry.text_px().0,
 		codeblock_wrap: true,
@@ -464,7 +463,7 @@ fn a_page_break_never_repeats_the_lines_that_moved_on() {
 	let sheet = print();
 	let geometry = PageGeometry::from_style(sheet.page()).unwrap();
 	let probe = LayoutEngine::new().layout(
-		&document::parse(source.clone()),
+		&markview_commonmark::parse(source.clone()),
 		&LayoutOptions {
 			width: geometry.text_px().0,
 			codeblock_wrap: true,
@@ -985,10 +984,11 @@ fn link_hitboxes_stay_inside_the_printed_text_area() {
 
 #[test]
 fn missing_image_pixels_abort_export_with_the_source_and_reason() {
-	use markview_core::image::ImageInfo;
+	use markview_layout::image::ImageInfo;
 	let sheet = print();
 	let geometry = PageGeometry::from_style(sheet.page()).unwrap();
-	let document = document::parse("![Question 7](Q07.png)".to_owned());
+	let document =
+		markview_commonmark::parse("![Question 7](Q07.png)".to_owned());
 	let mut images = ImageSnapshot::default();
 	images.entries.insert(
 		"Q07.png".into(),

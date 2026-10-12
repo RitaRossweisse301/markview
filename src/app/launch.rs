@@ -1,14 +1,14 @@
 //! Window and deterministic diagnostic entry points.
 use crate::cli::{LaunchOptions, Mode, arguments};
 use crate::{
-	benchmark, document,
+	benchmark,
 	file::read_document,
 	layout::LayoutEngine,
 	render::{Renderer, Theme, View},
 };
 use anyhow::{Result, bail};
 use log::{info, warn};
-use markview_core::style::CjkType;
+use markview_layout::style::CjkType;
 use std::collections::HashMap;
 use winit::event_loop::{ControlFlow, EventLoop};
 
@@ -133,8 +133,10 @@ fn run_with_options(mut args: LaunchOptions) -> Result<()> {
 	}
 	let mut sheet = (*args.options.stylesheet).clone();
 	sheet.set_media(
-		crate::stylesheet::media_context(markview_core::style::StyleTarget::Ui)
-			.with_size(args.width as f32, args.height as f32),
+		crate::stylesheet::media_context(
+			markview_layout::style::StyleTarget::Ui,
+		)
+		.with_size(args.width as f32, args.height as f32),
 	);
 	args.options.stylesheet = std::sync::Arc::new(sheet);
 	if args.mode == Mode::Render
@@ -181,7 +183,7 @@ fn run_with_options(mut args: LaunchOptions) -> Result<()> {
 			std::sync::Arc::new(|| {}),
 		);
 		engine.validate_stylesheet(&args.options.stylesheet)?;
-		let doc = document::parse(read_document(path)?);
+		let doc = markview_commonmark::parse(read_document(path)?);
 		let mut images = crate::images::Images::shared(
 			args.offline,
 			args.options.fonts.clone(),

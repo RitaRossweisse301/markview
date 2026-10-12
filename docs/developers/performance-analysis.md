@@ -161,11 +161,11 @@ first, as the window does, its first frame fell to 51.0 ms (ordinary-10k),
 
 | Stage | Evidence | Cost | Size-dependent |
 | --- | --- | ---: | --- |
-| System font discovery, shared and started on the worker thread so it overlaps the renderer | `crates/markview-core/src/shaping.rs` `system_fonts`, `src/worker.rs` `warm_system_fonts` | ~20 ms, off the main thread | no |
+| System font discovery, shared and started on the worker thread so it overlaps the renderer | `crates/markview-layout/src/shaping.rs` `system_fonts`, `src/worker.rs` `warm_system_fonts` | ~20 ms, off the main thread | no |
 | `Renderer::new`: instance, adapter, device, shader module, **two** pipelines, 4 MiB mask atlas, buffers | `src/app/painting.rs:126`, `crates/markview-render/src/gpu.rs:61`, `pipeline.rs:2`, `raster.rs:83` | ~30 ms | no |
 | Window creation, chrome overlay shaping, acquire/present, DPR-2 compositor handoff | `src/app/lifecycle.rs:33`, `src/app/painting.rs:25`, `frame.rs:186` | ~20–30 ms | no |
-| Bounded prefix parse before the first prefix | `src/worker.rs`, `crates/markview-core/src/document/incremental.rs` | 0.2 ms / 1.1 ms / 1.9 ms (10 KiB / 100 KiB / 1 MiB) | no (64 KiB cap) |
-| Layout to coverage | `crates/markview-core/src/layout.rs` | 6–11 ms | viewport-bounded |
+| Bounded prefix parse before the first prefix | `src/worker.rs`, `crates/markview-commonmark/src/incremental.rs` | 0.2 ms / 1.1 ms / 1.9 ms (10 KiB / 100 KiB / 1 MiB) | no (64 KiB cap) |
+| Layout to coverage | `crates/markview-layout/src/layout.rs` | 6–11 ms | viewport-bounded |
 
 `FontContext::new()` builds a fontique collection with system fonts, which
 enumerates every installed family (~1287 here). It used to run twice, once in
@@ -175,9 +175,9 @@ is created on the first overlay, which is already past the window, and
 `Renderer.fallback` (`crates/markview-render/src/lib.rs:80`) stays `None` on a
 normal launch, so no third scan is possible.
 
-Three whole-document passes precede the first laid-out block: `document::parse`,
+Three whole-document passes precede the first laid-out block: `markview_commonmark::parse`,
 `Images::prepare` (`src/worker.rs`) and `highlights.prepare`
-(`crates/markview-core/src/layout/highlights.rs`, which walks the block tree for
+(`crates/markview-layout/src/layout/highlights.rs`, which walks the block tree for
 code keys and clones the language and text of the jobs it still has to run).
 Only the block-layout walk is coverage-bound.
 
@@ -220,7 +220,7 @@ cannot lose entries, and at the end of a complete pass every entry it did not
 touch is dropped:
 
 ```rust
-// crates/markview-core/src/layout.rs
+// crates/markview-layout/src/layout.rs
 self.cache.retain(|_, entry| entry.pass == pass);
 ```
 
@@ -244,7 +244,7 @@ keep this measurable.
 A highlight result arrives asynchronously and used to bump a global generation,
 which made every code block's cache key stale and cleared the whole layout
 cache. `Highlights` also cleared its cache at 256 entries
-(`crates/markview-core/src/layout/highlights.rs`), so a document with more code
+(`crates/markview-layout/src/layout/highlights.rs`), so a document with more code
 blocks than that re-enqueued and re-laid out everything on every pass: measured
 with 300 fenced blocks, `reused = 0` forever and a 70 ms full re-layout per
 edit.
@@ -260,12 +260,12 @@ same 300-block fixture now reuses 597 of 600 blocks on an edit.
 ### Bounded parses: one block on edit, one prefix on open
 
 `Event::Changed` bumps `content_version`, which invalidates the worker's cached
-document, so once every edit read the file and ran `document::parse` over the
+document, so once every edit read the file and ran `markview_commonmark::parse` over the
 whole of it: comrak, a line index, a footnote map, then a walk of the block tree
-(`crates/markview-core/src/document/parse.rs`). That parse cost ~19 ms / MiB and
+(`crates/markview-commonmark/src/parse.rs`). That parse cost ~19 ms / MiB and
 was ~90 % of a 1 MiB edit.
 
-`document::parse_incremental` (`crates/markview-core/src/document/incremental.rs`)
+`markview_commonmark::parse_incremental` (`crates/markview-commonmark/src/incremental.rs`)
 now reuses the previous parse. It takes the common byte prefix and suffix of the
 old and new source, finds the blank-line-delimited group the change falls in,
 re-parses only that group with comrak, and keeps every block before it as-is and
@@ -286,7 +286,7 @@ The anchor walk underneath was quadratic when headings repeat: `Anchors::unique`
 restarted its suffix scan at one for every heading, so the thousandth `## Same`
 cost a thousand lookups. The 1 MiB fixture repeats one heading 1460 times and
 spent ~84 ms there. `Anchors` now remembers the next suffix per base slug
-(`crates/markview-core/src/document/heading.rs`), which took the full parse from
+(`crates/markview-commonmark/src/heading.rs`), which took the full parse from
 ~105 ms to ~28 ms: 0.2 ms / 10 KiB, 1.7 ms / 100 KiB, 28 ms / 1 MiB.
 
 ### The debounce floor
@@ -354,8 +354,8 @@ What dominates the bytes:
 - **Per-glyph layout representation.** `Draw` is 96 bytes and there is one
   `Draw::Glyph` per glyph, plus a 48-byte `TextCluster` per cluster, plus each
   node's reading-text `String` and grapheme boundaries
-  (`crates/markview-core/src/scene.rs:75-106,160-184`,
-  `crates/markview-core/src/text.rs:137-184`). For unique prose that is the
+  (`crates/markview-layout/src/scene.rs:75-106,160-184`,
+  `crates/markview-layout/src/text.rs:137-184`). For unique prose that is the
   ~220 B/char slope. This is the dominant per-document cost.
 - **Allocator high-water from re-layout.** Re-laying out a block builds a fresh
   `BlockLayout` while the previous snapshot still holds the old one, and glibc
@@ -408,7 +408,7 @@ chance of an output or behavior change.
    background thread while the font scan runs, and defer the image pipeline and
    the 4 MiB atlas until first use. ~15–25 ms, medium risk.
    (`pipeline.rs:21`, `raster.rs:83`.)
-4. **Prefix-aware parse — implemented.** `document::parse_prefix` parses at most
+4. **Prefix-aware parse — implemented.** `markview_commonmark::parse_prefix` parses at most
    64 KiB of a fresh file, appends the reference definitions and footnotes the
    prefix needs (rescanning for them only when the prefix names a reference),
    and the worker lays out only enough of it to cover the viewport and publishes

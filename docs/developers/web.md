@@ -109,7 +109,7 @@ CodeMirror scrolling/editing, Chinese composition, resize, TOC and lifecycle.
 
 ## Source navigation verification
 
-`cargo test -p markview-core --test source` verifies Unicode coordinates, CRLF,
+`cargo test -p markview-layout --test source` verifies Unicode coordinates, CRLF,
 long paragraphs/code, cells/quotes, cached geometry, deferred targets and nested,
 adjacent and quoted disclosure headings. `pnpm --dir web test
  tests/navigation.spec.mjs` exercises the built package with real canvas rendering,
@@ -120,5 +120,5 @@ repeated mounting. Existing reader/resource/font regression suites remain in use
 
 Use `MV_GPU=1 pnpm --dir web test --project=chromium-gpu` for the opt-in Vulkan
 browser project. Default browser tests use SwiftShader. Native engine tests run
-with `cargo test -p markview-core`; WASM lint runs with
+with `cargo test -p markview-commonmark -p markview-document -p markview-layout`; WASM lint runs with
 `cargo clippy -p markview-web --target wasm32-unknown-unknown --features woff -- -D warnings`.

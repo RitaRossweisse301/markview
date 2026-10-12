@@ -2,7 +2,7 @@ use crate::{
 	Renderer, Theme, View, intersect,
 	raster::{ATLAS_SIZE, COLOR_ATLAS_SIZE, GlyphOrigin},
 };
-use markview_core::{
+use markview_layout::{
 	scene::{Draw, Glyph, Paint, Rect},
 	shaping::TextShaper,
 };
@@ -194,7 +194,7 @@ impl Renderer {
 					Paint::Scoped(
 						*chain,
 						*condition,
-						markview_core::style::ColorField::Background,
+						markview_layout::style::ColorField::Background,
 					),
 					view.theme,
 				);
@@ -203,7 +203,7 @@ impl Renderer {
 						Paint::Scoped(
 							*chain,
 							*condition,
-							markview_core::style::ColorField::BorderColor,
+							markview_layout::style::ColorField::BorderColor,
 						),
 						view.theme,
 					);
@@ -223,7 +223,7 @@ impl Renderer {
 						Paint::Scoped(
 							*chain,
 							*condition,
-							markview_core::style::ColorField::BorderColor,
+							markview_layout::style::ColorField::BorderColor,
 						),
 						view.theme,
 					);

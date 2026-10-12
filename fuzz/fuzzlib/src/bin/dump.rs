@@ -12,7 +12,7 @@ fn main() {
 	let data = std::fs::read(&path).unwrap();
 	let md0 = String::from_utf8_lossy(&data).into_owned();
 
-	let doc0 = markview_core::document::parse(md0.clone());
+	let doc0 = markview_commonmark::parse(md0.clone());
 	eprintln!(
 		"full parse ({} bytes): {} blocks",
 		md0.len(),
@@ -23,7 +23,7 @@ fn main() {
 	}
 
 	// Same source through reparse (no edit): must be identical.
-	let same = markview_core::document::reparse(&doc0, Arc::from(md0.clone()));
+	let same = markview_commonmark::reparse(&doc0, Arc::from(md0.clone()));
 	eprintln!(
 		"reparse(same): {} blocks, same content id: {}",
 		same.blocks.len(),
@@ -36,8 +36,8 @@ fn main() {
 	// The deterministic edit the `reparse` target applies.
 	let edit = mvfuzz::edit::apply_deterministic_edit(&data);
 	let md1 = edit.md1;
-	let full = markview_core::document::parse(md1.clone());
-	let incr = markview_core::document::reparse(&doc0, Arc::from(md1.clone()));
+	let full = markview_commonmark::parse(md1.clone());
+	let incr = markview_commonmark::reparse(&doc0, Arc::from(md1.clone()));
 	eprintln!(
 		"edit ({}): full={} incremental={} equal={}",
 		edit.description,

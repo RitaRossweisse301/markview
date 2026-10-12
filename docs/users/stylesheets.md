@@ -92,7 +92,7 @@ markview pdf examples/themes.md --style monochrome --output monochrome.pdf
 markview pdf examples/themes.md --style vangogh --output vangogh.pdf
 ```
 
-Their source files live in [`crates/markview-core/styles/`](../../crates/markview-core/styles). Copy a visible theme to a **new filename** to start a standalone palette, or write a small override and layer it above an existing theme.
+Their source files live in [`crates/markview-layout/styles/`](../../crates/markview-layout/styles). Copy a visible theme to a **new filename** to start a standalone palette, or write a small override and layer it above an existing theme.
 
 `builtin.mvss.toml` supplies shared fonts, base typography, geometry, and safe fallback colors. It is always the last, lowest-priority layer, never appears in the UI, and cannot be selected, installed, or replaced. An empty reader style list uses only this fallback. The normal default chooses `light` or `dark`; neither is an implicit parent of another theme. PDF exports put `print` above `builtin` before applying the requested styles.
 

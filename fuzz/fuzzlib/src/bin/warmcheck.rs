@@ -10,7 +10,7 @@ fn main() {
 	let args: Vec<String> = std::env::args().skip(1).collect();
 	let latex = args.join(" ");
 	for round in 1..=3 {
-		let mut engine = markview_core::math::MathEngine::default();
+		let mut engine = markview_layout::math::MathEngine::default();
 		let (result, m) =
 			measure(latex.len(), || engine.layout(&latex, true, 18.0));
 		println!(

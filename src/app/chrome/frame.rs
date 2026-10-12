@@ -5,7 +5,7 @@ use crate::{
 	layout::{Draw, Paint},
 	settings::WindowLayout,
 };
-use markview_core::{
+use markview_layout::{
 	scene::IconPath,
 	style::{Color, ColorField as C, Condition},
 };

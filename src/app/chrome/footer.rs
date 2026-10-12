@@ -1,7 +1,7 @@
 use super::super::BOTTOM;
 use crate::lang::Lang;
 use crate::layout::{Draw, Paint, Rect, TextShaper};
-use markview_core::style::{ColorField as C, Condition, TextAppearance};
+use markview_layout::style::{ColorField as C, Condition, TextAppearance};
 
 /// The text style the footer measures and draws its labels with.
 fn appearance(shaper: &TextShaper) -> TextAppearance {
@@ -28,8 +28,8 @@ fn measure(shaper: &mut TextShaper, text: &str, max: f32) -> (String, f32) {
 /// selection's — fitted to the bar, with the width it occupies.
 pub(super) fn counts_label(
 	shaper: &mut TextShaper,
-	counts: Option<markview_core::text::TextCounts>,
-	selected: Option<markview_core::text::TextCounts>,
+	counts: Option<markview_layout::text::TextCounts>,
+	selected: Option<markview_layout::text::TextCounts>,
 	width: f32,
 	lang: Lang,
 ) -> (String, f32) {
@@ -73,8 +73,8 @@ pub(super) fn trailing(
 
 pub(super) fn draw_footer(
 	shaper: &mut TextShaper,
-	counts: Option<markview_core::text::TextCounts>,
-	selected: Option<markview_core::text::TextCounts>,
+	counts: Option<markview_layout::text::TextCounts>,
+	selected: Option<markview_layout::text::TextCounts>,
 	warning: Option<&str>,
 	secondary: &str,
 	size: (f32, f32),

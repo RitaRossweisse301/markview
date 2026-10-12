@@ -1,6 +1,6 @@
 //! Text faces supplied by the browser host; only KaTeX remains embedded.
 
-use markview_core::fonts::{FontConfig, is_font};
+use markview_layout::fonts::{FontConfig, is_font};
 use parley::fontique::Blob;
 use std::{
 	cell::RefCell,
@@ -72,7 +72,7 @@ pub(crate) fn config() -> FontConfig {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use markview_core::fonts::families;
+	use markview_layout::fonts::families;
 
 	#[test]
 	fn font_formats_and_independent_sets() {
@@ -109,7 +109,7 @@ mod tests {
 		let read = |name: &str| {
 			std::fs::read(
 				std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-					.join("../markview-core/tests/fonts")
+					.join("../markview-layout/tests/fonts")
 					.join(name),
 			)
 			.unwrap()

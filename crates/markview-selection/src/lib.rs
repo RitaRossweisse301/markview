@@ -18,8 +18,8 @@
 //! reading text and its geometry, this crate owns the pointer that walks it,
 //! and a front end owns the events.
 
-use markview_core::layout::LayoutSnapshot;
-use markview_core::text::{TextPosition, TextSelection};
+use markview_layout::layout::LayoutSnapshot;
+use markview_layout::text::{TextPosition, TextSelection};
 use std::time::Duration;
 use web_time::Instant;
 

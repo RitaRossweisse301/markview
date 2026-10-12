@@ -2573,9 +2573,11 @@ dependencies = [
  "image",
  "log",
  "lopdf",
- "markview-core",
+ "markview-commonmark",
+ "markview-document",
  "markview-i18n",
  "markview-icon",
+ "markview-layout",
  "markview-pdf",
  "markview-platform",
  "markview-render",
@@ -2606,36 +2608,20 @@ dependencies = [
 ]
 
 [[package]]
-name = "markview-core"
+name = "markview-commonmark"
 version = "0.3.0"
 dependencies = [
- "anyhow",
- "codex",
  "comrak",
  "html-escape",
- "hypher",
- "icu_properties",
- "icu_segmenter",
- "log",
- "markview-core",
- "memmap2",
- "parley",
+ "markview-document",
  "percent-encoding",
- "ratex-katex-fonts",
- "ratex-layout",
- "ratex-parser",
- "ratex-types",
- "regex",
- "regex-automata",
+]
+
+[[package]]
+name = "markview-document"
+version = "0.3.0"
+dependencies = [
  "serde",
- "skrifa 0.42.1",
- "swash",
- "syntect",
- "tempfile",
- "toml_edit",
- "two-face",
- "unicode-segmentation",
- "web-time",
 ]
 
 [[package]]
@@ -2658,6 +2644,38 @@ dependencies = [
 ]
 
 [[package]]
+name = "markview-layout"
+version = "0.3.0"
+dependencies = [
+ "anyhow",
+ "codex",
+ "hypher",
+ "icu_properties",
+ "icu_segmenter",
+ "log",
+ "markview-commonmark",
+ "markview-document",
+ "markview-layout",
+ "memmap2",
+ "parley",
+ "ratex-katex-fonts",
+ "ratex-layout",
+ "ratex-parser",
+ "ratex-types",
+ "regex",
+ "regex-automata",
+ "serde",
+ "skrifa 0.42.1",
+ "swash",
+ "syntect",
+ "tempfile",
+ "toml_edit",
+ "two-face",
+ "unicode-segmentation",
+ "web-time",
+]
+
+[[package]]
 name = "markview-pdf"
 version = "0.3.0"
 dependencies = [
@@ -2665,7 +2683,9 @@ dependencies = [
  "krilla",
  "log",
  "lopdf",
- "markview-core",
+ "markview-commonmark",
+ "markview-document",
+ "markview-layout",
  "parley",
  "percent-encoding",
  "ratex-font",
@@ -2716,7 +2736,9 @@ dependencies = [
  "anyhow",
  "bytemuck",
  "image",
- "markview-core",
+ "markview-commonmark",
+ "markview-document",
+ "markview-layout",
  "markview-pdf",
  "markview-render",
  "parley",
@@ -2737,7 +2759,7 @@ dependencies = [
 name = "markview-selection"
 version = "0.3.0"
 dependencies = [
- "markview-core",
+ "markview-layout",
  "web-time",
 ]
 
@@ -2749,7 +2771,9 @@ dependencies = [
  "console_error_panic_hook",
  "js-sys",
  "log",
- "markview-core",
+ "markview-commonmark",
+ "markview-document",
+ "markview-layout",
  "markview-render",
  "markview-selection",
  "parley",

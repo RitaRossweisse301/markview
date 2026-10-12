@@ -14,10 +14,12 @@ cargo-fuzz = true
 members = ["fuzzlib"]
 
 [dependencies]
+markview-commonmark = { path = "../crates/markview-commonmark" }
+markview-document = { path = "../crates/markview-document" }
 libfuzzer-sys = "0.4"
 arbitrary = { version = "1", features = ["derive"] }
 lopdf = { version = "0.45", default-features = false }
-markview-core = { path = "../crates/markview-core", features = ["fuzz"] }
+markview-layout = { path = "../crates/markview-layout", features = ["fuzz"] }
 markview-pdf = { path = "../crates/markview-pdf", features = ["fuzz"] }
 markview-render = { path = "../crates/markview-render", features = ["fuzz"] }
 mvfuzz = { path = "fuzzlib" }

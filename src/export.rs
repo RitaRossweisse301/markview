@@ -5,7 +5,6 @@
 //! borrows [`ExportSettings`] for a single job, so an export can never reflow
 //! the document on screen.
 use crate::{
-	document,
 	file::read_document,
 	images::Images,
 	layout::{LayoutEngine, LayoutOptions, LayoutSnapshot},
@@ -13,7 +12,7 @@ use crate::{
 };
 use anyhow::{Context, Result, bail};
 use image::ImageEncoder;
-use markview_core::{
+use markview_layout::{
 	fonts::FontConfig,
 	paginate::{PT_PER_PX, PageGeometry},
 	style::{CjkType, PageStyle, Stylesheet},
@@ -199,7 +198,7 @@ pub(crate) fn png_snapshot_text(
 		std::sync::Arc::new(|| {}),
 	);
 	engine.validate_stylesheet(&options.stylesheet)?;
-	let document = document::parse(text.to_owned());
+	let document = markview_commonmark::parse(text.to_owned());
 	let mut images = Images::shared(offline, options.fonts.clone(), &services);
 	images.set_security(security.for_content(&document.source));
 	images.prepare(
@@ -389,14 +388,14 @@ pub(crate) fn draw_tile(
 		let start = if bottom { height - width } else { 0.0 };
 		let top = start.max(tile_top);
 		let end = (start + width).min(tile_bottom);
-		(end > top).then_some(markview_core::scene::Draw::Rect(
-			markview_core::scene::Rect {
+		(end > top).then_some(markview_layout::scene::Draw::Rect(
+			markview_layout::scene::Rect {
 				x: 0.0,
 				y: top - tile_top,
 				w: plan.width_px as f32 / scale,
 				h: end - top,
 			},
-			markview_core::scene::Paint::Color(color),
+			markview_layout::scene::Paint::Color(color),
 		))
 	})
 	.collect();

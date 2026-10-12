@@ -8,7 +8,7 @@ use crate::{
 	layout::{Draw, Paint, Rect, TextShaper},
 	state::{Command, InteractionState},
 };
-use markview_core::style::{ColorField as C, Condition, TextAppearance};
+use markview_layout::style::{ColorField as C, Condition, TextAppearance};
 
 /// Which list a stylesheet page edits: the reader's effective styles, or the
 /// sequence one export layers on the print sheet.

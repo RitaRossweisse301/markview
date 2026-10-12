@@ -22,7 +22,7 @@ use krilla::{
 	surface::Surface,
 	text::{Font, GlyphId, KrillaGlyph},
 };
-use markview_core::{
+use markview_layout::{
 	layout::{BlockLayout, Draw, LayoutSnapshot, Paint, PlacedBlock},
 	math::MathBox,
 	paginate::{
@@ -237,7 +237,7 @@ impl Painter<'_> {
 		chain: u128,
 		condition: Condition,
 	) {
-		let corners = markview_core::scene::fit_corners(
+		let corners = markview_layout::scene::fit_corners(
 			LocalRect {
 				x: 0.0,
 				y: 0.0,
@@ -261,7 +261,7 @@ impl Painter<'_> {
 		if edges == [0.0; 4] {
 			return;
 		}
-		let [t, r, b, l] = markview_core::scene::fit_edges(
+		let [t, r, b, l] = markview_layout::scene::fit_edges(
 			LocalRect {
 				x: 0.0,
 				y: 0.0,
@@ -1342,7 +1342,7 @@ fn rounded_path(
 }
 
 fn rounded_contour(builder: &mut PathBuilder, rect: Rect, corners: [f32; 4]) {
-	let [tl, tr, br, bl] = markview_core::scene::fit_corners(
+	let [tl, tr, br, bl] = markview_layout::scene::fit_corners(
 		LocalRect {
 			x: 0.0,
 			y: 0.0,

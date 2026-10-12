@@ -1,8 +1,8 @@
 //! Compressed PDF resources and decoded-image fallback for standalone callers.
 use anyhow::{Result, anyhow};
 use krilla::image::{BitsPerComponent, CustomImage, Image, ImageColorspace};
-use markview_core::image::ImageSnapshot;
-use markview_core::image::Pixels;
+use markview_layout::image::ImageSnapshot;
+use markview_layout::image::Pixels;
 use std::collections::HashMap;
 use std::{
 	hash::{Hash, Hasher},
@@ -143,7 +143,7 @@ impl<'a> Images<'a> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use markview_core::image::Pixels;
+	use markview_layout::image::Pixels;
 	use std::sync::Arc;
 
 	#[test]

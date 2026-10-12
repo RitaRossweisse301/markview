@@ -1,5 +1,6 @@
 //! Desktop application and platform services.
-pub use markview_core::{document, layout, paginate, profile};
+pub use markview_document as document;
+pub use markview_layout::{layout, paginate, profile};
 pub use markview_render as render;
 pub mod app;
 mod benchmark;

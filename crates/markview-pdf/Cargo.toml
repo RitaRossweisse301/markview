@@ -22,9 +22,11 @@ rust-embed.workspace = true
 ratex-types.workspace = true
 anyhow.workspace = true
 log.workspace = true
-markview-core = { path = "../markview-core", features = ["font-directories"] }
+markview-layout = { path = "../markview-layout", features = ["font-directories"] }
 
 [dev-dependencies]
+markview-commonmark = { path = "../markview-commonmark" }
+markview-document = { path = "../markview-document" }
 tempfile.workspace = true
 lopdf = { version = "0.45", default-features = false }
 

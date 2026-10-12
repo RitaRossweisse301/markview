@@ -1,6 +1,5 @@
-use markview_core::{
+use markview_layout::{
 	background::Direct,
-	document,
 	fonts::FontConfig,
 	layout::{LayoutEngine, LayoutOptions},
 	style::Stylesheet,
@@ -13,15 +12,15 @@ fn fonts() -> FontConfig {
 		0x72656e646572,
 		[
 			include_bytes!(
-				"../../markview-core/tests/fonts/NotoSerif-Regular-subset.otf"
+				"../../markview-layout/tests/fonts/NotoSerif-Regular-subset.otf"
 			)
 			.as_slice(),
 			include_bytes!(
-				"../../markview-core/tests/fonts/NotoSans-Bold-subset.otf"
+				"../../markview-layout/tests/fonts/NotoSans-Bold-subset.otf"
 			)
 			.as_slice(),
 			include_bytes!(
-				"../../markview-core/tests/fonts/NotoSansMono-Regular-subset.otf"
+				"../../markview-layout/tests/fonts/NotoSansMono-Regular-subset.otf"
 			)
 			.as_slice(),
 		]
@@ -57,7 +56,7 @@ fn view<'a>(
 #[test]
 fn markdown_renders_visible_and_identical_cached_frames() -> anyhow::Result<()>
 {
-	let doc = document::parse(
+	let doc = markview_commonmark::parse(
 		"# Rendering\n\nA paragraph with $x^2$.\n\n- first\n- second\n\n```rust\nlet answer = 42;\n```\n",
 	);
 	let mut engine =
@@ -126,7 +125,7 @@ fn prewarm_prepares_atlases_without_a_frame() -> anyhow::Result<()> {
 			)
 		})
 		.collect::<String>();
-	let doc = document::parse(source.as_str());
+	let doc = markview_commonmark::parse(source.as_str());
 	let mut engine =
 		LayoutEngine::with_executor(Arc::new(Direct), Arc::new(|| {}));
 	let mut renderer = pollster::block_on(Renderer::new(None))?;

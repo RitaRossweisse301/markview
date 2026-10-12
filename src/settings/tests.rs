@@ -443,7 +443,10 @@ fn a_pending_export_edit_survives_an_external_reload() {
 fn an_export_defaults_to_twelve_point_body_text() {
 	let export = ExportSettings::default();
 	assert_eq!(export.format, ExportFormat::Pdf);
-	assert_eq!(export.font_size * markview_core::paginate::PT_PER_PX, 12.0);
+	assert_eq!(
+		export.font_size * markview_layout::paginate::PT_PER_PX,
+		12.0
+	);
 }
 
 #[test]

@@ -281,7 +281,7 @@ impl<P: super::SendEvent> App<P> {
 			self.interaction.selection_counts = selection.map(|s| {
 				(
 					s,
-					markview_core::text::TextCounts::of(
+					markview_layout::text::TextCounts::of(
 						&session
 							.snapshot
 							.extract_text(s, session.accepted_revision),
@@ -300,7 +300,7 @@ impl<P: super::SendEvent> App<P> {
 		out.extend(chrome.overlay());
 		if markview_platform::touch_layout() {
 			use crate::layout::{Paint, Rect};
-			use markview_core::style::{ColorField, Condition};
+			use markview_layout::style::{ColorField, Condition};
 			let (width, height, _) = self.dimensions();
 			let [left, top, right, bottom] = self.insets();
 			// Extend the chrome behind system bars without moving its controls.

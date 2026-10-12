@@ -1,4 +1,4 @@
-use markview_core::{
+use markview_layout::{
 	layout::LayoutOptions,
 	style::{CjkType, Media, MediaContext, StyleTarget, Stylesheet},
 };

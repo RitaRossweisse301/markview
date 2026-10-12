@@ -5,7 +5,7 @@ mod paint;
 mod text;
 use anyhow::Result;
 pub use image::PreparedImage;
-use markview_core::{
+use markview_layout::{
 	fonts::FontConfig,
 	image::ImageSnapshot,
 	layout::LayoutSnapshot,

@@ -46,7 +46,7 @@ def main():
         apk.write(dex / "classes.dex", "classes.dex")
         for file in sorted((ROOT / "android/tests/assets").iterdir()):
             apk.write(file, "assets/" + file.name)
-        apk.write(ROOT / "crates/markview-core/tests/fonts/NotoSans-Regular-subset.otf", "assets/Test.otf")
+        apk.write(ROOT / "crates/markview-layout/tests/fonts/NotoSans-Regular-subset.otf", "assets/Test.otf")
     apk = build / "markview-android-tests.apk"
     run(tools / "zipalign", "-f", "4", unsigned, apk)
     run(tools / "apksigner", "sign", "--ks", build / "debug.keystore", "--ks-pass", "pass:android", apk)

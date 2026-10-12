@@ -1,7 +1,7 @@
 //! Instance-owned parsed MVSS rules and atomic reader selection.
 
 use anyhow::{Context, Result, ensure};
-use markview_core::style::{StyleTarget, Stylesheet, StylesheetSource};
+use markview_layout::style::{StyleTarget, Stylesheet, StylesheetSource};
 use std::{collections::HashMap, sync::Arc};
 
 #[derive(Default)]
@@ -64,7 +64,7 @@ impl Stylesheets {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use markview_core::style::{Color, Condition, MediaContext};
+	use markview_layout::style::{Color, Condition, MediaContext};
 
 	const FIRST: &str = "format_version = 2\nversion = 1\n[[rule]]\nwhen = ['body']\ncolor = '#112233'";
 	const SECOND: &str = "format_version = 2\nversion = 1\n[[rule]]\nwhen = ['body']\ncolor = '#445566'";

@@ -106,7 +106,7 @@ export async function mockCdnFonts(page) {
 				body: woff(
 					await readFile(
 						new URL(
-							`../../../crates/markview-core/tests/fonts/${name}`,
+							`../../../crates/markview-layout/tests/fonts/${name}`,
 							import.meta.url,
 						),
 					),
@@ -119,7 +119,7 @@ export async function mockCdnFonts(page) {
 				: "font/otf",
 			path: fileURLToPath(
 				new URL(
-					`../../../crates/markview-core/tests/fonts/${name}`,
+					`../../../crates/markview-layout/tests/fonts/${name}`,
 					import.meta.url,
 				),
 			),

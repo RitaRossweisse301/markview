@@ -7,13 +7,15 @@ publish = false
 
 
 [dependencies]
+markview-commonmark = { path = "../../crates/markview-commonmark" }
+markview-document = { path = "../../crates/markview-document" }
 
 libfuzzer-sys = "0.4"
 # `font-directories` is named here because this crate is the one that reads
 # `tests/fonts` (see `pipeline::pinned_fonts`). It happens to arrive through
 # `markview-pdf` today, but a layout helper that only works because another
 # crate enables a feature is one refactor away from shaping with no faces.
-markview-core = { path = "../../crates/markview-core", features = ["fuzz", "font-directories"] }
+markview-layout = { path = "../../crates/markview-layout", features = ["fuzz", "font-directories"] }
 markview-pdf = { path = "../../crates/markview-pdf", features = ["fuzz"] }
 # The PDF targets re-parse Markview's own output; the reader dependency carries
 # the same version, so the harness checks what a viewer would see.
@@ -25,7 +27,7 @@ percent-encoding = "2"
 # code points they can draw, so an undrawable glyph is not read as a dropped
 # character.
 swash = "0.2.9"
-# `mathprobe` measures ratex directly, below `markview-core`'s byte budgets, so
+# `mathprobe` measures ratex directly, below `markview-layout`'s byte budgets, so
 # it needs the three crates the reader pins. Same versions as the root
 # workspace; a divergence here would measure a different ratex than the app
 # ships.

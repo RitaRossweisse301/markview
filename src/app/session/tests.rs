@@ -194,7 +194,7 @@ fn accept(
 	options: &LayoutOptions,
 	complete: bool,
 ) {
-	let doc = Arc::new(markview_core::document::parse(source));
+	let doc = Arc::new(markview_commonmark::parse(source));
 	let mut layout = LayoutEngine::new().layout(&doc, options);
 	if !complete {
 		layout.blocks.truncate(2);
@@ -312,7 +312,7 @@ fn disclosures_apply_before_layout_and_changed_content_discards_overrides() {
 		fn exit(&self) {}
 	}
 	let source = "<details>\n<summary>Summary</summary>\n\nHidden paragraph.\n\n</details>\n\nFollowing paragraph.";
-	let parsed = Arc::new(markview_core::document::parse(source));
+	let parsed = Arc::new(markview_commonmark::parse(source));
 	let id = parsed
 		.blocks
 		.iter()
@@ -362,9 +362,7 @@ fn disclosures_apply_before_layout_and_changed_content_discards_overrides() {
 		Event::Parsed {
 			path,
 			content_version: app.readers.session.content_version,
-			document: Arc::new(markview_core::document::parse(
-				"Changed content.",
-			)),
+			document: Arc::new(markview_commonmark::parse("Changed content.")),
 		},
 	);
 	assert!(app.readers.session.details_open.is_empty());

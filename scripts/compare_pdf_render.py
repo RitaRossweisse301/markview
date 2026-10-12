@@ -20,7 +20,7 @@ overlap to a quarter-pixel offset, which reads as a shift that is not there.
 
 The render is exported with `--style print`, which merges the print sheet over
 the reader's light sheet; `the_print_sheet_survives_a_merge_over_the_reader_sheet`
-in `crates/markview-core/src/style/tests.rs` holds those two to the same fields.
+in `crates/markview-layout/src/style/tests.rs` holds those two to the same fields.
 
 Requirements: python3 with numpy and Pillow, plus Ghostscript (`gs`).
 

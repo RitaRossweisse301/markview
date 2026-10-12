@@ -1,6 +1,6 @@
 use anyhow::{Context, Result, bail};
 use image::{Rgba, RgbaImage};
-use markview_core::scene::Draw;
+use markview_layout::scene::Draw;
 use std::{
 	collections::BTreeSet,
 	fs,
@@ -83,7 +83,7 @@ impl Baselines {
 
 pub fn capture(
 	renderer: &mut markview_render::Renderer,
-	snapshot: &markview_core::scene::LayoutSnapshot,
+	snapshot: &markview_layout::scene::LayoutSnapshot,
 	view: &markview_render::View<'_>,
 	overlay: &[Draw],
 ) -> Result<RgbaImage> {

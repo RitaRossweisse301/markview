@@ -300,7 +300,7 @@ fn the_wheel_over_the_list_scrolls_it_and_not_the_document() {
 
 #[test]
 fn collapsed_outline_keeps_drawing_hits_and_navigation_in_sync() {
-	let entries = crate::document::parse(
+	let entries = markview_commonmark::parse(
 		"# Parent\n### Child\n##### Grandchild\n## Sibling\n# Next\n",
 	)
 	.outline();
@@ -382,7 +382,7 @@ fn collapsed_outline_keeps_drawing_hits_and_navigation_in_sync() {
 #[test]
 fn bulk_controls_draw_in_the_header_and_collapse_every_level() {
 	let drawer = rect(800.0, 600.0, TOP);
-	let entries = crate::document::parse(
+	let entries = markview_commonmark::parse(
 		"# Parent\n### Child\n##### Grandchild\n## Sibling\n# Next\n",
 	)
 	.outline();

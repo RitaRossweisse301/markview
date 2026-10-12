@@ -7,6 +7,7 @@ license.workspace = true
 publish = false
 
 [dependencies]
+markview-document = { path = "../markview-document" }
 serde.workspace = true
 anyhow.workspace = true
 bytemuck.workspace = true
@@ -22,7 +23,7 @@ web-time.workspace = true
 # driving text never names a window.
 # No font directories: a front end that compiles this for the Web has no
 # filesystem to read.
-markview-core = { path = "../markview-core" }
+markview-layout = { path = "../markview-layout" }
 
 [features]
 # Reading a texture back, and waiting on submitted work, both block the
@@ -56,6 +57,7 @@ wgpu = { workspace = true, features = ["webgl"] }
 workspace = true
 
 [dev-dependencies]
+markview-commonmark = { path = "../markview-commonmark" }
 image = { version = "0.25.9", default-features = false, features = ["png"] }
 tempfile.workspace = true
 markview-pdf = { path = "../markview-pdf" }

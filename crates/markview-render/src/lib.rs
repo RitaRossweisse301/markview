@@ -9,7 +9,7 @@ mod raster;
 #[cfg(feature = "readback")]
 use anyhow::Context;
 use anyhow::Result;
-use markview_core::{
+use markview_layout::{
 	scene::{Paint, Rect},
 	shaping::TextShaper,
 };
@@ -58,13 +58,13 @@ pub enum Theme {
 }
 impl Theme {
 	pub fn color(self, p: Paint) -> [f32; 4] {
-		markview_core::style::Stylesheet::bundled(self == Self::Dark).paint(p)
+		markview_layout::style::Stylesheet::bundled(self == Self::Dark).paint(p)
 	}
 }
 
 #[derive(Clone)]
 pub struct View<'a> {
-	pub selection: Option<markview_core::text::TextSelection>,
+	pub selection: Option<markview_layout::text::TextSelection>,
 	pub revision: u64,
 	pub width: u32,
 	pub height: u32,
@@ -85,8 +85,8 @@ pub struct View<'a> {
 }
 
 impl View<'_> {
-	pub fn viewport(&self) -> markview_core::scene::Viewport {
-		markview_core::scene::Viewport {
+	pub fn viewport(&self) -> markview_layout::scene::Viewport {
+		markview_layout::scene::Viewport {
 			width: self.width as f32 / self.scale,
 			height: self.height as f32 / self.scale,
 			left: self.left,
@@ -111,7 +111,7 @@ pub struct Renderer {
 	/// must leave the published image demand and every cached texture exactly
 	/// as the frame on screen left them.
 	prewarming: bool,
-	stylesheet: Option<Arc<markview_core::style::Stylesheet>>,
+	stylesheet: Option<Arc<markview_layout::style::Stylesheet>>,
 	fallback: Option<TextShaper>,
 	pub adapter_name: String,
 	pub backend: wgpu::Backend,
@@ -140,7 +140,7 @@ impl Renderer {
 
 	pub fn set_stylesheet(
 		&mut self,
-		style: Arc<markview_core::style::Stylesheet>,
+		style: Arc<markview_layout::style::Stylesheet>,
 	) {
 		self.stylesheet = Some(style);
 	}
@@ -152,7 +152,7 @@ impl Renderer {
 	/// Hovering adds a condition to the chain, so `["link", "hover"]` can
 	/// override every link rule while leaving the rest of the chain intact.
 	fn hover_paint(paint: Paint) -> Paint {
-		use markview_core::style::{Condition, chain_push};
+		use markview_layout::style::{Condition, chain_push};
 		match paint {
 			Paint::Styled(Condition::Link, field) => {
 				Paint::Styled(Condition::Hover, field)
@@ -257,7 +257,7 @@ impl Renderer {
 	/// scheduling while the reader stays put.
 	pub fn prewarm(
 		&mut self,
-		snapshot: &markview_core::scene::LayoutSnapshot,
+		snapshot: &markview_layout::scene::LayoutSnapshot,
 		view: &View<'_>,
 		budget: Duration,
 	) -> bool {
@@ -291,17 +291,17 @@ fn intersect(a: Rect, b: Rect) -> Option<Rect> {
 /// it.
 #[cfg(feature = "fuzz")]
 pub mod fuzz_api {
-	use markview_core::scene::{Rect, Viewport};
+	use markview_layout::scene::{Rect, Viewport};
 
 	/// The clip the renderer applies before drawing a region.
 	pub fn intersect(a: Rect, b: Rect) -> Option<Rect> {
 		crate::intersect(a, b)
 	}
 	pub fn fit_corners(rect: Rect, corners: [f32; 4]) -> [f32; 4] {
-		markview_core::scene::fit_corners(rect, corners)
+		markview_layout::scene::fit_corners(rect, corners)
 	}
 	pub fn fit_edges(rect: Rect, edges: [f32; 4]) -> [f32; 4] {
-		markview_core::scene::fit_edges(rect, edges)
+		markview_layout::scene::fit_edges(rect, edges)
 	}
 	pub fn viewport_clip(v: Viewport) -> Rect {
 		v.clip()
