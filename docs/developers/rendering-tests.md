@@ -24,7 +24,8 @@ observed Mesa rounding difference without allowing a percentage of bad pixels.
 | Search and text selection | `tests/goldens/search/` | `artifacts/search/` |
 
 Failures retain actual, expected and magenta difference PNGs. PDF cases also
-retain the exported PDFs. CI uploads the artifacts even when tests fail.
+retain the exported PDFs. CI uploads the artifacts only when tests fail and
+retains them for three days.
 Unused baselines fail the Markdown, UI and diagram suites, so removing a case
 cannot silently leave an untested PNG. Every Markdown fixture must be registered.
 

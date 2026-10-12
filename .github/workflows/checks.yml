@@ -38,12 +38,13 @@ jobs:
           # Linux sees no installed fonts, so missing test configuration fails.
           FONTCONFIG_FILE: ${{ github.workspace }}/tests/fontconfig.conf
       - name: Upload rendered test frames
-        if: always()
+        if: failure()
         uses: actions/upload-artifact@v7
         with:
           name: rendered-test-frames-${{ runner.os }}
           path: artifacts/
           if-no-files-found: ignore
+          retention-days: 3
       - name: PDF viewer regressions
         if: runner.os == 'Linux'
         run: cargo test -p markview-pdf --locked --test export -- --ignored
