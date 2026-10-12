@@ -106,7 +106,7 @@ Offscreen `latency`, median cold first frame:
 The document-dependent part of the first frame is small and **bounded**: a fresh
 file is parsed only as far as `PREFIX_BYTES` (64 KiB), the worker lays out just
 enough of that prefix to cover the viewport (6–25 blocks in 6–13 ms), and
-rendering is viewport-culled (`crates/markview-render/src/frame.rs:35-47`). The
+rendering is viewport-culled (`crates/markview-render/src/frame.rs:83-94`). The
 parse column is that prefix parse, so it no longer grows with the file. When the
 prefix names a reference or note, the worker scans the file for the definitions
 and appends them, which costs ~0.5 ms/MiB and still leaves a 4 MiB file with
@@ -379,7 +379,7 @@ Bounds worth knowing, with their cap:
 | GPU image textures | 256 MiB | only on the next insert (`render/images.rs:97-108`) |
 | CPU decoded pixels | 256 MiB | only on the next insert (`src/images/cache.rs`) |
 | Raster atlases | 4 MiB mask + 1 MiB lazy color | reset, not freed (`raster.rs`) |
-| Geometry vertices | viewport-bounded | cleared per frame; a prewarm pass emits none (`frame.rs:35`) |
+| Geometry vertices | viewport-bounded | cleared per frame; a prewarm pass emits none (`frame.rs:47`) |
 | Tabs | count unbounded; inactive released after 20 s | `src/app/tabs.rs:11,176` |
 
 Closing the last tab now calls `Worker::release`, which drops the retained

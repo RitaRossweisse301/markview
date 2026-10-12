@@ -2,6 +2,40 @@ use crate::{Renderer, View};
 use anyhow::{Result, bail};
 use markview_core::scene::{Draw, LayoutSnapshot, Paint, Rect};
 use std::sync::Arc;
+
+/// A visible command staged until its layer is painted.
+///
+/// The block and command indices are resolved again when the stage is
+/// replayed. That keeps the buffer free of borrows, so one renderer reuses it
+/// across frames instead of allocating per frame.
+struct Staged {
+	block: usize,
+	command: usize,
+	dx: f32,
+	dy: f32,
+	clip: Rect,
+	hovered: bool,
+}
+
+/// Per-frame paint order, kept across frames so painting allocates nothing.
+#[derive(Default)]
+pub(super) struct FrameScratch {
+	/// Block backgrounds and boxes, painted below the selection.
+	backgrounds: Vec<Staged>,
+	/// Glyphs and other marks, painted above the selection.
+	foreground: Vec<Staged>,
+	/// Overflow scrollbar tracks and thumbs, painted last.
+	tracks: Vec<(Rect, [f32; 4])>,
+}
+
+impl FrameScratch {
+	fn clear(&mut self) {
+		self.backgrounds.clear();
+		self.foreground.clear();
+		self.tracks.clear();
+	}
+}
+
 impl Renderer {
 	pub(super) fn prepare(
 		&mut self,
@@ -51,9 +85,8 @@ impl Renderer {
 			.partition_point(|b| b.y + b.height() < view.scroll);
 		// Selection sits above block and code backgrounds but below glyphs, so a
 		// highlight never tints the text it covers.
-		let mut backgrounds: Vec<(&Draw, f32, f32, Rect, bool)> = Vec::new();
-		let mut foreground: Vec<(&Draw, f32, f32, Rect, bool)> = Vec::new();
-		let mut tracks: Vec<(Rect, [f32; 4])> = Vec::new();
+		let mut scratch = std::mem::take(&mut self.scratch);
+		scratch.clear();
 		for (index, block) in snapshot.blocks.iter().enumerate().skip(start) {
 			let dy = view.top + block.y - view.scroll;
 			if dy > clip.y + clip.h {
@@ -87,8 +120,14 @@ impl Renderer {
 				} else {
 					clip
 				};
-				let dx = view.left + position[0] - offset;
-				let dy = dy + position[1];
+				let staged = Staged {
+					block: index,
+					command: i,
+					dx: view.left + position[0] - offset,
+					dy: dy + position[1],
+					clip,
+					hovered,
+				};
 				match draw {
 					// Strike-through and similar marks stay above the glyphs.
 					Draw::Rect(
@@ -107,10 +146,10 @@ impl Renderer {
 					| Draw::Glyph(_)
 					| Draw::Image { .. }
 					| Draw::Icon { .. }
-					| Draw::Math { .. } => foreground.push((draw, dx, dy, clip, hovered)),
+					| Draw::Math { .. } => scratch.foreground.push(staged),
 					Draw::Rect(..)
 					| Draw::Box { .. }
-					| Draw::Polygon { .. } => backgrounds.push((draw, dx, dy, clip, hovered)),
+					| Draw::Polygon { .. } => scratch.backgrounds.push(staged),
 				}
 			}
 			for (oi, o) in block.layout.overflow.iter().enumerate() {
@@ -140,7 +179,7 @@ impl Renderer {
 				let on_thumb = held
 					|| self.pointer.is_some_and(|(x, y)| bar.on_thumb(x, y));
 				let (track, thumb) = bar.bars(hovered);
-				tracks.push((
+				scratch.tracks.push((
 					track,
 					self.color(
 						Paint::Styled(
@@ -150,7 +189,7 @@ impl Renderer {
 						view.theme,
 					),
 				));
-				tracks.push((
+				scratch.tracks.push((
 					thumb,
 					self.color(
 						Paint::Styled(
@@ -166,8 +205,15 @@ impl Renderer {
 				));
 			}
 		}
-		for (draw, dx, dy, clip, hovered) in backgrounds {
-			self.draw(draw, dx, dy, clip, view, hovered);
+		for staged in &scratch.backgrounds {
+			self.draw(
+				snapshot.blocks[staged.block].draw(staged.command),
+				staged.dx,
+				staged.dy,
+				staged.clip,
+				view,
+				staged.hovered,
+			);
 		}
 		if let Some(selection) = view.selection {
 			let color = self.color(
@@ -191,11 +237,18 @@ impl Renderer {
 				);
 			}
 		}
-		for (draw, dx, dy, clip, hovered) in foreground {
-			self.draw(draw, dx, dy, clip, view, hovered);
+		for staged in &scratch.foreground {
+			self.draw(
+				snapshot.blocks[staged.block].draw(staged.command),
+				staged.dx,
+				staged.dy,
+				staged.clip,
+				view,
+				staged.hovered,
+			);
 		}
-		for (rect, color) in tracks {
-			self.geometry.solid(rect, color, clip, view);
+		for (rect, color) in &scratch.tracks {
+			self.geometry.solid(*rect, *color, clip, view);
 		}
 		for draw in overlay {
 			self.draw(
@@ -213,6 +266,8 @@ impl Renderer {
 		if !self.prewarming {
 			self.images.publish();
 		}
+		// Keep the stage buffers for the next frame.
+		self.scratch = scratch;
 	}
 	/// Renders one frame with a stylesheet of its own, leaving the renderer's
 	/// colors exactly as they were. The PNG export uses this so its strips can

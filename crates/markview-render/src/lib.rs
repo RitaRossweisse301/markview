@@ -103,6 +103,8 @@ pub struct Renderer {
 	raster: raster::RasterCache,
 	images: images::ImageTextures,
 	geometry: geometry::Geometry,
+	/// Paint order staged per frame, kept so painting never allocates.
+	scratch: frame::FrameScratch,
 	pipeline: wgpu::RenderPipeline,
 	pointer: Option<(f32, f32)>,
 	/// While a prewarm pass runs, the frame it builds is thrown away, so it
@@ -176,6 +178,7 @@ impl Renderer {
 			gpu,
 			raster,
 			geometry,
+			scratch: frame::FrameScratch::default(),
 			pipeline,
 			adapter_name,
 			images: images::ImageTextures::new(image_pipeline),
@@ -236,13 +239,13 @@ impl Renderer {
 			+ self.geometry.capacity_bytes()
 			+ self.images.bytes()
 	}
-	pub fn clear_raster_cache(&mut self) {
-		self.raster.reset_atlas(&self.gpu.queue);
-	}
 	/// Vertices the last prepared pass emitted. A prewarm pass fills the
 	/// atlases for a frame it discards, so it emits none.
 	pub fn vertices(&self) -> u32 {
 		self.geometry.len()
+	}
+	pub fn clear_raster_cache(&mut self) {
+		self.raster.reset_atlas(&self.gpu.queue);
 	}
 	/// Rasterization counters since this renderer was created.
 	pub fn raster_stats(&self) -> RasterStats {
