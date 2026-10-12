@@ -14,6 +14,9 @@ pub(super) struct Geometry {
 	vertices: Vec<Vertex>,
 	vertex_buffer: wgpu::Buffer,
 	vertex_capacity: usize,
+	/// Whether the current pass builds a frame. A prewarm pass fills the
+	/// atlases for a frame it throws away, so it emits no vertices.
+	emitting: bool,
 }
 impl Geometry {
 	pub(super) fn decorated(
@@ -25,6 +28,9 @@ impl Geometry {
 		clip: Rect,
 		view: &View<'_>,
 	) {
+		if !self.emitting {
+			return;
+		}
 		let Some(visible) = r.intersect(clip) else {
 			return;
 		};
@@ -159,6 +165,11 @@ impl Geometry {
 	pub(super) fn clear(&mut self) {
 		self.vertices.clear();
 	}
+	/// A pass that only prepares atlases builds no frame; its vertices would
+	/// be thrown away, so it must not pay to append them.
+	pub(super) fn set_emitting(&mut self, emitting: bool) {
+		self.emitting = emitting;
+	}
 	pub(super) fn len(&self) -> u32 {
 		self.vertices.len() as u32
 	}
@@ -201,6 +212,7 @@ impl Geometry {
 			vertices: Vec::new(),
 			vertex_buffer,
 			vertex_capacity,
+			emitting: true,
 		}
 	}
 	pub(super) fn rounded(
@@ -211,6 +223,9 @@ impl Geometry {
 		clip: Rect,
 		view: &View<'_>,
 	) {
+		if !self.emitting {
+			return;
+		}
 		if color[3] == 0.
 			|| r.w <= 0.
 			|| r.h <= 0.
@@ -263,6 +278,9 @@ impl Geometry {
 		clip: Rect,
 		view: &View<'_>,
 	) {
+		if !self.emitting {
+			return;
+		}
 		let b = border.min(r.w / 2.).min(r.h / 2.).max(0.);
 		let radius = radius.min(r.w / 2.).min(r.h / 2.).max(0.);
 		let step = 1. / view.scale;
@@ -320,6 +338,9 @@ impl Geometry {
 		clip: Rect,
 		view: &View<'_>,
 	) {
+		if !self.emitting {
+			return;
+		}
 		let Some(r) = intersect(rect, clip) else {
 			return;
 		};

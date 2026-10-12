@@ -239,6 +239,11 @@ impl Renderer {
 	pub fn clear_raster_cache(&mut self) {
 		self.raster.reset_atlas(&self.gpu.queue);
 	}
+	/// Vertices the last prepared pass emitted. A prewarm pass fills the
+	/// atlases for a frame it discards, so it emits none.
+	pub fn vertices(&self) -> u32 {
+		self.geometry.len()
+	}
 	/// Rasterization counters since this renderer was created.
 	pub fn raster_stats(&self) -> RasterStats {
 		self.raster.stats()

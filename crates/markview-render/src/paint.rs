@@ -65,7 +65,9 @@ impl Renderer {
 				clip,
 				view,
 			);
-			if e.color {
+			// A prewarm pass emits no vertices for these glyphs and is not the
+			// frame the run list describes, so it must not record either.
+			if e.color && !self.prewarming {
 				self.images.record_color_glyph(start..self.geometry.len());
 			}
 		}

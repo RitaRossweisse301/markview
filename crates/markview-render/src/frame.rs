@@ -11,6 +11,7 @@ impl Renderer {
 		overlay: &[Draw],
 	) {
 		self.geometry.clear();
+		self.geometry.set_emitting(!self.prewarming);
 		if !self.prewarming {
 			self.images.begin(&snapshot.images);
 		}
