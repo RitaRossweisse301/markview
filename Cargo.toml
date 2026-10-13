@@ -34,6 +34,7 @@ eula = false
 members = [
 	"crates/markview-commonmark",
 	"crates/markview-document",
+	"crates/markview-geometry",
 	"crates/markview-layout",
 	"crates/markview-i18n",
 	"crates/markview-icon",

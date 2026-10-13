@@ -57,7 +57,7 @@ pub struct Glyph {
 	pub paint: Paint,
 }
 
-pub use markview_ui_core::Rect;
+pub use markview_geometry::Rect;
 
 /// One figure of a vector icon, in a unit box.
 ///

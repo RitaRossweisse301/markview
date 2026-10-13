@@ -6,5 +6,8 @@ rust-version.workspace = true
 license.workspace = true
 publish = false
 
+[dependencies]
+markview-geometry = { path = "../markview-geometry" }
+
 [lints]
 workspace = true

@@ -32,6 +32,7 @@ at the same level, without `[brackets]`.
 
 ### Changed
 
+- Move shared rectangle geometry into `markview-geometry`, removing layout's dependency on UI core while preserving existing type exports.
 - Route Settings, Export and Fonts through a pure `markview-ui-core` message flow, sharing stable widget identities, interaction and clipped layout geometry while retaining native drawing.
 - Reduce shaping allocations by reusing layout storage and scanning inline spans once; measure label widths without emitting glyphs.
 - Upgrade Parley to 0.12, adapting font metrics, variation coordinates and cluster styles, preserving RTL ligatures and refreshing rendering baselines.

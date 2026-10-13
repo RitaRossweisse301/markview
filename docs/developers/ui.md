@@ -1,9 +1,9 @@
 # Native UI message flow
 
-The reader keeps its native vector and glyph drawing. `markview-ui-core` has no
-dependencies and does not access windows, fonts, GPU objects, files, clocks or
-workers. It contains the `Component` protocol, FIFO message scheduling, geometry
-and widget interaction.
+The reader keeps its native vector and glyph drawing. `markview-ui-core` depends
+only on `markview-geometry` and does not access windows, fonts, GPU objects, files,
+clocks or workers. It contains the `Component` protocol, FIFO message scheduling
+and widget interaction, and re-exports the shared `Rect` type.
 
 ```text
 input → widget layout → typed page message → update → effect descriptions

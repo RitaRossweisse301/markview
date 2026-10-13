@@ -6,4 +6,5 @@ mod component;
 mod widget;
 
 pub use component::{Component, Invalidation, Runtime, Update};
-pub use widget::{Input, Interaction, Layout, Rect, Widget, WidgetId};
+pub use markview_geometry::Rect;
+pub use widget::{Input, Interaction, Layout, Widget, WidgetId};

@@ -2627,6 +2627,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "markview-geometry"
+version = "0.3.0"
+
+[[package]]
 name = "markview-i18n"
 version = "0.3.0"
 dependencies = [
@@ -2657,8 +2661,8 @@ dependencies = [
  "log",
  "markview-commonmark",
  "markview-document",
+ "markview-geometry",
  "markview-layout",
- "markview-ui-core",
  "memmap2",
  "parley",
  "ratex-katex-fonts",
@@ -2769,6 +2773,9 @@ dependencies = [
 [[package]]
 name = "markview-ui-core"
 version = "0.3.0"
+dependencies = [
+ "markview-geometry",
+]
 
 [[package]]
 name = "markview-web"
