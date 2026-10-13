@@ -1,5 +1,6 @@
 use super::*;
 use crate::lang::Lang;
+use markview_layout::style::CjkType;
 
 #[test]
 fn in_memory_exports_keep_permissions_bound_to_the_supplied_text() {
@@ -36,15 +37,20 @@ fn in_memory_exports_keep_permissions_bound_to_the_supplied_text() {
 		)
 		.unwrap();
 		assert_eq!(snapshot.images.decoded().len(), expected_images);
-		let mut request = pdf_request(
-			path.clone(),
-			dir.path().join(format!("{index}.pdf")),
+		let mut request = Config::from_settings(
 			&ExportSettings::default(),
 			crate::test_support::fonts(),
 			CjkType::Sc,
 			&[],
-			true,
 		)
+		.prepare()
+		.map(|prepared| {
+			prepared.pdf_request(
+				path.clone(),
+				dir.path().join(format!("{index}.pdf")),
+				true,
+			)
+		})
 		.unwrap();
 		request.security = security;
 		let result = crate::pdf::export_text(
@@ -105,12 +111,22 @@ fn the_summary_reports_only_the_derived_measure() {
 
 #[test]
 fn an_export_layers_its_own_styles_on_the_print_sheet() {
-	let sheet = export_stylesheet(&["print".into()], CjkType::Sc, &[]).unwrap();
-	assert!(sheet.page().size.is_some());
-	let missing = export_stylesheet(&["missing".into()], CjkType::Sc, &[]);
-	assert!(missing.is_err());
-	// An empty list is the bare print sheet, not an error.
-	assert!(export_stylesheet(&[], CjkType::Sc, &[]).is_ok());
+	for (styles, succeeds) in [
+		(vec!["print".into()], true),
+		(vec!["missing".into()], false),
+		(vec![], true),
+	] {
+		let result = Config {
+			styles,
+			options: crate::test_support::options(),
+			..Default::default()
+		}
+		.prepare();
+		assert_eq!(result.is_ok(), succeeds);
+		if let Ok(prepared) = result {
+			assert!(prepared.options.stylesheet.page().size.is_some());
+		}
+	}
 }
 
 #[test]
@@ -149,23 +165,49 @@ fn a_panel_export_preserves_its_settings_in_the_pdf_request() {
 	s.landscape = true;
 	s.font_size = 20.0;
 	s.paragraph_indent = 2.0;
-	let args = pdf_request(
-		PathBuf::from("doc.md"),
-		PathBuf::from("doc.pdf"),
+	let args = Config::from_settings(
 		&s,
 		crate::test_support::fonts(),
 		CjkType::Sc,
 		&[],
-		false,
 	)
+	.prepare()
+	.map(|prepared| {
+		prepared.pdf_request("doc.md".into(), "doc.pdf".into(), false)
+	})
 	.unwrap();
-	assert_eq!(args.page.paper.as_deref(), Some("letter"));
-	assert!(args.page.landscape);
-	assert_eq!(args.page.margin, Some([22.0, 20.0, 22.0, 20.0]));
+	assert_eq!(
+		args.options.stylesheet.page().size.as_deref(),
+		Some("letter")
+	);
+	assert_eq!(args.options.stylesheet.page().landscape, Some(true));
+	assert_eq!(
+		args.options.stylesheet.page().margin,
+		Some(vec![22.0, 20.0, 22.0, 20.0])
+	);
 	assert_eq!(args.options.font_size, 20.0);
 	assert_eq!(args.options.paragraph_indent, 2.0);
 	assert!(args.options.codeblock_wrap);
 	assert!(args.links);
+
+	let dir = tempfile::tempdir().unwrap();
+	let style = dir.path().join("landscape.mvss.toml");
+	std::fs::write(&style, "format_version=2\nversion=1\ntargets=['pdf']\n[page]\nsize='a5'\nlandscape=true\n").unwrap();
+	s.landscape = false;
+	let mut config = Config::from_settings(
+		&s,
+		crate::test_support::fonts(),
+		CjkType::Sc,
+		&[],
+	);
+	config.style_file = Some(style);
+	let prepared = config.prepare().unwrap();
+	assert!(prepared.geometry.width_pt < prepared.geometry.height_pt);
+	assert_eq!(
+		prepared.options.stylesheet.page().size.as_deref(),
+		Some("letter")
+	);
+	assert_eq!(prepared.options.stylesheet.page().landscape, Some(false));
 }
 
 #[test]
@@ -249,15 +291,14 @@ fn a_mapped_export_writes_a_real_pdf() {
 	let path = dir.path().join("doc.md");
 	let output = dir.path().join("doc.pdf");
 	std::fs::write(&path, "# Title\n\nA paragraph.\n").unwrap();
-	let args = pdf_request(
-		path.clone(),
-		output.clone(),
+	let args = Config::from_settings(
 		&ExportSettings::default(),
 		crate::test_support::fonts(),
 		CjkType::Sc,
 		&[],
-		false,
 	)
+	.prepare()
+	.map(|prepared| prepared.pdf_request(path.clone(), output.clone(), false))
 	.unwrap();
 	let stats = crate::pdf::export_once(&args).unwrap();
 	assert_eq!(stats.pages, 1);
@@ -286,13 +327,15 @@ fn an_export_shows_every_details_body() {
 		"<details>\n<summary>More</summary>\n\nHidden body.\n\n</details>\n",
 	)
 	.unwrap();
-	let sheet = export_stylesheet(&[], CjkType::Sc, &[]).unwrap();
-	let options = layout_options(
+	let options = Config::from_settings(
 		&settings(ExportFormat::Png),
-		400.0,
-		sheet,
 		crate::test_support::fonts(),
-	);
+		CjkType::Sc,
+		&[],
+	)
+	.prepare()
+	.unwrap()
+	.options;
 	assert!(options.force_open);
 	let snapshot = png_snapshot(&path, options, true).unwrap();
 	let text = snapshot
@@ -320,15 +363,14 @@ fn a_pdf_shows_every_details_body() {
 	}
 	source.push_str("</details>\n");
 	std::fs::write(&path, source).unwrap();
-	let args = pdf_request(
-		path.clone(),
-		output.clone(),
+	let args = Config::from_settings(
 		&ExportSettings::default(),
 		crate::test_support::fonts(),
 		CjkType::Sc,
 		&[],
-		false,
 	)
+	.prepare()
+	.map(|prepared| prepared.pdf_request(path.clone(), output.clone(), false))
 	.unwrap();
 	assert!(args.options.force_open);
 	let stats = crate::pdf::export_once(&args).unwrap();

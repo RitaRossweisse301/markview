@@ -28,7 +28,7 @@ pub(super) fn run() -> Result<()> {
 	};
 	crate::logging::init(&args.mode);
 	if let Some(command) = &args.export_command {
-		return command.run(args.offline);
+		return command.run(args.export_config(), args.offline);
 	}
 	if let Some(command) = &args.fonts {
 		return super::fonts_command::run(command, args.offline);
@@ -84,6 +84,9 @@ fn run_with_options(mut args: LaunchOptions) -> Result<()> {
 	if super::background::launch(&args)? {
 		return Ok(());
 	}
+	if args.mode == Mode::Pdf {
+		return crate::pdf::run(&args.pdf_request()?, args.watch);
+	}
 	let ids = args.style.clone().or_else(|| {
 		args.theme.map(|t| {
 			vec![if t == Theme::Dark { "dark" } else { "light" }.into()]
@@ -106,19 +109,11 @@ fn run_with_options(mut args: LaunchOptions) -> Result<()> {
 	// A rendered page or a printed sheet has no pointer to open a collapsed
 	// `<details>` with, so both show every body — and has no room for the
 	// reader's metadata aid, so neither draws front matter.
-	if matches!(args.mode, Mode::Pdf | Mode::Render) {
+	if args.mode == Mode::Render {
 		args.options.force_open = true;
 		args.options.hide_front_matter = true;
 	}
-	args.options.stylesheet = if args.mode == Mode::Pdf {
-		// A PDF always starts from the bundled print sheet, whatever the
-		// reader's theme is; --style layers a named sheet on top of it.
-		crate::stylesheet::load_for_pdf(
-			ids.as_deref(),
-			crate::stylesheet::directory().as_deref(),
-			cjk_type,
-		)?
-	} else if args.mode == Mode::Render {
+	args.options.stylesheet = if args.mode == Mode::Render {
 		crate::stylesheet::load_for_preview(
 			ids.as_deref(),
 			crate::stylesheet::directory().as_deref(),
@@ -131,9 +126,6 @@ fn run_with_options(mut args: LaunchOptions) -> Result<()> {
 			cjk_type,
 		)?
 	};
-	if args.mode == Mode::Pdf {
-		return crate::pdf::run(&args.pdf_request()?, args.watch);
-	}
 	let mut sheet = (*args.options.stylesheet).clone();
 	sheet.set_media(
 		crate::stylesheet::media_context(

@@ -259,9 +259,12 @@ identity, cancellation or progress. Shared button and list geometry stays in
 `app/chrome`. Change panel navigation through `InteractionState` operations,
 keeping the outline and confirmations independent.
 
-For PDF options, update `export::PdfRequest` only when the service needs new
-information, then adapt CLI parsing and/or the GUI request builder. Keep
-entry-point defaults explicit and test the resulting request and export.
+For export options, compose reader settings and CLI flags into `export::Config`.
+Keep template, font, numeric validation and page resolution in its preparation
+path, shared by UI, `pdf` and `export`. Update `export::PdfRequest` only when the
+PDF service needs new information. Keep entry-point defaults explicit and test
+the resulting request and export, including agreement between file and buffer
+commands.
 Transport policy belongs in `net`; image caching and font installation stay
 with their respective services.
 

@@ -99,6 +99,7 @@ pub fn load_with_cjk_type(
 		cjk_type,
 		Stylesheet::builtin(),
 		Some(StyleTarget::Ui),
+		None,
 	)
 }
 
@@ -108,25 +109,16 @@ pub fn load_for_pdf(
 	ids: Option<&[String]>,
 	dir: Option<&Path>,
 	cjk_type: CjkType,
+	file: Option<&Path>,
 ) -> Result<Arc<Stylesheet>> {
-	match ids {
-		Some(ids) => load_over(
-			ids,
-			dir,
-			cjk_type,
-			Stylesheet::bundled_print(),
-			Some(StyleTarget::Pdf),
-		),
-		None => {
-			let mut sheet = (*Stylesheet::bundled_print()).clone();
-			let (width, height) = sheet.page.paper_mm().unwrap();
-			sheet.set_media(
-				media_context(StyleTarget::Pdf).with_size(width, height),
-			);
-			sheet.set_cjk_type(cjk_type);
-			Ok(Arc::new(sheet))
-		}
-	}
+	load_over(
+		ids.unwrap_or_default(),
+		dir,
+		cjk_type,
+		Stylesheet::bundled_print(),
+		Some(StyleTarget::Pdf),
+		file,
+	)
 }
 
 /// Offscreen diagnostics can preview either kind without selecting it in a UI.
@@ -136,7 +128,9 @@ pub fn load_for_preview(
 	cjk_type: CjkType,
 ) -> Result<Arc<Stylesheet>> {
 	match ids {
-		Some(ids) => load_over(ids, dir, cjk_type, Stylesheet::builtin(), None),
+		Some(ids) => {
+			load_over(ids, dir, cjk_type, Stylesheet::builtin(), None, None)
+		}
 		None => load_for_run(None, dir, cjk_type),
 	}
 }
@@ -147,6 +141,7 @@ fn load_over(
 	cjk_type: CjkType,
 	base: Arc<Stylesheet>,
 	target: Option<StyleTarget>,
+	file: Option<&Path>,
 ) -> Result<Arc<Stylesheet>> {
 	let mut source = (*base.source()).clone();
 	for id in ids.iter().rev() {
@@ -156,6 +151,19 @@ fn load_over(
 			&& !next.targets.contains(&target)
 		{
 			bail!("{id}: targets do not include {}", target.as_str());
+		}
+		source.merge(&next);
+	}
+	if let Some(file) = file {
+		let next = validate(file)?;
+		if let Some(target) = target
+			&& !next.targets.contains(&target)
+		{
+			bail!(
+				"{}: targets do not include {}",
+				file.display(),
+				target.as_str()
+			);
 		}
 		source.merge(&next);
 	}
@@ -563,7 +571,8 @@ mod theme_tests {
 			assert_eq!(ui.font, body.font);
 		}
 		assert!(
-			load_for_pdf(Some(&["8-bit".into()]), None, CjkType::Sc).is_err()
+			load_for_pdf(Some(&["8-bit".into()]), None, CjkType::Sc, None)
+				.is_err()
 		);
 	}
 
@@ -580,7 +589,7 @@ mod theme_tests {
 			assert_ne!(sheet.rule(Condition::Body).background, Some(Color(0)));
 			assert!(validate_id(&id.to_uppercase()).is_err());
 		}
-		let print = load_for_pdf(None, None, CjkType::Sc).unwrap();
+		let print = load_for_pdf(None, None, CjkType::Sc, None).unwrap();
 		assert_eq!(
 			print.rule(Condition::Body).background,
 			Some(Color(0xffffffff))
@@ -632,23 +641,28 @@ mod target_tests {
 					StyleTarget::Ui => {
 						load_with_cjk_type(&ids, Some(dir.path()), CjkType::Sc)
 					}
-					StyleTarget::Pdf => {
-						load_for_pdf(Some(&ids), Some(dir.path()), CjkType::Sc)
-					}
+					StyleTarget::Pdf => load_for_pdf(
+						Some(&ids),
+						Some(dir.path()),
+						CjkType::Sc,
+						None,
+					),
 				};
 				assert_eq!(result.is_ok(), allowed, "{target:?}: {id}");
 			}
 		}
 		// Every layer is checked, including one beneath a shared override.
 		let ids = ["shared".into(), "screen".into()];
-		let error = load_for_pdf(Some(&ids), Some(dir.path()), CjkType::Sc)
-			.unwrap_err()
-			.to_string();
+		let error =
+			load_for_pdf(Some(&ids), Some(dir.path()), CjkType::Sc, None)
+				.unwrap_err()
+				.to_string();
 		assert!(error.contains("screen") && error.contains("pdf"));
 		let sheet = load_for_pdf(
 			Some(&["shared".into(), "paper".into()]),
 			Some(dir.path()),
 			CjkType::Sc,
+			None,
 		)
 		.unwrap();
 		assert_eq!(sheet.rule(Condition::Body).color, Some(Color(0x123456ff)));
@@ -713,7 +727,8 @@ mod paper_theme_tests {
 			assert!(reserved(id));
 			assert!(validate_id(&id.to_uppercase()).is_err());
 			let sheet =
-				load_for_pdf(Some(&[id.into()]), None, CjkType::Sc).unwrap();
+				load_for_pdf(Some(&[id.into()]), None, CjkType::Sc, None)
+					.unwrap();
 			assert_eq!(
 				sheet.rule(Condition::Page).background,
 				Some(Color(0xffffffff))
@@ -728,7 +743,7 @@ mod paper_theme_tests {
 			}
 		}
 		let mono =
-			load_for_pdf(Some(&["monochrome".into()]), None, CjkType::Sc)
+			load_for_pdf(Some(&["monochrome".into()]), None, CjkType::Sc, None)
 				.unwrap();
 		assert_eq!(
 			mono.rule(Condition::CodeBlock).theme.as_deref(),
@@ -776,28 +791,30 @@ line_height = 1.9
 		let ids = ["adaptive".into()];
 		let reader =
 			load_for_run(Some(&ids), Some(dir.path()), CjkType::Sc).unwrap();
-		let pdf =
-			load_for_pdf(Some(&ids), Some(dir.path()), CjkType::Sc).unwrap();
+		let pdf = load_for_pdf(Some(&ids), Some(dir.path()), CjkType::Sc, None)
+			.unwrap();
 		assert_eq!(reader.rule(Condition::P).size, Some(1.2));
 		assert_eq!(pdf.rule(Condition::P).size, Some(1.4));
 		assert_eq!(reader.rule(Condition::P).weight, Some(500));
 		assert_eq!(pdf.rule(Condition::P).weight, Some(500));
 		assert_eq!(pdf.rule(Condition::P).line_height, Some(1.7));
-		let landscape = crate::pdf::styled(
+		let landscape = crate::export::config::styled(
 			pdf.clone(),
 			&crate::export::PageOverrides {
-				landscape: true,
+				landscape: Some(true),
 				..Default::default()
 			},
-		);
+		)
+		.unwrap();
 		assert_eq!(landscape.rule(Condition::P).line_height, Some(1.9));
-		let portrait = crate::pdf::styled(
+		let portrait = crate::export::config::styled(
 			landscape,
 			&crate::export::PageOverrides {
 				paper: Some("300x200".into()),
 				..Default::default()
 			},
-		);
+		)
+		.unwrap();
 		assert_eq!(portrait.rule(Condition::P).line_height, Some(1.7));
 		assert_eq!(pdf.rule(Condition::P).line_height, Some(1.7));
 	}

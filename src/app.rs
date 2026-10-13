@@ -127,6 +127,7 @@ enum ExportOutcome {
 		/// What the strips render with; the shared renderer borrows it and
 		/// then takes the reading view's sheet back.
 		stylesheet: Arc<markview_layout::style::Stylesheet>,
+		scale: f32,
 	},
 	Failed(String),
 	Cancelled,

@@ -80,8 +80,11 @@ impl<P: super::SendEvent> App<P> {
 		match action {
 			Command::ExportFormat(format) => settings.format = format,
 			Command::ExportSize(delta) => {
-				settings.font_size =
-					(settings.font_size + f32::from(delta)).clamp(10.0, 40.0)
+				settings.font_size = (settings.font_size + f32::from(delta))
+					.clamp(
+						export::config::MIN_FONT_SIZE_PX,
+						export::config::MAX_FONT_SIZE_PX,
+					)
 			}
 			Command::ExportIndent(em) => {
 				settings.paragraph_indent = f32::from(em)
@@ -329,9 +332,10 @@ impl<P: super::SendEvent> App<P> {
 				snapshot,
 				path,
 				stylesheet,
+				scale,
 			} => {
 				self.start_png_export(
-					*snapshot, path, stylesheet, watch, rebuild,
+					*snapshot, path, stylesheet, scale, watch, rebuild,
 				);
 			}
 			ExportOutcome::Failed(error) => {
@@ -393,44 +397,44 @@ impl<P: super::SendEvent> App<P> {
 		snapshot: LayoutSnapshot,
 		path: PathBuf,
 		stylesheet: Arc<Stylesheet>,
+		scale: f32,
 		watch: bool,
 		rebuild: bool,
 	) {
-		let settings = self.preferences.export.clone();
-		let (geometry, max_tile) =
-			match (&self.renderer, export::geometry(&settings)) {
-				(Some(renderer), Ok(geometry)) => {
-					(geometry, renderer.max_texture_dimension_2d())
-				}
-				(None, _) => {
-					let reason =
-						self.preferences.values.lang().status_gpu_not_ready();
-					self.fail_png_export(reason);
-					return;
-				}
-				(_, Err(error)) => {
-					self.fail_png_export(&format!("{error:#}"));
-					return;
-				}
-			};
-		let plan = match export::plan(
-			&geometry,
-			snapshot.height,
-			settings.scale,
-			max_tile,
+		let (geometry, max_tile) = match (
+			&self.renderer,
+			markview_layout::paginate::PageGeometry::from_style(
+				stylesheet.page(),
+			),
 		) {
-			Ok(plan) => plan,
-			Err(error) => {
+			(Some(renderer), Ok(geometry)) => {
+				(geometry, renderer.max_texture_dimension_2d())
+			}
+			(None, _) => {
+				let reason =
+					self.preferences.values.lang().status_gpu_not_ready();
+				self.fail_png_export(reason);
+				return;
+			}
+			(_, Err(error)) => {
 				self.fail_png_export(&format!("{error:#}"));
 				return;
 			}
 		};
+		let plan =
+			match export::plan(&geometry, snapshot.height, scale, max_tile) {
+				Ok(plan) => plan,
+				Err(error) => {
+					self.fail_png_export(&format!("{error:#}"));
+					return;
+				}
+			};
 		let bytes = plan.width_px as usize * plan.height_px as usize * 4;
 		self.png_export = Some(PngExport {
 			snapshot,
 			path,
 			stylesheet,
-			scale: settings.scale,
+			scale,
 			left: geometry.margin_pt[3] / PT_PER_PX,
 			rgba: vec![0; bytes],
 			next: 0,
@@ -619,22 +623,17 @@ fn run(
 	services: Arc<crate::services::Services>,
 	security: crate::security::Security,
 ) -> ExportOutcome {
+	let prepared =
+		match export::Config::from_settings(settings, fonts, cjk, overrides)
+			.prepare()
+		{
+			Ok(prepared) => prepared,
+			Err(error) => return ExportOutcome::Failed(format!("{error:#}")),
+		};
 	match settings.format {
 		ExportFormat::Pdf => {
-			let mut args = match export::pdf_request(
-				path.to_path_buf(),
-				output.to_path_buf(),
-				settings,
-				fonts,
-				cjk,
-				overrides,
-				offline,
-			) {
-				Ok(args) => args,
-				Err(error) => {
-					return ExportOutcome::Failed(format!("{error:#}"));
-				}
-			};
+			let mut args =
+				prepared.pdf_request(path.into(), output.into(), offline);
 			args.metadata = metadata;
 			args.security = security;
 			match crate::pdf::export_with_services(&args, services) {
@@ -651,45 +650,20 @@ fn run(
 			}
 		}
 		ExportFormat::Png => {
-			let stylesheet = match export::export_stylesheet(
-				&settings.style,
-				cjk,
-				overrides,
-			) {
-				Ok(stylesheet) => stylesheet,
-				Err(error) => {
-					return ExportOutcome::Failed(format!("{error:#}"));
-				}
-			};
-			let geometry = match export::geometry(settings) {
-				Ok(geometry) => geometry,
-				Err(error) => {
-					return ExportOutcome::Failed(format!("{error:#}"));
-				}
-			};
-			let mut sheet = (*stylesheet).clone();
-			let (width, height) =
-				export::page_style(settings).paper_mm().unwrap();
-			sheet.set_media(
-				crate::stylesheet::media_context(
-					markview_layout::style::StyleTarget::Pdf,
-				)
-				.with_size(width, height),
-			);
-			let stylesheet = Arc::new(sheet);
-			let options = export::layout_options(
-				settings,
-				geometry.text_px().0,
-				stylesheet.clone(),
-				fonts,
-			);
+			let scale = prepared.scale;
+			let stylesheet = prepared.options.stylesheet.clone();
 			match export::png_snapshot_with_services(
-				path, options, offline, services, security,
+				path,
+				prepared.options,
+				offline,
+				services,
+				security,
 			) {
 				Ok(snapshot) => ExportOutcome::PngReady {
 					snapshot: Box::new(snapshot),
 					path: output.to_path_buf(),
 					stylesheet,
+					scale,
 				},
 				Err(error) => ExportOutcome::Failed(format!("{error:#}")),
 			}
@@ -700,6 +674,99 @@ fn run(
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	#[test]
+	fn panel_size_controls_adjust_across_the_full_export_range() {
+		#[derive(Clone)]
+		struct Proxy;
+		impl super::super::SendEvent for Proxy {
+			fn try_send(&self, _: Event) -> bool {
+				true
+			}
+		}
+		let mut app = App::new(
+			crate::cli::LaunchOptions {
+				mode: crate::cli::Mode::Smoke,
+				options: crate::test_support::options(),
+				..Default::default()
+			},
+			Proxy,
+		);
+		for (size, delta, expected) in [
+			(72.0, 1, 73.0),
+			(72.0, -1, 71.0),
+			(8.0, 1, 9.0),
+			(8.0, -1, 7.0),
+			(1.0, -1, 1.0),
+			(1.0, 1, 2.0),
+			(200.0, 1, 200.0),
+			(200.0, -1, 199.0),
+		] {
+			app.preferences.export.font_size = size;
+			app.preferences.export.validate().unwrap();
+			assert!(app.export_command(Command::ExportSize(delta)));
+			assert_eq!(app.preferences.export.font_size, expected);
+			app.preferences.export.validate().unwrap();
+		}
+	}
+
+	#[test]
+	fn png_jobs_keep_their_page_and_scale_when_preferences_change() {
+		#[derive(Clone)]
+		struct Proxy;
+		impl super::super::SendEvent for Proxy {
+			fn try_send(&self, _: Event) -> bool {
+				true
+			}
+		}
+		let dir = tempfile::tempdir().unwrap();
+		let source = dir.path().join("source.md");
+		std::fs::write(&source, "# Snapshot\n\nBody paragraph.").unwrap();
+		let settings = ExportSettings {
+			format: ExportFormat::Png,
+			paper: "a5".into(),
+			landscape: true,
+			margin: [15.0; 4],
+			scale: 3.0,
+			..Default::default()
+		};
+		let outcome = run(
+			&source,
+			&dir.path().join("snapshot.png"),
+			&settings,
+			Default::default(),
+			crate::test_support::fonts(),
+			CjkType::Sc,
+			&[],
+			true,
+			Arc::new(crate::services::Services::new(2)),
+			crate::security::Security::local(crate::security::Trust::Trusted),
+		);
+		assert!(matches!(outcome, ExportOutcome::PngReady { .. }));
+		let mut app = App::new(
+			crate::cli::LaunchOptions {
+				mode: crate::cli::Mode::Smoke,
+				options: crate::test_support::options(),
+				..Default::default()
+			},
+			Proxy,
+		);
+		app.renderer = Some(
+			pollster::block_on(crate::render::Renderer::new(None)).unwrap(),
+		);
+		app.preferences.export = ExportSettings::default();
+		app.export_finished(outcome);
+		let job = app.png_export.as_ref().unwrap();
+		let geometry = export::geometry(&settings).unwrap();
+		assert_eq!(job.scale, 3.0);
+		assert_eq!(job.left, geometry.margin_pt[3] / PT_PER_PX);
+		assert_eq!(
+			job.plan.width_px,
+			(geometry.width_pt / PT_PER_PX * 3.0).round() as u32
+		);
+		assert!(job.snapshot.height > 0.0);
+	}
+
 	#[test]
 	fn closing_the_app_cancels_an_open_save_selection_before_joining() {
 		#[derive(Clone)]

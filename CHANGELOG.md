@@ -31,6 +31,7 @@ at the same level, without `[brackets]`.
 
 ### Changed
 
+- Share template, font and page configuration across reader, file and buffer exports, including CJK selection and numeric validation.
 - Split source parsing, semantic documents and layout into `markview-commonmark`, `markview-document` and `markview-layout`, preserving host scheduling and reader behavior.
 - Skip vertex emission during a glyph prewarm pass, which only prepares atlases for a frame it discards.
 - Reuse the per-frame paint order buffers instead of allocating them on every frame.
@@ -41,6 +42,9 @@ at the same level, without `[brackets]`.
 
 ### Fixed
 
+- Keep export-panel size adjustments within the shared 1–200 px range, including sizes outside the former 10–40 px limits.
+- Keep a PNG export's page geometry and scale when export preferences change during the job.
+- Reject invalid explicit font files before replacing an export and use downloaded fonts in buffer exports by default.
 - Wait for syntax highlighting before capturing search rendering baselines, avoiding timing-dependent code colors.
 - Update web disclosure regressions to verify retained layout tasks, immediate flow changes and refreshed source anchors.
 - Redraw vector images when their requested proportions change, so reloaded SVGs keep the correct aspect ratio in the viewer.

@@ -29,8 +29,8 @@ black on white, and a centred page number. Body text is 12 pt unless
 one, two, or four millimetres; `--landscape` swaps the sides.
 The six header and footer slots are set with `--header`, `--footer` and the
 `-left`/`-right` variants, and their templates may use `{page}`, `{pages}`,
-`{title}` and `{path}`. PDF commands use `--paper` and `--margin` for page geometry
-and `--style` for colors; window dimensions, reading column and reader theme
+`{title}` and `{path}`. PDF commands use `--paper` and `--margin` to override template page geometry
+and `--style` to layer templates; window dimensions, reading column and reader theme
 flags do not apply. Put command options after the subcommand; only `--offline`
 is global. The `render` command alone accepts `--scroll`, in logical pixels.
 
@@ -63,6 +63,7 @@ markview pdf article.md -o article.pdf --document-trust untrusted --allow-networ
 ```
 
 Both grant options repeat. A network grant names an origin (scheme, host, effective port) and a class: `private`, `loopback`, or `link-local`. It does not authorize other origins or address classes. `--offline` opens no network connections and grants no additional cache access. Grants apply to the initial document content; a changed source in `--watch` revokes them, so an Untrusted job needing them must be restarted with explicit grants.
+
 ## Exporting an editor buffer
 
 `markview export` accepts Markdown on stdin, so an editor can export unsaved
@@ -79,10 +80,20 @@ and `--allow-network` grants described above. A resource directory does not gran
 trust.
 
 `--base-dir` resolves relative images (default: the current directory).
-`--style` selects a bundled PDF template; `--style-file` selects a custom MVSS
-file targeting `pdf`. Both output formats use its page geometry. `--font-size`
-is in logical pixels (default: 16). Repeat `--fonts` for font directories or
-`--font-file` for explicit font files. Explicit files replace system discovery.
+The `pdf` and `export` commands share their template and reading options.
+Repeat `--style` for bundled or installed PDF templates, highest priority first;
+`--style-file` layers a custom MVSS file targeting `pdf` above them. Both output
+formats use the template's page geometry. `--cjk-type SC|TC|JP|none` selects the
+CJK convention (default: SC); `--paragraph-indent`, `--left` and `--no-hyphens`
+control paragraph layout. `--font-size` is in logical pixels (default: 16,
+range: 1–200); PNG `--scale` ranges from 0.1 to 8.
+
+Repeat `--fonts` for font directories or `--font-file` for explicit font files.
+Reader, file and buffer exports all use downloaded fonts by default.
+`--ignore-system-fonts` excludes system and downloaded fonts; explicit files
+also exclude both, while retaining any directories named with `--fonts`.
+An invalid explicit font file or one over 64 MiB fails the job before replacing
+an existing output.
 
 Stdout contains one JSON object per line: `progress` events with a `phase` and
 `fraction`, followed by a `done` event with PDF page/byte counts or PNG dimensions.

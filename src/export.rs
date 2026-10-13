@@ -1,27 +1,28 @@
 //! Window-independent export planning: paper geometry, a paperless PNG layout,
 //! and the one-shot job descriptions the reader hands to a background thread.
 //!
-//! Nothing here touches a window, a GPU or the reader's settings. The reader
-//! borrows [`ExportSettings`] for a single job, so an export can never reflow
-//! the document on screen.
+//! The adapters prepare one immutable job through [`Config`]. Window dialogs,
+//! command-line parsing and progress presentation stay with their callers.
 use crate::{
 	file::read_document,
 	images::Images,
 	layout::{LayoutEngine, LayoutOptions, LayoutSnapshot},
-	settings::{ExportFormat, ExportSettings, FontDefOverride},
+	settings::{ExportFormat, ExportSettings},
 };
 use anyhow::{Context, Result, bail};
 use image::ImageEncoder;
 use markview_layout::{
-	fonts::FontConfig,
 	paginate::{PT_PER_PX, PageGeometry},
-	style::{CjkType, PageStyle, Stylesheet},
+	style::{PageStyle, Stylesheet},
 };
 use std::{
 	io::Write,
 	path::{Path, PathBuf},
 	sync::Arc,
 };
+
+pub(crate) mod config;
+pub(crate) use config::Config;
 
 /// The document metadata written into the PDF.
 #[derive(Default, Clone)]
@@ -48,7 +49,7 @@ impl MetadataOverrides {
 #[derive(Default, Clone)]
 pub(crate) struct PageOverrides {
 	pub(crate) paper: Option<String>,
-	pub(crate) landscape: bool,
+	pub(crate) landscape: Option<bool>,
 	pub(crate) margin: Option<[f32; 4]>,
 	/// Header and footer slots, left to centre to right.
 	pub(crate) header: [Option<String>; 3],
@@ -60,7 +61,7 @@ pub(crate) struct PdfRequest {
 	pub(crate) path: PathBuf,
 	pub(crate) output: PathBuf,
 	pub(crate) options: LayoutOptions,
-	pub(crate) page: PageOverrides,
+	pub(crate) geometry: PageGeometry,
 	pub(crate) metadata: MetadataOverrides,
 	pub(crate) links: bool,
 	pub(crate) offline: bool,
@@ -86,76 +87,8 @@ pub(crate) fn page_style(settings: &ExportSettings) -> PageStyle {
 }
 
 pub(crate) fn geometry(settings: &ExportSettings) -> Result<PageGeometry> {
+	config::validate_margin(&settings.margin)?;
 	PageGeometry::from_style(&page_style(settings))
-}
-
-/// The layout options both formats share. `width` is the paper's text measure
-/// for a PNG and is replaced by the page geometry for a PDF.
-pub(crate) fn layout_options(
-	settings: &ExportSettings,
-	width: f32,
-	stylesheet: Arc<Stylesheet>,
-	fonts: FontConfig,
-) -> LayoutOptions {
-	LayoutOptions {
-		width,
-		font_size: settings.font_size,
-		paragraph_indent: settings.paragraph_indent,
-		codeblock_wrap: true,
-		force_open: true,
-		// A page carries the document's text, not the reader's metadata aid.
-		hide_front_matter: true,
-		stylesheet,
-		fonts,
-		..Default::default()
-	}
-}
-
-/// The stylesheet an export starts from: the bundled print sheet with the
-/// export's own styles layered on it, the reader's CJK variant, and the
-/// reader's font overrides. The reader's theme never applies here.
-pub(crate) fn export_stylesheet(
-	style: &[String],
-	cjk: CjkType,
-	overrides: &[FontDefOverride],
-) -> Result<Arc<Stylesheet>> {
-	let ids = (!style.is_empty()).then_some(style);
-	let sheet = crate::stylesheet::load_for_pdf(
-		ids,
-		crate::stylesheet::directory().as_deref(),
-		cjk,
-	)?;
-	crate::stylesheet::apply_font_overrides(sheet, overrides)
-}
-
-/// Builds a PDF job from the export panel's own defaults.
-pub(crate) fn pdf_request(
-	path: PathBuf,
-	output: PathBuf,
-	settings: &ExportSettings,
-	fonts: FontConfig,
-	cjk: CjkType,
-	overrides: &[FontDefOverride],
-	offline: bool,
-) -> Result<PdfRequest> {
-	let stylesheet = export_stylesheet(&settings.style, cjk, overrides)?;
-	Ok(PdfRequest {
-		security: crate::security::Security::local(
-			crate::security::Trust::Trusted,
-		),
-		offline,
-		path,
-		output,
-		options: layout_options(settings, 0.0, stylesheet, fonts),
-		page: PageOverrides {
-			paper: Some(settings.paper.clone()),
-			landscape: settings.landscape,
-			margin: Some(settings.margin),
-			..Default::default()
-		},
-		metadata: MetadataOverrides::default(),
-		links: true,
-	})
 }
 
 /// Lays the document out once at the export's own measure. This is the PNG

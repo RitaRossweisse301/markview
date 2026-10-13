@@ -9,7 +9,7 @@
 //! decoded images, exactly as the reader's worker does.
 use crate::{
 	document,
-	export::{MetadataOverrides, PageOverrides, PdfRequest},
+	export::{MetadataOverrides, PdfRequest},
 	file::read_document,
 	images::Images,
 	layout::{LayoutEngine, LayoutOptions},
@@ -18,7 +18,6 @@ use crate::{
 };
 use anyhow::{Context, Result};
 use log::{info, warn};
-use markview_layout::style::{PageStyle, Stylesheet};
 use markview_pdf::{Export, Renderer};
 use std::{
 	path::{Path, PathBuf},
@@ -28,50 +27,6 @@ use std::{
 
 /// How long the watch loop waits before it checks local image stamps again.
 const IMAGE_POLL: Duration = Duration::from_millis(500);
-
-/// The paper the export uses: the print stylesheet with the flags on top.
-pub fn styled(sheet: Arc<Stylesheet>, page: &PageOverrides) -> Arc<Stylesheet> {
-	let mut sheet = (*sheet).clone();
-	if let Some(paper) = &page.paper {
-		sheet.page.size = Some(paper.clone());
-	}
-	if page.landscape {
-		sheet.page.landscape = Some(true);
-	}
-	if let Some(margin) = page.margin {
-		sheet.page.margin = Some(margin.to_vec());
-	}
-	for (slot, value) in page.header.iter().enumerate() {
-		if let Some(value) = value {
-			slot_of(&mut sheet.page, true, slot, value.clone());
-		}
-	}
-	for (slot, value) in page.footer.iter().enumerate() {
-		if let Some(value) = value {
-			slot_of(&mut sheet.page, false, slot, value.clone());
-		}
-	}
-	let (width, height) = sheet.page.paper_mm().unwrap();
-	sheet.set_media(
-		crate::stylesheet::media_context(
-			markview_layout::style::StyleTarget::Pdf,
-		)
-		.with_size(width, height),
-	);
-	Arc::new(sheet)
-}
-
-fn slot_of(page: &mut PageStyle, header: bool, slot: usize, value: String) {
-	let target = match (header, slot) {
-		(true, 0) => &mut page.header_left,
-		(true, 1) => &mut page.header_center,
-		(true, _) => &mut page.header_right,
-		(false, 0) => &mut page.footer_left,
-		(false, 1) => &mut page.footer_center,
-		(false, _) => &mut page.footer_right,
-	};
-	*target = Some(value);
-}
 
 pub(crate) fn run(args: &PdfRequest, watching: bool) -> Result<()> {
 	let path = &args.path;
@@ -198,18 +153,8 @@ impl Exporter {
 		services: Arc<crate::services::Services>,
 	) -> Result<Self> {
 		let output = args.output.clone();
-		let stylesheet = styled(args.options.stylesheet.clone(), &args.page);
-		let geometry = PageGeometry::from_style(stylesheet.page())?;
-		// The page's text measure replaces the reader's reading column, and a
-		// printed sheet shows every `<details>` body but no front matter.
-		let options = LayoutOptions {
-			width: geometry.text_px().0,
-			codeblock_wrap: true,
-			force_open: true,
-			hide_front_matter: true,
-			stylesheet,
-			..args.options.clone()
-		};
+		let geometry = args.geometry;
+		let options = args.options.clone();
 		let mut engine = LayoutEngine::with_executor(
 			services.handle.cpu.clone(),
 			std::sync::Arc::new(|| {}),
@@ -414,26 +359,19 @@ fn title_of(
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use markview_layout::style::Stylesheet;
+	use markview_layout::style::CjkType;
 	use std::fs;
 
 	fn options(path: &Path, output: &Path) -> PdfRequest {
-		PdfRequest {
-			security: crate::security::Security::local(
-				crate::security::Trust::Trusted,
-			),
-			path: path.into(),
-			output: output.into(),
-			options: LayoutOptions {
-				stylesheet: Stylesheet::bundled_print(),
-				fonts: crate::test_support::fonts(),
-				..Default::default()
-			},
-			page: PageOverrides::default(),
-			metadata: MetadataOverrides::default(),
-			links: true,
-			offline: false,
-		}
+		crate::export::Config::from_settings(
+			&crate::settings::ExportSettings::default(),
+			crate::test_support::fonts(),
+			CjkType::Sc,
+			&[],
+		)
+		.prepare()
+		.unwrap()
+		.pdf_request(path.into(), output.into(), false)
 	}
 
 	fn start(dir: &Path, source: &str) -> (PathBuf, PathBuf, Exporter) {

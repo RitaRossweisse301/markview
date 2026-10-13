@@ -121,11 +121,15 @@ cancellation. Images own their response-cache and decoding policies; fonts own
 archive limits and installation transactions. Neither service obtains transport
 through the other.
 
-`export::PdfRequest` contains the source, destination, layout/font options,
-page and metadata overrides, links and offline policy. CLI and GUI construct it
-independently, preserving their defaults. PDF processing consumes this request
-without launch or window state; its watch session retains the existing caches.
-PNG scheduling remains in the desktop adapter.
+`export::Config` prepares reader, file and buffer exports through one path:
+print-template layering, CJK and font overrides, validated font inputs and
+personal font discovery, page geometry and export layout defaults.
+`export::PdfRequest` carries the resulting layout and geometry together with
+source, destination, metadata, links and resource policy. PDF processing
+consumes that request without launch or window state; its watch session retains
+the existing caches. PNG adapters share snapshot preparation, strip planning,
+drawing and atomic output; the desktop adapter schedules its strips on frames
+and retains the job's captured geometry and scale.
 
 ## Semantic identity and immutable snapshots
 

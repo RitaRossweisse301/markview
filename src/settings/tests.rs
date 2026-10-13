@@ -401,7 +401,8 @@ fn export_settings_round_trip_and_leave_the_reader_alone() {
 fn a_bad_export_table_only_resets_the_export() {
 	let dir = tempfile::tempdir().unwrap();
 	let path = dir.path().join("settings.toml");
-	fs::write(&path, "font_size = 21.0\n[export]\nfont_size = 99.0\n").unwrap();
+	fs::write(&path, "font_size = 21.0\n[export]\nfont_size = 201.0\n")
+		.unwrap();
 	let (mut store, warning) = SettingsStore::load(Some(path.clone()));
 	assert_eq!(store.settings().font_size, 21.0);
 	assert_eq!(store.export(), ExportSettings::default());

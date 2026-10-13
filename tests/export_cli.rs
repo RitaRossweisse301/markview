@@ -12,10 +12,16 @@ fn font() -> String {
 		.to_string()
 }
 fn run(args: &[&str], text: &str) -> Output {
-	let mut child = Command::new(env!("CARGO_BIN_EXE_markview"))
-		.args(["export"])
-		.args(args)
-		.args(["--stdin", "--font-file", &font()])
+	let mut command = Command::new(env!("CARGO_BIN_EXE_markview"));
+	command.args(["export"]).args(args).args([
+		"--stdin",
+		"--font-file",
+		&font(),
+	]);
+	invoke(command, text)
+}
+fn invoke(mut command: Command, text: &str) -> Output {
+	let mut child = command
 		.stdin(Stdio::piped())
 		.stdout(Stdio::piped())
 		.stderr(Stdio::piped())
@@ -36,7 +42,19 @@ fn success(output: Output) -> serde_json::Value {
 		String::from_utf8_lossy(&output.stderr)
 	);
 	let lines = String::from_utf8(output.stdout).unwrap();
-	serde_json::from_str(lines.lines().last().unwrap()).unwrap()
+	let events: Vec<serde_json::Value> = lines
+		.lines()
+		.map(|line| serde_json::from_str(line).unwrap())
+		.collect();
+	assert_eq!(events.first().unwrap()["type"], "progress");
+	assert_eq!(events.last().unwrap()["type"], "done");
+	assert!(
+		events
+			.windows(2)
+			.all(|pair| pair[0]["fraction"].as_f64().unwrap()
+				<= pair[1]["fraction"].as_f64().unwrap())
+	);
+	events.last().unwrap().clone()
 }
 fn image(dir: &Path, name: &str, color: [u8; 4]) {
 	image::RgbaImage::from_pixel(64, 64, image::Rgba(color))
@@ -227,4 +245,195 @@ fn custom_templates_errors_and_cancellation_preserve_target() {
 		.success()
 	);
 	assert_eq!(std::fs::read(&output).unwrap(), b"previous result");
+}
+
+#[test]
+fn invalid_explicit_fonts_fail_before_replacing_any_export() {
+	let dir = tempfile::tempdir().unwrap();
+	let bad = dir.path().join("error-page.ttf");
+	std::fs::write(&bad, b"<html>Not a font</html>").unwrap();
+	let source = dir.path().join("source.md");
+	std::fs::write(&source, "# Snapshot").unwrap();
+	for (command, format) in
+		[("pdf", "pdf"), ("export", "pdf"), ("export", "png")]
+	{
+		let output = dir.path().join(format!("{command}.{format}"));
+		std::fs::write(&output, b"previous result").unwrap();
+		let mut process = Command::new(env!("CARGO_BIN_EXE_markview"));
+		process.arg(command);
+		if command == "pdf" {
+			process.arg(&source);
+		} else {
+			process.args(["--stdin", "--format", format]);
+		}
+		process
+			.arg("--output")
+			.arg(&output)
+			.arg("--font-file")
+			.arg(&bad)
+			.args(["--font-file", &font()]);
+		let result = invoke(process, "# Snapshot");
+		assert!(!result.status.success());
+		assert!(
+			String::from_utf8_lossy(&result.stderr)
+				.contains("Invalid font file")
+		);
+		assert!(!String::from_utf8_lossy(&result.stdout).contains("\"done\""));
+		assert_eq!(std::fs::read(&output).unwrap(), b"previous result");
+	}
+}
+
+#[test]
+fn file_and_buffer_pdf_exports_share_templates_fonts_and_reading_options() {
+	let dir = tempfile::tempdir().unwrap();
+	let source = dir.path().join("source.md");
+	let text = "# Snapshot\n\nBody paragraph.\n\n中文\n";
+	std::fs::write(&source, text).unwrap();
+	let style = dir.path().join("custom.mvss.toml");
+	std::fs::write(&style, "format_version=2\nversion=1\ntargets=['pdf']\n[page]\nsize='a5'\nlandscape=true\n[[rule]]\nwhen=['p']\nmedia=['landscape','pdf']\nline_height=1.8\n").unwrap();
+	let cjk = Path::new(env!("CARGO_MANIFEST_DIR")).join(
+		"crates/markview-render/tests/fonts/NotoSerifCJKtc-Regular-subset.otf",
+	);
+	let faces = Path::new(env!("CARGO_MANIFEST_DIR"))
+		.join("crates/markview-layout/tests/fonts");
+	let sans = faces.join("NotoSans-Regular-subset.otf");
+	let bold = faces.join("NotoSans-Bold-subset.otf");
+	let common = [
+		"--style",
+		"monochrome",
+		"--style-file",
+		style.to_str().unwrap(),
+		"--font-file",
+		&font(),
+		"--font-file",
+		cjk.to_str().unwrap(),
+		"--font-file",
+		sans.to_str().unwrap(),
+		"--font-file",
+		bold.to_str().unwrap(),
+		"--font-size",
+		"72",
+		"--cjk-type",
+		"TC",
+		"--paragraph-indent",
+		"2",
+		"--left",
+		"--no-hyphens",
+	];
+	let file_pdf = dir.path().join("file.pdf");
+	let mut file_command = Command::new(env!("CARGO_BIN_EXE_markview"));
+	file_command
+		.arg("pdf")
+		.arg(&source)
+		.arg("--output")
+		.arg(&file_pdf)
+		.args(common);
+	let result = invoke(file_command, "");
+	assert!(
+		result.status.success(),
+		"{}",
+		String::from_utf8_lossy(&result.stderr)
+	);
+	let buffer_pdf = dir.path().join("buffer.pdf");
+	let mut buffer_command = Command::new(env!("CARGO_BIN_EXE_markview"));
+	buffer_command
+		.args(["export", "--stdin", "--output"])
+		.arg(&buffer_pdf)
+		.args(common);
+	success(invoke(buffer_command, text));
+	assert_eq!(
+		std::fs::read(&file_pdf).unwrap(),
+		std::fs::read(&buffer_pdf).unwrap()
+	);
+	let pdf = lopdf::Document::load(&buffer_pdf).unwrap();
+	assert!(pdf.extract_text(&[1]).unwrap().contains("Snapshot"));
+	let page = pdf
+		.get_dictionary(*pdf.get_pages().values().next().unwrap())
+		.unwrap();
+	let media = page.get(b"MediaBox").unwrap().as_array().unwrap();
+	assert!((media[2].as_float().unwrap() - 595.28).abs() < 2.0);
+	assert!((media[3].as_float().unwrap() - 419.53).abs() < 2.0);
+}
+
+#[test]
+fn file_and_buffer_exports_use_downloaded_fonts_unless_pinned() {
+	if !markview_platform::test_support::isolated_fontconfig() {
+		return;
+	}
+	let dir = tempfile::tempdir().unwrap();
+	let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+	let system = dir.path().join("system");
+	std::fs::create_dir(&system).unwrap();
+	std::fs::copy(
+		root.join(
+			"crates/markview-layout/tests/fonts/NotoSans-Regular-subset.otf",
+		),
+		system.join("sans.otf"),
+	)
+	.unwrap();
+	let config = dir.path().join("config");
+	let personal = config.join("markview/fonts");
+	std::fs::create_dir_all(&personal).unwrap();
+	std::fs::copy(font(), personal.join("serif.otf")).unwrap();
+	let fontconfig = dir.path().join("fonts.conf");
+	std::fs::write(
+		&fontconfig,
+		format!("<fontconfig><dir>{}</dir></fontconfig>", system.display()),
+	)
+	.unwrap();
+	let source = dir.path().join("source.md");
+	let text = "# Snapshot\n\nBody paragraph.\n";
+	std::fs::write(&source, text).unwrap();
+	let mut baseline = None;
+	for (index, command) in ["pdf", "export", "export", "export"]
+		.into_iter()
+		.enumerate()
+	{
+		let output = dir.path().join(format!("{index}.pdf"));
+		let mut process = Command::new(env!("CARGO_BIN_EXE_markview"));
+		process
+			.env("XDG_CONFIG_HOME", &config)
+			.env("FONTCONFIG_FILE", &fontconfig)
+			.arg(command);
+		if command == "pdf" {
+			process.arg(&source);
+		} else {
+			process.arg("--stdin");
+		}
+		process.arg("--output").arg(&output);
+		if index == 2 {
+			process
+				.arg("--ignore-system-fonts")
+				.arg("--fonts")
+				.arg(&system);
+		} else if index == 3 {
+			process.arg("--font-file").arg(system.join("sans.otf"));
+		}
+		let result = invoke(process, text);
+		assert!(
+			result.status.success(),
+			"{}",
+			String::from_utf8_lossy(&result.stderr)
+		);
+		let pdf = lopdf::Document::load(&output).unwrap();
+		assert!(pdf.extract_text(&[1]).unwrap().contains("Body paragraph"));
+		let has_serif = pdf
+			.objects
+			.values()
+			.filter_map(|object| object.as_dict().ok())
+			.filter_map(|dict| dict.get(b"BaseFont").ok())
+			.filter_map(|name| name.as_name().ok())
+			.any(|name| {
+				String::from_utf8_lossy(name).contains("NotoSerif-Regular")
+			});
+		assert_eq!(has_serif, index < 2);
+		if index == 0 {
+			baseline = Some(std::fs::read(&output).unwrap());
+		} else if index == 1 {
+			assert_eq!(
+				std::fs::read(&output).unwrap(),
+				baseline.take().unwrap()
+			);
+		}
+	}
 }

@@ -37,7 +37,13 @@ impl Mode {
 	/// what the reader shows. Measurement runs keep the pinned set, so a
 	/// download cannot move a benchmark.
 	pub(crate) fn uses_personal_fonts(&self) -> bool {
-		matches!(self, Self::Window | Self::Render | Self::Smoke | Self::Pdf)
+		matches!(
+			self,
+			Self::Window
+				| Self::Render
+				| Self::Smoke
+				| Self::Pdf | Self::Export
+		)
 	}
 }
 
@@ -89,6 +95,8 @@ pub(crate) struct LaunchOptions {
 	pub(crate) list_stylesheets: bool,
 	pub(crate) fonts: Option<FontsCommand>,
 	pub(crate) export_command: Option<crate::export_cli::Command>,
+	pub(crate) export_style_file: Option<PathBuf>,
+	pub(crate) export_font_files: Vec<PathBuf>,
 	pub(crate) iterations: usize,
 	pub(crate) options: LayoutOptions,
 	pub(crate) overrides: Vec<Setting>,
@@ -122,6 +130,8 @@ impl Default for LaunchOptions {
 			list_stylesheets: false,
 			fonts: None,
 			export_command: None,
+			export_style_file: None,
+			export_font_files: Vec::new(),
 			iterations: 100,
 			options: LayoutOptions::default(),
 			overrides: Vec::new(),
@@ -206,6 +216,26 @@ struct Reading {
 	/// Shape greedily, for a typography comparison.
 	#[arg(long)]
 	greedy: bool,
+}
+
+#[derive(Args)]
+pub(crate) struct ExportReading {
+	#[command(flatten)]
+	reading: Reading,
+	/// Layer a custom PDF stylesheet above the named templates.
+	#[arg(long)]
+	style_file: Option<PathBuf>,
+	/// Load an explicit font file; repeats and replaces system discovery.
+	#[arg(long)]
+	font_file: Vec<PathBuf>,
+}
+
+impl ExportReading {
+	fn apply(&self, out: &mut LaunchOptions) -> Result<()> {
+		out.export_style_file = self.style_file.clone();
+		out.export_font_files = self.font_file.clone();
+		apply_reading(out, &self.reading)
+	}
 }
 #[derive(Subcommand)]
 // The parsed command line is built once and dropped; a variant is never held
@@ -356,7 +386,7 @@ struct PdfArgs {
 	#[arg(long, value_name = "TEXT")]
 	creator: Option<String>,
 	#[command(flatten)]
-	reading: Reading,
+	reading: ExportReading,
 }
 
 #[derive(Subcommand)]
@@ -558,6 +588,7 @@ fn apply_command(out: &mut LaunchOptions, command: Command) -> Result<()> {
 	match command {
 		Command::Export(command) => {
 			out.mode = Mode::Export;
+			command.reading.apply(out)?;
 			out.export_command = Some(command);
 			Ok(())
 		}
@@ -621,13 +652,8 @@ fn apply_command(out: &mut LaunchOptions, command: Command) -> Result<()> {
 			out.output = Some(args.output);
 			out.links = !args.no_links;
 			out.watch = args.watch;
-			out.page.landscape = args.landscape;
+			out.page.landscape = args.landscape.then_some(true);
 			if let Some(paper) = args.paper {
-				if markview_layout::style::parse_paper_size(&paper).is_none() {
-					bail!(
-						"Invalid paper {paper:?}; use a3, a4, a5, a6, b5, letter, legal, tabloid or WIDTHxHEIGHT in millimetres"
-					);
-				}
 				out.page.paper = Some(paper);
 			}
 			if let Some(margin) = args.margin {
@@ -639,7 +665,6 @@ fn apply_command(out: &mut LaunchOptions, command: Command) -> Result<()> {
 				(2, args.header_right),
 			] {
 				if let Some(value) = value {
-					template("--header", &value)?;
 					out.page.header[slot] = Some(value);
 				}
 			}
@@ -649,10 +674,10 @@ fn apply_command(out: &mut LaunchOptions, command: Command) -> Result<()> {
 				(2, args.footer_right),
 			] {
 				if let Some(value) = value {
-					template("--footer", &value)?;
 					out.page.footer[slot] = Some(value);
 				}
 			}
+			out.page.validate()?;
 			out.metadata.title = args.title;
 			out.metadata.authors = args
 				.author
@@ -677,7 +702,7 @@ fn apply_command(out: &mut LaunchOptions, command: Command) -> Result<()> {
 				out.metadata.language = Some(language);
 			}
 			out.metadata.creator = args.creator;
-			apply_reading(out, &args.reading)
+			args.reading.apply(out)
 		}
 		Command::Ss { action } => {
 			match action {
@@ -762,23 +787,33 @@ fn apply_reading(out: &mut LaunchOptions, reading: &Reading) -> Result<()> {
 		out.style = Some(reading.style.clone());
 		out.overrides.push(Setting::Theme);
 	}
+	crate::fonts::validate_directories(&reading.fonts)?;
 	for directory in &reading.fonts {
-		if !directory.is_dir() {
-			bail!("--fonts: {} is not a directory", directory.display());
-		}
 		out.options.fonts.directories.push(directory.clone());
 	}
 	if reading.ignore_system_fonts {
 		out.options.fonts.ignore_system_fonts = true;
 	}
 	if let Some(size) = reading.font_size {
-		check_number("--font-size", size)?;
-		out.options.font_size = size.clamp(10.0, 40.0);
+		out.options.font_size = if matches!(out.mode, Mode::Pdf | Mode::Export)
+		{
+			crate::export::config::validate_font_size(size)?;
+			size
+		} else {
+			check_number("--font-size", size)?;
+			size.clamp(10.0, 40.0)
+		};
 		out.overrides.push(Setting::FontSize);
 	}
 	if let Some(indent) = reading.paragraph_indent {
-		check_number("--paragraph-indent", indent)?;
-		out.options.paragraph_indent = indent.clamp(0.0, 4.0);
+		out.options.paragraph_indent =
+			if matches!(out.mode, Mode::Pdf | Mode::Export) {
+				crate::export::config::validate_indent(indent)?;
+				indent
+			} else {
+				check_number("--paragraph-indent", indent)?;
+				indent.clamp(0.0, 4.0)
+			};
 		out.overrides.push(Setting::ParagraphIndent);
 	}
 	if let Some(name) = &reading.cjk_type {
@@ -827,23 +862,8 @@ fn parse_margin(value: &str) -> Result<[f32; 4]> {
 		[top, right, bottom, left] => [*top, *right, *bottom, *left],
 		_ => bail!("--margin takes 1, 2 or 4 millimetres: --margin 20,25"),
 	};
-	if margin
-		.iter()
-		.any(|value| !value.is_finite() || *value < 0.0)
-	{
-		bail!("Invalid margin");
-	}
+	crate::export::config::validate_margin(&margin)?;
 	Ok(margin)
-}
-
-/// A page-furniture slot may only name the placeholders the page writer knows.
-fn template(flag: &str, value: &str) -> Result<()> {
-	if !markview_layout::paginate::template_is_valid(value) {
-		bail!(
-			"{flag}: unknown placeholder; use {{page}}, {{pages}}, {{title}} or {{path}}"
-		);
-	}
-	Ok(())
 }
 
 pub(crate) fn network_grant(
@@ -880,7 +900,9 @@ fn finish(mut out: LaunchOptions) -> Result<Option<LaunchOptions>> {
 	}
 	// A drawing run shapes with the personal download directory, so an export
 	// matches the reader on the same machine; a pinned run keeps its set.
-	if out.mode.uses_personal_fonts() {
+	if out.mode.uses_personal_fonts()
+		&& !matches!(out.mode, Mode::Pdf | Mode::Export)
+	{
 		crate::fonts::join_download_directory(
 			&mut out.options.fonts,
 			crate::fonts::directory(),
@@ -888,7 +910,9 @@ fn finish(mut out: LaunchOptions) -> Result<Option<LaunchOptions>> {
 	}
 	// Paper is set at 12 pt unless the command line names a size; the reader
 	// and the other diagnostic modes keep their own default.
-	if out.mode == Mode::Pdf && !out.overrides.contains(&Setting::FontSize) {
+	if matches!(out.mode, Mode::Pdf | Mode::Export)
+		&& !out.overrides.contains(&Setting::FontSize)
+	{
 		out.options.font_size = ExportSettings::DEFAULT_FONT_SIZE_PX;
 	}
 	if matches!(
@@ -988,23 +1012,32 @@ fn normalize(path: &std::path::Path) -> std::path::PathBuf {
 }
 
 impl LaunchOptions {
-	pub(crate) fn pdf_request(&self) -> Result<PdfRequest> {
-		Ok(PdfRequest {
-			security: self.security.clone(),
-			path: self
-				.path
-				.clone()
-				.context("PDF export requires a document")?,
-			output: self
-				.output
-				.clone()
-				.context("--pdf requires --output out.pdf")?,
+	pub(crate) fn export_config(&self) -> crate::export::Config {
+		crate::export::Config {
+			styles: self.style.clone().unwrap_or_default(),
+			style_file: self.export_style_file.clone(),
+			font_files: self.export_font_files.clone(),
+			cjk: self.cjk_type.unwrap_or(markview_layout::style::CjkType::Sc),
 			options: self.options.clone(),
 			page: self.page.clone(),
-			metadata: self.metadata.clone(),
-			links: self.links,
-			offline: self.offline,
-		})
+			..Default::default()
+		}
+	}
+
+	pub(crate) fn pdf_request(&self) -> Result<PdfRequest> {
+		let mut request = self.export_config().prepare()?.pdf_request(
+			self.path
+				.clone()
+				.context("PDF export requires a document")?,
+			self.output
+				.clone()
+				.context("pdf requires --output out.pdf")?,
+			self.offline,
+		);
+		request.security = self.security.clone();
+		request.metadata = self.metadata.clone();
+		request.links = self.links;
+		Ok(request)
 	}
 }
 
@@ -1077,7 +1110,13 @@ mod tests {
 
 	#[test]
 	fn drawing_modes_shape_with_the_personal_download_directory() {
-		for mode in [Mode::Window, Mode::Render, Mode::Smoke, Mode::Pdf] {
+		for mode in [
+			Mode::Window,
+			Mode::Render,
+			Mode::Smoke,
+			Mode::Pdf,
+			Mode::Export,
+		] {
 			assert!(mode.uses_personal_fonts());
 		}
 		for mode in [
@@ -1090,11 +1129,12 @@ mod tests {
 		}
 		// A drawing run folds the directory in where this machine has one.
 		let args = parse(&["pdf", "a.md", "--output", "out.pdf"]);
+		let fonts = args.export_config().prepare().unwrap().options.fonts;
 		match crate::fonts::directory() {
 			Some(dir) if dir.is_dir() => {
-				assert!(args.options.fonts.directories.contains(&dir));
+				assert!(fonts.directories.contains(&dir));
 			}
-			_ => assert!(args.options.fonts.directories.is_empty()),
+			_ => assert!(fonts.directories.is_empty()),
 		}
 		// A pinned run keeps exactly the set it named.
 		let args = parse(&[
@@ -1364,12 +1404,27 @@ mod tests {
 		let args = args.pdf_request().unwrap();
 		assert_eq!(args.path, PathBuf::from("a.md"));
 		assert_eq!(args.output, PathBuf::from("out.pdf"));
-		assert_eq!(args.page.paper.as_deref(), Some("letter"));
-		assert!(args.page.landscape);
-		assert_eq!(args.page.margin, Some([10.0, 15.0, 10.0, 15.0]));
-		assert_eq!(args.page.header[0].as_deref(), Some("Draft"));
-		assert_eq!(args.page.header[1], None);
-		assert_eq!(args.page.footer[1].as_deref(), Some("{page}/{pages}"));
+		assert_eq!(
+			args.options.stylesheet.page().size.as_deref(),
+			Some("letter")
+		);
+		assert_eq!(args.options.stylesheet.page().landscape, Some(true));
+		assert_eq!(
+			args.options.stylesheet.page().margin,
+			Some(vec![10.0, 15.0, 10.0, 15.0])
+		);
+		assert_eq!(
+			args.options.stylesheet.page().header_left.as_deref(),
+			Some("Draft")
+		);
+		assert_eq!(
+			args.options.stylesheet.page().header_center.as_deref(),
+			Some("")
+		);
+		assert_eq!(
+			args.options.stylesheet.page().footer_center.as_deref(),
+			Some("{page}/{pages}")
+		);
 		assert!(!args.links);
 		assert_eq!(args.metadata.title.as_deref(), Some("A paper"));
 		assert_eq!(args.metadata.authors, ["Ada", "Grace"]);

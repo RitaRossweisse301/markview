@@ -1,5 +1,10 @@
 //! Native fixtures shared by application integration tests.
 use std::{ffi::OsString, fs, io, path::Path};
+
+/// Whether a subprocess can isolate Linux font discovery with Fontconfig.
+pub const fn isolated_fontconfig() -> bool {
+	cfg!(target_os = "linux")
+}
 pub const fn special_files() -> bool {
 	cfg!(unix)
 }

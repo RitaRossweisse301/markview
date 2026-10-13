@@ -233,19 +233,10 @@ impl ExportSettings {
 	pub const DEFAULT_FONT_SIZE_PX: f32 = 16.0;
 
 	pub fn validate(&self) -> Result<()> {
-		if !self.font_size.is_finite()
-			|| !(10.0..=40.0).contains(&self.font_size)
-			|| !self.paragraph_indent.is_finite()
-			|| !(0.0..=4.0).contains(&self.paragraph_indent)
-			|| !self.scale.is_finite()
-			|| !(0.5..=4.0).contains(&self.scale)
-			|| self.margin.iter().any(|v| !v.is_finite() || *v < 0.0)
-		{
-			bail!("Export settings are out of range");
-		}
-		if markview_layout::style::parse_paper_size(&self.paper).is_none() {
-			bail!("Export paper {:?} is not a size", self.paper);
-		}
+		crate::export::config::validate_font_size(self.font_size)?;
+		crate::export::config::validate_indent(self.paragraph_indent)?;
+		crate::export::config::validate_scale(self.scale)?;
+		crate::export::geometry(self)?;
 		for id in &self.style {
 			crate::stylesheet::validate_id(id)?;
 		}

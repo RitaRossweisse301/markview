@@ -64,6 +64,50 @@ pub fn join_download_directory(
 	}
 }
 
+pub(crate) fn validate_directories(directories: &[PathBuf]) -> Result<()> {
+	for directory in directories {
+		if !directory.is_dir() {
+			bail!("--fonts: {} is not a directory", directory.display());
+		}
+	}
+	Ok(())
+}
+
+/// Resolve export faces once; explicit files exclude system and personal fonts.
+pub(crate) fn export_config(
+	mut config: FontConfig,
+	files: &[PathBuf],
+) -> Result<FontConfig> {
+	validate_directories(&config.directories)?;
+	if !files.is_empty() {
+		use std::hash::{DefaultHasher, Hash, Hasher};
+		let mut identity = DefaultHasher::new();
+		let mut faces = Vec::new();
+		for path in files {
+			let mut data = Vec::new();
+			crate::file::open_regular(path)?
+				.take(MAX_FILE_BYTES + 1)
+				.read_to_end(&mut data)
+				.with_context(|| {
+					format!("Cannot read font {}", path.display())
+				})?;
+			if data.len() as u64 > MAX_FILE_BYTES {
+				bail!("Font {} exceeds 64 MiB", path.display());
+			}
+			if !markview_layout::fonts::is_font(&data) {
+				bail!("Invalid font file: {}", path.display());
+			}
+			data.hash(&mut identity);
+			faces.push(parley::fontique::Blob::new(std::sync::Arc::new(data)));
+		}
+		let mut explicit = FontConfig::from_faces(identity.finish(), faces);
+		explicit.directories = config.directories;
+		return Ok(explicit);
+	}
+	join_download_directory(&mut config, directory());
+	Ok(config)
+}
+
 /// What one font file on disk says about itself.
 ///
 /// A downloaded family is only ever known through its own files: the reader
