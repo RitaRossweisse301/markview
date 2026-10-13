@@ -33,6 +33,36 @@ macro bodies and expansions are not analyzed. Clippy's `cognitive_complexity`
 uses a different metric. The audit is a local command while existing violations
 are being assessed; it is not part of the CI gate.
 
+An intentional exception must be marked on the function itself, with a
+nonempty reason:
+
+```rust
+#[cfg_attr(any(), markview::allow_complexity(reason = "Keep the exhaustive mapping together"))]
+fn map_kind(kind: Kind) -> Value {
+    // ...
+}
+```
+
+`any()` is always false, so stable Rust ignores this source-only attribute;
+the complexity checker reads it. The same marker works on methods and trait
+methods with a default body. It exempts only that body: nested functions and
+closures keep their own checks. Module, `impl` and crate annotations do not
+grant exemptions. Missing or blank reasons fail the audit. Exempt functions
+still have their complexity measured and printed with the reason, and the
+summary includes their count; they do not contribute to the failure count.
+
+For a closure, put its annotated expression inside a block, since attributes
+directly on an initializer expression require unstable Rust:
+
+```rust
+let handler = {
+    #[cfg_attr(any(), markview::allow_complexity(reason = "Keep the worker state transitions together"))]
+    move || {
+        // ...
+    }
+};
+```
+
 Debian and Ubuntu additionally need the native development packages:
 
 ```sh

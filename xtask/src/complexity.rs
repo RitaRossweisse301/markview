@@ -1,4 +1,9 @@
-use std::{collections::BTreeSet, fs, path::PathBuf, process::Command};
+use std::{
+	collections::BTreeSet,
+	fs,
+	path::{Path, PathBuf},
+	process::Command,
+};
 
 use anyhow::{Context, Result, bail, ensure};
 use syn::{
@@ -8,7 +13,20 @@ use syn::{
 	visit::{self, Visit},
 };
 
-type Function = (usize, String, usize);
+#[derive(Debug)]
+struct Function {
+	line: usize,
+	name: String,
+	score: usize,
+	exemption: Option<String>,
+}
+
+impl Function {
+	fn exceeds(&self, limit: usize) -> bool {
+		self.score > limit && self.exemption.is_none()
+	}
+}
+
 type Module = (PathBuf, PathBuf);
 
 pub fn run() -> Result<()> {
@@ -32,32 +50,29 @@ pub fn run() -> Result<()> {
 	let mut pending = targets(&metadata);
 	let mut seen = BTreeSet::new();
 	let mut reports = Vec::new();
+	let mut exemptions = Vec::new();
 	let mut functions = 0;
 	while let Some((path, directory)) = pending.pop() {
 		if !seen.insert(path.clone()) {
 			continue;
 		}
-		let source = fs::read_to_string(&path)
-			.with_context(|| path.display().to_string())?;
-		let syntax = syn::parse_file(&source)
-			.with_context(|| path.display().to_string())?;
-		let mut check = Check {
-			directory,
-			pending: &mut pending,
-			scores: Vec::new(),
-			functions: Vec::new(),
-		};
-		if !test_only(&syntax.attrs) {
-			check.visit_file(&syntax);
-		}
-		functions += check.functions.len();
-		for (line, name, score) in check.functions {
-			if score > limit {
+		let measured = measure(&path, directory, &mut pending)?;
+		functions += measured.len();
+		for function in measured {
+			if function.exceeds(limit) {
 				reports.push((
 					path.strip_prefix(&root)?.to_owned(),
-					line,
-					name,
-					score,
+					function.line,
+					function.name,
+					function.score,
+				));
+			} else if let Some(reason) = function.exemption {
+				exemptions.push((
+					path.strip_prefix(&root)?.to_owned(),
+					function.line,
+					function.name,
+					function.score,
+					reason,
 				));
 			}
 		}
@@ -69,14 +84,102 @@ pub fn run() -> Result<()> {
 			path.display()
 		);
 	}
+	exemptions.sort();
+	for (path, line, name, score, reason) in &exemptions {
+		println!(
+			"{}:{line}: {name}: cyclomatic complexity {score}; exempt: {reason}",
+			path.display()
+		);
+	}
 	println!(
-		"{} reports / {functions} functions and closures; maximum allowed: {limit}",
-		reports.len()
+		"{} reports / {functions} functions and closures; {} exemptions; maximum allowed: {limit}",
+		reports.len(),
+		exemptions.len()
 	);
 	if !reports.is_empty() {
 		bail!("cyclomatic complexity check failed");
 	}
 	Ok(())
+}
+
+fn measure(
+	path: &Path,
+	directory: PathBuf,
+	pending: &mut Vec<Module>,
+) -> Result<Vec<Function>> {
+	let source =
+		fs::read_to_string(path).with_context(|| path.display().to_string())?;
+	let syntax =
+		syn::parse_file(&source).with_context(|| path.display().to_string())?;
+	let mut check = Check {
+		directory,
+		pending,
+		scores: Vec::new(),
+		functions: Vec::new(),
+		error: None,
+	};
+	if !test_only(&syntax.attrs) {
+		check.visit_file(&syntax);
+	}
+	if let Some(error) = check.error {
+		bail!("{}:{}: {error}", path.display(), error.span().start().line);
+	}
+	Ok(check.functions)
+}
+
+fn exemption(attrs: &[Attribute]) -> syn::Result<Option<String>> {
+	let mut reason = None;
+	for attr in attrs.iter().filter(|attr| attr.path().is_ident("cfg_attr")) {
+		let args = attr
+			.parse_args_with(Punctuated::<Meta, Token![,]>::parse_terminated)?;
+		for meta in args.iter().skip(1) {
+			if meta.path().segments.len() == 2
+				&& meta.path().segments[0].ident == "markview"
+				&& meta.path().segments[1].ident == "allow_complexity"
+			{
+				if !matches!(args.first(), Some(Meta::List(predicate)) if predicate.path.is_ident("any") && predicate.tokens.is_empty())
+				{
+					return Err(syn::Error::new_spanned(
+						attr,
+						"complexity exemptions require `cfg_attr(any(), ...)`",
+					));
+				}
+				let Meta::List(marker) = meta else {
+					return Err(syn::Error::new_spanned(
+						meta,
+						"allow_complexity requires a nonempty `reason`",
+					));
+				};
+				if reason.is_some() {
+					return Err(syn::Error::new_spanned(
+						marker,
+						"only one complexity exemption is allowed per function",
+					));
+				}
+				marker.parse_nested_meta(|arg| {
+					if !arg.path.is_ident("reason") || reason.is_some() {
+						return Err(arg.error("expected one `reason` string"));
+					}
+					let value: syn::LitStr = arg.value()?.parse()?;
+					if value.value().trim().is_empty() {
+						return Err(syn::Error::new_spanned(
+							value,
+							"complexity exemption reason must not be empty",
+						));
+					}
+					reason = Some(value.value());
+					Ok(())
+				})?;
+				if reason.is_none() {
+					return Err(syn::Error::new_spanned(
+						marker,
+						"allow_complexity requires a nonempty `reason`",
+					));
+				}
+			}
+		}
+	}
+	Ok(reason)
 }
 
 fn targets(metadata: &serde_json::Value) -> Vec<Module> {
@@ -137,17 +240,32 @@ struct Check<'a> {
 	pending: &'a mut Vec<Module>,
 	scores: Vec<usize>,
 	functions: Vec<Function>,
+	error: Option<syn::Error>,
 }
 
 impl Check<'_> {
-	fn function(&mut self, name: String, span: proc_macro2::Span, body: &Expr) {
+	fn function(
+		&mut self,
+		attrs: &[Attribute],
+		name: String,
+		span: proc_macro2::Span,
+		visit: impl FnOnce(&mut Self),
+	) {
+		let exemption = match exemption(attrs) {
+			Ok(reason) => reason,
+			Err(error) => {
+				self.error.get_or_insert(error);
+				None
+			}
+		};
 		self.scores.push(1);
-		self.visit_expr(body);
-		self.functions.push((
-			span.start().line,
+		visit(self);
+		self.functions.push(Function {
+			line: span.start().line,
 			name,
-			self.scores.pop().unwrap(),
-		));
+			score: self.scores.pop().unwrap(),
+			exemption,
+		});
 	}
 }
 
@@ -193,13 +311,12 @@ impl<'ast> Visit<'ast> for Check<'_> {
 
 	fn visit_item_fn(&mut self, item: &'ast syn::ItemFn) {
 		if !test_only(&item.attrs) {
-			self.scores.push(1);
-			self.visit_block(&item.block);
-			self.functions.push((
-				item.sig.ident.span().start().line,
+			self.function(
+				&item.attrs,
 				item.sig.ident.to_string(),
-				self.scores.pop().unwrap(),
-			));
+				item.sig.ident.span(),
+				|check| check.visit_block(&item.block),
+			);
 		}
 	}
 
@@ -217,13 +334,12 @@ impl<'ast> Visit<'ast> for Check<'_> {
 
 	fn visit_impl_item_fn(&mut self, item: &'ast syn::ImplItemFn) {
 		if !test_only(&item.attrs) {
-			self.scores.push(1);
-			self.visit_block(&item.block);
-			self.functions.push((
-				item.sig.ident.span().start().line,
+			self.function(
+				&item.attrs,
 				item.sig.ident.to_string(),
-				self.scores.pop().unwrap(),
-			));
+				item.sig.ident.span(),
+				|check| check.visit_block(&item.block),
+			);
 		}
 	}
 
@@ -231,18 +347,22 @@ impl<'ast> Visit<'ast> for Check<'_> {
 		if !test_only(&item.attrs)
 			&& let Some(body) = &item.default
 		{
-			self.scores.push(1);
-			self.visit_block(body);
-			self.functions.push((
-				item.sig.ident.span().start().line,
+			self.function(
+				&item.attrs,
 				item.sig.ident.to_string(),
-				self.scores.pop().unwrap(),
-			));
+				item.sig.ident.span(),
+				|check| check.visit_block(body),
+			);
 		}
 	}
 
 	fn visit_expr_closure(&mut self, closure: &'ast syn::ExprClosure) {
-		self.function("<closure>".into(), closure.span(), &closure.body);
+		self.function(
+			&closure.attrs,
+			"<closure>".into(),
+			closure.span(),
+			|check| check.visit_expr(&closure.body),
+		);
 	}
 
 	fn visit_expr(&mut self, expr: &'ast Expr) {
@@ -273,16 +393,20 @@ impl<'ast> Visit<'ast> for Check<'_> {
 mod tests {
 	use super::*;
 
-	fn check(source: &str) -> (Vec<Function>, Vec<Module>) {
+	fn check(source: &str) -> syn::Result<(Vec<Function>, Vec<Module>)> {
 		let mut pending = Vec::new();
 		let mut check = Check {
 			directory: PathBuf::from("src"),
 			pending: &mut pending,
 			scores: Vec::new(),
 			functions: Vec::new(),
+			error: None,
 		};
 		check.visit_file(&syn::parse_file(source).unwrap());
-		(check.functions, pending)
+		if let Some(error) = check.error {
+			return Err(error);
+		}
+		Ok((check.functions, pending))
 	}
 
 	#[test]
@@ -301,11 +425,12 @@ mod tests {
 			impl T { fn method() { if a {} } }
 			trait T { fn default() { if a {} } }
 		"#,
-		);
+		)
+		.unwrap();
 		assert_eq!(
 			functions
 				.iter()
-				.map(|(_, name, score)| (name.as_str(), *score))
+				.map(|function| (function.name.as_str(), function.score))
 				.collect::<Vec<_>>(),
 			[
 				("<closure>", 2),
@@ -332,11 +457,12 @@ mod tests {
 			#[cfg(any(test, unix))] mod platform;
 			mod inline { #[path = "custom.rs"] mod child; }
 		"#,
-		);
+		)
+		.unwrap();
 		assert_eq!(
 			functions
 				.iter()
-				.map(|(_, name, _)| name.as_str())
+				.map(|function| function.name.as_str())
 				.collect::<Vec<_>>(),
 			["production"]
 		);
@@ -361,8 +487,125 @@ mod tests {
 			"fn allowed() {{ {} }} fn exceeded() {{ {} }}",
 			"if a {}".repeat(14),
 			"if a {}".repeat(15)
-		));
-		assert_eq!(functions[0].2, 15);
-		assert_eq!(functions[1].2, 16);
+		))
+		.unwrap();
+		assert!(!functions[0].exceeds(15));
+		assert!(functions[1].exceeds(15));
+	}
+
+	#[test]
+	fn marked_rust_compiles_and_exempts_only_the_annotated_body() {
+		let directory = tempfile::tempdir().unwrap();
+		let source = directory.path().join("fixture.rs");
+		let decisions = "if flag {}".repeat(15);
+		let marker = r#"#[cfg_attr(any(), markview::allow_complexity(reason = "Keep the mapping together"))]"#;
+		fs::write(&source, format!(r#"
+			{marker}
+			pub fn outer(flag: bool) {{
+				fn inner(flag: bool) {{ {decisions} }}
+				let nested = || {{ {decisions} }};
+				inner(flag);
+				nested();
+				{decisions}
+			}}
+			pub fn sibling(flag: bool) {{ {decisions} }}
+			pub struct Example;
+			impl Example {{ {marker} pub fn method(flag: bool) {{ {decisions} }} }}
+			pub trait ExampleTrait {{ {marker} fn default(flag: bool) {{ {decisions} }} }}
+			pub fn closure_scope(flag: bool) {{
+				let marked = {{ {marker} || {{ {decisions} }} }};
+				marked();
+			}}
+		"#)).unwrap();
+		let output = Command::new("rustc")
+			.args([
+				"--edition=2024",
+				"--crate-type=lib",
+				"--emit=metadata",
+				"-Dwarnings",
+				"-o",
+			])
+			.arg(directory.path().join("fixture.rmeta"))
+			.arg(&source)
+			.output()
+			.unwrap();
+		assert!(
+			output.status.success(),
+			"{}",
+			String::from_utf8_lossy(&output.stderr)
+		);
+		let functions =
+			measure(&source, directory.path().to_owned(), &mut Vec::new())
+				.unwrap();
+		assert_eq!(
+			functions
+				.iter()
+				.map(|f| (f.name.as_str(), f.score, f.exceeds(15)))
+				.collect::<Vec<_>>(),
+			[
+				("inner", 16, true),
+				("<closure>", 16, true),
+				("outer", 16, false),
+				("sibling", 16, true),
+				("method", 16, false),
+				("default", 16, false),
+				("<closure>", 16, false),
+				("closure_scope", 1, false),
+			]
+		);
+		assert_eq!(
+			functions
+				.iter()
+				.filter_map(|f| f.exemption.as_deref())
+				.collect::<Vec<_>>(),
+			["Keep the mapping together"; 4]
+		);
+	}
+
+	#[test]
+	fn malformed_exemptions_fail_instead_of_disabling_the_check() {
+		for marker in [
+			"markview::allow_complexity",
+			"markview::allow_complexity()",
+			r#"markview::allow_complexity(reason = " ")"#,
+			"markview::allow_complexity(reason = 15)",
+			r#"markview::allow_complexity(reason = "mapping", extra = true)"#,
+			r#"markview::allow_complexity(reason = "mapping", reason = "duplicate")"#,
+		] {
+			let source = format!("#[cfg_attr(any(), {marker})] fn f() {{}}");
+			assert!(check(&source).is_err(), "{marker}");
+		}
+		assert!(check(r#"#[cfg_attr(test, markview::allow_complexity(reason = "mapping"))] fn f() {}"#).is_err());
+		assert!(
+			check(
+				r#"
+			#[cfg_attr(any(), markview::allow_complexity(reason = "mapping"))]
+			#[cfg_attr(any(), markview::allow_complexity())]
+			fn f() {}
+		"#
+			)
+			.is_err()
+		);
+	}
+
+	#[test]
+	fn module_impl_and_unrelated_allow_attributes_do_not_exempt_functions() {
+		let (functions, _) = check(
+			r#"
+			#[cfg_attr(any(), markview::allow_complexity(reason = "module"))]
+			mod module { fn child() { if flag {} } }
+			#[cfg_attr(any(), markview::allow_complexity(reason = "impl"))]
+			impl Example { fn method() { if flag {} } }
+			#[allow(clippy::cognitive_complexity, reason = "different metric")]
+			fn unrelated() { if flag {} }
+		"#,
+		)
+		.unwrap();
+		assert_eq!(functions.len(), 3);
+		assert!(
+			functions
+				.iter()
+				.all(|f| f.exemption.is_none() && f.exceeds(1))
+		);
 	}
 }

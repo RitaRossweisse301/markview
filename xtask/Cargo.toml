@@ -15,5 +15,8 @@ proc-macro2 = { version = "1", features = ["span-locations"] }
 serde_json.workspace = true
 syn = { version = "2", features = ["full", "visit"] }
 
+[dev-dependencies]
+tempfile.workspace = true
+
 [lints]
 workspace = true
