@@ -6547,7 +6547,10 @@ version = "0.3.0"
 dependencies = [
  "anyhow",
  "ico",
+ "proc-macro2",
  "resvg",
+ "serde_json",
+ "syn 2.0.119",
  "tiny-skia",
 ]
 

@@ -13,6 +13,26 @@ cargo clippy --workspace --all-targets --locked -- -D warnings
 cargo build --release --locked
 ```
 
+Audit Rust cyclomatic complexity separately:
+
+```sh
+cargo run -p xtask --locked -- complexity
+```
+
+The maximum is 15, configured under `[workspace.metadata.lint]` in
+`Cargo.toml`. The command prints every function or closure above the limit,
+followed by the report count, and exits with status 1 if any exceed it.
+It scans workspace library, binary and build-script module trees, including
+all platform branches. Test, benchmark and example targets, `#[test]`,
+`#[cfg(test)]` code and the `test-support` feature are excluded.
+
+Each function or closure starts at 1. `if`, `while`, `for`, `?`, `&&` and `||`
+add 1; a `match` adds its arm count minus 1, plus 1 for each guard. Nested
+functions and closures are measured separately. This is a source AST check:
+macro bodies and expansions are not analyzed. Clippy's `cognitive_complexity`
+uses a different metric. The audit is a local command while existing violations
+are being assessed; it is not part of the CI gate.
+
 Debian and Ubuntu additionally need the native development packages:
 
 ```sh

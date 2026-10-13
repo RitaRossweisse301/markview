@@ -4,11 +4,21 @@
 //! assets from the source SVGs.
 use std::process::ExitCode;
 
+mod complexity;
 mod icons;
 
 fn main() -> ExitCode {
 	let mut args = std::env::args().skip(1);
 	match args.next().as_deref() {
+		Some("complexity") if args.next().is_none() => {
+			match complexity::run() {
+				Ok(()) => ExitCode::SUCCESS,
+				Err(error) => {
+					eprintln!("{error:#}");
+					ExitCode::FAILURE
+				}
+			}
+		}
 		Some("icons") => {
 			let check = args.next().as_deref() == Some("--check");
 			if args.next().is_some() {
@@ -24,7 +34,9 @@ fn main() -> ExitCode {
 			}
 		}
 		_ => {
-			eprintln!("Usage: cargo run -p xtask -- icons [--check]");
+			eprintln!(
+				"Usage: cargo run -p xtask -- icons [--check] | complexity"
+			);
 			ExitCode::FAILURE
 		}
 	}

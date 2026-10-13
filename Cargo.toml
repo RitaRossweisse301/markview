@@ -64,6 +64,9 @@ documentation = "https://github.com/szdytom/markview/tree/main/docs"
 # `forbid` cannot be lifted by a local `#[allow]`.
 unsafe_code = "deny"
 
+[workspace.metadata.lint]
+cyclomatic-complexity-threshold = 15
+
 [workspace.dependencies]
 regex = "1"
 regex-automata = "0.4"
