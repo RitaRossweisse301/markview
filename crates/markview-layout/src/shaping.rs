@@ -44,6 +44,7 @@ struct FontSet {
 	wanted_style: FontStyle,
 }
 type FaceChoice = Option<(usize, usize)>;
+type FaceChoices = Vec<(Range<usize>, FaceChoice, bool)>;
 impl FontSet {
 	fn choose(&mut self, text: &str) -> Option<usize> {
 		if let Some(choice) = self.choices.get(text) {
@@ -119,6 +120,7 @@ fn is_emoji_presentation(c: char) -> bool {
 
 #[derive(Clone)]
 pub(crate) struct Span {
+	/// Spans are sorted, non-overlapping byte ranges; gaps inherit the base style.
 	pub(crate) range: Range<usize>,
 	pub(crate) style: TextStyle,
 }
@@ -146,6 +148,8 @@ pub struct TextShaper {
 	/// Which faces the shaper may use, replaced through [`Self::set_fonts`].
 	font_config: FontConfig,
 	context: LayoutContext<usize>,
+	/// Scratch storage retains capacity, but releases font references after shaping.
+	layout: parley::Layout<usize>,
 	pub stylesheet: Arc<Stylesheet>,
 	pub appearance: TextAppearance,
 	faces: HashMap<(Vec<Font>, u16), usize>,
@@ -306,6 +310,7 @@ impl TextShaper {
 			fonts: None,
 			font_config: config,
 			context: LayoutContext::new(),
+			layout: parley::Layout::new(),
 			stylesheet,
 			appearance,
 			faces: HashMap::new(),
@@ -700,24 +705,20 @@ impl TextShaper {
 			}
 		))
 	}
-	pub(crate) fn shape(
+	fn build_layout(
 		&mut self,
 		text: &str,
 		spans: &[Span],
 		size: f32,
-		_sans: bool,
-	) -> Vec<Cluster> {
-		if text.is_empty() {
-			return Vec::new();
-		}
-		let base = self.appearance.clone();
+		base: &TextAppearance,
+	) -> (parley::Layout<usize>, Vec<TextAppearance>, FaceChoices) {
 		let appearances: Vec<_> = spans
 			.iter()
-			.map(|span| self.stylesheet.inline(&base, &span.style))
+			.map(|span| self.stylesheet.inline(base, &span.style))
 			.collect();
 		let (base_fonts, span_fonts) =
 			crate::profile::span(crate::profile::Stage::FontResolve, || {
-				let base_fonts = self.resolve_fonts(&base);
+				let base_fonts = self.resolve_fonts(base);
 				let span_fonts: Vec<_> = appearances
 					.iter()
 					.map(|appearance| self.resolve_fonts(appearance))
@@ -726,32 +727,42 @@ impl TextShaper {
 			});
 		let mut choices: Vec<(Range<usize>, FaceChoice, bool)> = Vec::new();
 		crate::profile::span(crate::profile::Stage::FontChoose, || {
+			debug_assert!(
+				spans.windows(2).all(|s| s[0].range.end <= s[1].range.start)
+			);
+			let mut span_index = 0;
+			let mut parts: Vec<(usize, &str, Option<usize>)> = Vec::new();
 			// Resolve whole joining-script words together; elsewhere resolve grapheme clusters.
 			// All ranges are subsequently shaped in one paragraph, preserving bidi and context.
 			for (start, word) in text.split_word_bound_indices() {
 				let joining = word.chars().any(
 					|c| matches!(c as u32,0x600..=0x1cff|0xa800..=0xabff|0x11000..=0x11fff),
 				);
-				let mut parts: Vec<(usize, &str)> = Vec::new();
+				parts.clear();
 				for (offset, cluster) in word.grapheme_indices(true) {
-					let span_at =
-						|pos| spans.iter().position(|s| s.range.contains(&pos));
+					let pos = start + offset;
+					while span_index < spans.len()
+						&& spans[span_index].range.end <= pos
+					{
+						span_index += 1;
+					}
+					let span = spans
+						.get(span_index)
+						.filter(|s| s.range.start <= pos)
+						.map(|_| span_index);
 					if joining
-						&& let Some((previous, part)) = parts.last_mut()
-						&& span_at(start + *previous) == span_at(start + offset)
+						&& let Some((previous, part, previous_span)) =
+							parts.last_mut() && *previous_span == span
 					{
 						*part = &word[*previous..offset + cluster.len()];
 					} else {
-						parts.push((offset, cluster));
+						parts.push((offset, cluster, span));
 					}
 				}
-				for (offset, part) in parts {
+				for &(offset, part, span) in &parts {
 					let pos = start + offset;
-					let fonts = spans
-						.iter()
-						.position(|s| s.range.contains(&pos))
-						.map(|i| span_fonts[i])
-						.unwrap_or(base_fonts);
+					let fonts =
+						span.map(|i| span_fonts[i]).unwrap_or(base_fonts);
 					let face = match self.font_sets[fonts].choose(part) {
 						Some(index) => Some((fonts, index)),
 						None => self
@@ -786,18 +797,28 @@ impl TextShaper {
 		});
 		let config = self.font_config.clone();
 		let fonts = self.fonts.get_or_insert_with(|| default_fonts(&config));
+		// Uncovered text still needs a face for `.notdef`; without one,
+		// Parley aborts shaping the paragraph, including covered text.
+		let fallback = self.font_sets[base_fonts]
+			.faces
+			.first()
+			.map(|face| face.family.clone())
+			.or_else(|| {
+				fonts.collection.family_names().next().map(str::to_owned)
+			})
+			.unwrap_or_else(|| "sans-serif".into());
 		let mut builder = self.context.ranged_builder(fonts, text, 1.0, false);
 		builder.push_default(StyleProperty::FontSize(size));
 		builder.push_default(StyleProperty::LetterSpacing(
 			size * self.appearance.letter_spacing,
 		));
-		builder.push_default(StyleProperty::FontFamily("sans-serif".into()));
+		builder.push_default(StyleProperty::FontFamily(
+			parley::FontFamilyName::Named(fallback.into()).into(),
+		));
 		builder.push_default(StyleProperty::FontWeight(FontWeight::NORMAL));
 		builder.push_default(StyleProperty::FontStyle(FontStyle::Normal));
 		builder.push_default(StyleProperty::Brush(usize::MAX));
-		let mut has_synthetic = false;
-		for (range, face, synthetic) in &choices {
-			has_synthetic |= *synthetic;
+		for (range, face, _) in &choices {
 			if let Some((set, index)) = face {
 				let face = &self.font_sets[*set].faces[*index];
 				builder.push(
@@ -832,16 +853,33 @@ impl TextShaper {
 				span.range.clone(),
 			);
 		}
-		let mut layout =
-			crate::profile::span(crate::profile::Stage::ShapeBuild, || {
-				builder.build(text)
-			});
+		let mut layout = std::mem::take(&mut self.layout);
+		crate::profile::span(crate::profile::Stage::ShapeBuild, || {
+			builder.build_into(&mut layout, text);
+		});
 		// `parley`'s default height ceiling is `f32::MAX`; an overflowing
 		// line height repeatedly yields without consuming the next cluster.
 		// Shaping imposes no height limit.
 		let mut breaker = layout.break_lines();
 		breaker.state_mut().set_line_max_height(f32::INFINITY);
 		breaker.break_remaining(f32::MAX);
+		(layout, appearances, choices)
+	}
+
+	pub(crate) fn shape(
+		&mut self,
+		text: &str,
+		spans: &[Span],
+		size: f32,
+		_sans: bool,
+	) -> Vec<Cluster> {
+		if text.is_empty() {
+			return Vec::new();
+		}
+		let base = self.appearance.clone();
+		let (mut layout, appearances, choices) =
+			self.build_layout(text, spans, size, &base);
+		let has_synthetic = choices.iter().any(|(_, _, synthetic)| *synthetic);
 		// A cluster keeps the choice its first byte resolved to, which is the
 		// face the shaper used for the whole cluster. Documents without a
 		// synthetic candidate skip the lookup entirely.
@@ -867,13 +905,17 @@ impl TextShaper {
 		if needs_bounds {
 			for line in layout.lines() {
 				for run in line.runs() {
-					let coords: Arc<[i16]> = run.normalized_coords().into();
+					let coords: Arc<[i16]> = run
+						.normalized_coords()
+						.iter()
+						.map(|c| c.to_bits())
+						.collect();
 					for c in run.visual_clusters() {
 						if metrics::blank(&text[c.text_range()]) {
 							continue;
 						}
+						let index = c.style().brush;
 						for g in c.glyphs() {
-							let index = layout.styles()[g.style_index()].brush;
 							if appearances
 								.get(index)
 								.unwrap_or(&base)
@@ -890,11 +932,15 @@ impl TextShaper {
 		}
 		for line in layout.lines() {
 			for run in line.runs() {
-				let coords: Arc<[i16]> = run.normalized_coords().into();
-				// The last cluster that draws a glyph, which a ligature's
-				// continuations fold into. `parley` emits it before them.
+				let coords: Arc<[i16]> = run
+					.normalized_coords()
+					.iter()
+					.map(|c| c.to_bits())
+					.collect();
+				let run_start = clusters.len();
+				// Logical order puts a ligature's glyph before its continuations.
 				let mut inked: Option<usize> = None;
-				for c in run.visual_clusters() {
+				for c in run.clusters() {
 					let range = c.text_range();
 					// A ligature is one glyph for several characters: `parley`
 					// hands the glyph to one cluster and leaves the rest as
@@ -919,9 +965,7 @@ impl TextShaper {
 					let mut bounds: Option<(f32, f32)> = None;
 					let blank =
 						needs_bounds && metrics::blank(&text[range.clone()]);
-					let index = c.glyphs().next().map_or(usize::MAX, |g| {
-						layout.styles()[g.style_index()].brush
-					});
+					let index = c.style().brush;
 					let appearance = appearances.get(index).unwrap_or(&base);
 					let style = spans.get(index).map(|s| &s.style);
 					let shift = run.font_size() * appearance.baseline
@@ -931,7 +975,6 @@ impl TextShaper {
 							0.
 						};
 					for g in c.glyphs() {
-						let index = layout.styles()[g.style_index()].brush;
 						if !blank
 							&& appearance.uses_bounds()
 							&& let Some((lo, hi)) = self.glyph_bounds(
@@ -953,15 +996,12 @@ impl TextShaper {
 							x: x + g.x,
 							y: g.y + shift,
 							synthetic_italic,
-							paint: appearances
-								.get(index)
-								.unwrap_or(&base)
-								.paint,
+							paint: appearance.paint,
 						});
 						x += g.advance;
 					}
 					inked = Some(clusters.len());
-					let metrics = run.metrics();
+					let metrics = run.font_metrics();
 					let bounds = bounds.unwrap_or(
 						if inked_styles.contains(&index) && blank {
 							(f32::INFINITY, f32::NEG_INFINITY)
@@ -996,6 +1036,12 @@ impl TextShaper {
 						bound_styles.push(index);
 					}
 				}
+				if run.is_rtl() {
+					clusters[run_start..].reverse();
+					if needs_bounds {
+						bound_styles[run_start..].reverse();
+					}
+				}
 			}
 		}
 		if needs_bounds {
@@ -1015,6 +1061,8 @@ impl TextShaper {
 				c.background = backgrounds[&index];
 			}
 		}
+		layout.clear();
+		self.layout = layout;
 		clusters
 	}
 
@@ -1213,10 +1261,32 @@ impl TextShaper {
 
 	/// Advance width of a UI label at `size`.
 	pub fn text_width(&mut self, text: &str, size: f32) -> f32 {
-		self.shape(text, &[], size * self.appearance.size, true)
-			.iter()
-			.map(|c| c.width)
-			.sum()
+		if text.is_empty() {
+			return 0.;
+		}
+		let base = self.appearance.clone();
+		let (mut layout, _, _) =
+			self.build_layout(text, &[], size * base.size, &base);
+		// Keep `shape`'s ligature grouping and visual summation order.
+		let mut advances = Vec::new();
+		for line in layout.lines() {
+			for run in line.runs() {
+				let start = advances.len();
+				for c in run.clusters() {
+					if c.is_ligature_continuation() {
+						*advances.last_mut().unwrap() += c.advance();
+					} else {
+						advances.push(c.advance());
+					}
+				}
+				if run.is_rtl() {
+					advances[start..].reverse();
+				}
+			}
+		}
+		layout.clear();
+		self.layout = layout;
+		advances.into_iter().sum()
 	}
 
 	/// Shorten `text` to `max` width, keeping its start and end like a browser.

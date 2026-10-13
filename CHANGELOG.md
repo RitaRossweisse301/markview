@@ -31,6 +31,8 @@ at the same level, without `[brackets]`.
 
 ### Changed
 
+- Reduce shaping allocations by reusing layout storage and scanning inline spans once; measure label widths without emitting glyphs.
+- Upgrade Parley to 0.12, adapting font metrics, variation coordinates and cluster styles, preserving RTL ligatures and refreshing rendering baselines.
 - Share template, font and page configuration across reader, file and buffer exports, including CJK selection and numeric validation.
 - Split source parsing, semantic documents and layout into `markview-commonmark`, `markview-document` and `markview-layout`, preserving host scheduling and reader behavior.
 - Skip vertex emission during a glyph prewarm pass, which only prepares atlases for a frame it discards.
@@ -42,6 +44,7 @@ at the same level, without `[brackets]`.
 
 ### Fixed
 
+- Wait for completed layout updates when verifying worker document counts, allowing intermediate snapshots during slower test runs.
 - Keep export-panel size adjustments within the shared 1–200 px range, including sizes outside the former 10–40 px limits.
 - Keep a PNG export's page geometry and scale when export preferences change during the job.
 - Reject invalid explicit font files before replacing an export and use downloaded fonts in buffer exports by default.

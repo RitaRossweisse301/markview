@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 #[test]
 fn semantic_documents_layout_without_source_parsing() {
-	let source: Arc<str> = Arc::from("Read café 👋");
+	let source: Arc<str> = Arc::from("Read café 👋 after");
 	let kind = BlockKind::Paragraph(vec![Inline {
 		kind: InlineKind::Text(source.to_string()),
 		style: TextStyle {
@@ -45,6 +45,12 @@ fn semantic_documents_layout_without_source_parsing() {
 	let first = engine.layout(&document, &options);
 	assert_eq!(first.full_reading_text(), document.source.as_ref());
 	assert!(first.anchor_y("article").is_some());
+	let text = &first.blocks[0].layout.text[0];
+	assert_eq!(text.clusters.first().unwrap().range.start, 0);
+	assert_eq!(
+		text.clusters.last().unwrap().range.end,
+		document.source.len()
+	);
 	assert!(
 		first.blocks[0]
 			.layout

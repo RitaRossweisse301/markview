@@ -1,7 +1,7 @@
 //! Independent layout and decoration edges, measured relative to a baseline.
 use super::TextShaper;
 use crate::style::{TextAppearance, TextEdge, TextMetric};
-use parley::{FontData, RunMetrics};
+use parley::{FontData, FontMetrics};
 use skrifa::{
 	GlyphId, MetadataProvider,
 	instance::{NormalizedCoord, Size},
@@ -23,7 +23,7 @@ pub(super) fn blank(text: &str) -> bool {
 impl TextEdge {
 	pub(super) fn position(
 		self,
-		metrics: &RunMetrics,
+		metrics: &FontMetrics,
 		size: f32,
 		bounds: (f32, f32),
 		top: bool,

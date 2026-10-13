@@ -977,15 +977,19 @@ mod reflow_tests {
 				load_all_images: false,
 			})
 		};
+		let complete = |version| loop {
+			let update = rx.recv_timeout(Duration::from_secs(5)).unwrap();
+			if update.version == version
+				&& update.result.as_ref().unwrap().as_ref().unwrap().complete
+			{
+				break update;
+			}
+		};
 		submit(1, &first);
-		let counts = rx
-			.recv_timeout(Duration::from_secs(5))
-			.unwrap()
-			.counts
-			.expect("counts for the first document");
+		let counts = complete(1).counts.expect("counts for the first document");
 		assert_eq!(counts.words, 5);
 		submit(2, &second);
-		let update = rx.recv_timeout(Duration::from_secs(5)).unwrap();
+		let update = complete(2);
 		assert!(update.result.unwrap().is_ok());
 		assert_eq!(update.counts, Some(counts));
 	}

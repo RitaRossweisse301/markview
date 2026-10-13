@@ -351,6 +351,41 @@ new frame that renders the remote-image notice strip and the local-file
 confirmation in both themes. Raw reports are under
 `artifacts/security-hardening/` (ignored by Git).
 
+## Shaping with Parley 0.12
+
+The 2026-10-13 CPU comparison used Parley 0.12 in both builds, an Intel Core
+Ultra 5 125H, Linux x86_64, Rust 1.98.1, release mode and the `balanced` power profile.
+Five alternating baseline/candidate process pairs used pinned subset fonts,
+warm font caches and identical iteration counts. These medians measure one
+width, glyph-generation or full-layout call; they exclude parsing, GPU work and
+window startup.
+
+| Case | Before (µs) | After (µs) | Change |
+| --- | ---: | ---: | ---: |
+| Short label width | 8.02 | 6.29 | −21.6% |
+| Long Latin label width | 424.34 | 228.54 | −46.1% |
+| Mixed CJK/Latin label width | 314.90 | 234.63 | −25.5% |
+| Mixed CJK/Latin glyph generation | 400.56 | 375.77 | −6.2% |
+| Paragraph with many inline styles | 7882.04 | 6938.60 | −12.0% |
+
+Width measurement now sums cluster advances without allocating glyph records,
+while preserving ligature grouping and visual summation order. Font selection
+walks ordered inline spans once and reuses its word-part buffer. Parley layout
+storage is reused, with font references cleared after each call. Plain paragraph
+layout and Latin glyph generation improved only about 1–2% in this run.
+Three further alternating pairs recorded median process peak RSS of 15,848 →
+16,024 KiB (+1.1%); this small workload does not establish large-document memory
+behavior or cold-start gains.
+
+Reproduce the CPU measurement with:
+
+```sh
+cargo test --release -p markview-layout --locked --test shaping_performance -- --ignored --nocapture
+```
+
+The preserved executables, raw samples, binary hashes and memory measurements
+are under `artifacts/shaping-optimization/` (ignored by Git).
+
 ## What can change the result
 
 Color Emoji preserve their RGBA pixels through the image pipeline. The renderer

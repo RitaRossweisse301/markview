@@ -24,6 +24,67 @@ fn fonts() -> FontConfig {
 }
 
 #[test]
+fn width_measurements_match_drawn_advances_for_unicode_and_spacing() {
+	let mut shaper = TextShaper::with_fonts(fonts());
+	for spacing in [0., 0.04, -0.01] {
+		shaper.appearance.letter_spacing = spacing;
+		let appearance = shaper.appearance.clone();
+		for text in [
+			"",
+			"office fi  ",
+			"e\u{301} 👩‍💻 中文",
+			"\u{202e}if\u{202c}",
+			"ab\ncd  ",
+		] {
+			for size in [13., 18., 32.] {
+				let width = shaper.text_width(text, size);
+				let (_, drawn_width) = shaper.label_with(
+					text,
+					size,
+					0.,
+					0.,
+					&appearance,
+					Paint::Text,
+					None,
+				);
+				assert_eq!(
+					width, drawn_width,
+					"{text:?}, size={size}, spacing={spacing}"
+				);
+			}
+		}
+	}
+}
+
+#[test]
+fn many_inline_spans_preserve_font_selection_and_reading_text() {
+	let repetitions = 128;
+	let document =
+		markview_commonmark::parse("plain **bold** text ".repeat(repetitions));
+	let snapshot = LayoutEngine::new().layout(
+		&document,
+		&LayoutOptions {
+			fonts: fonts(),
+			..Default::default()
+		},
+	);
+	let bold = include_bytes!("fonts/NotoSerif-Bold-subset.otf").as_slice();
+	let bold_glyphs = snapshot
+		.blocks
+		.iter()
+		.flat_map(|block| &block.layout.draws)
+		.filter(
+			|draw| matches!(draw, Draw::Glyph(g) if g.font.data.data() == bold),
+		)
+		.count();
+	assert_eq!(bold_glyphs, 4 * repetitions);
+	assert_eq!(
+		snapshot.full_reading_text(),
+		"plain bold text ".repeat(repetitions).trim_end()
+	);
+}
+
+#[test]
 fn unavailable_weights_keep_the_covering_family_in_document_layout() {
 	let doc = markview_commonmark::parse("A");
 	let mut engine = LayoutEngine::new();

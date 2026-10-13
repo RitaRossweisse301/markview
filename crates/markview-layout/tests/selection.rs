@@ -142,6 +142,63 @@ fn a_partial_selection_marks_nothing_it_does_not_cover() {
 }
 
 #[test]
+fn combining_marks_keep_one_selection_cluster_across_inline_styles() {
+	for source in ["A e\u{301} Z", "A **e\u{301}** Z"] {
+		let snapshot = layout(source);
+		let placed = &snapshot.blocks[0];
+		let node = &placed.layout.text[0];
+		let cluster = node
+			.clusters
+			.iter()
+			.find(|c| c.range == (2..5))
+			.expect("the accent stays with its base letter");
+		for step in 0..=10 {
+			let hit = snapshot
+				.hit_test_text(
+					cluster.rect.x + cluster.rect.w * step as f32 / 10.,
+					placed.y + cluster.rect.y + cluster.rect.h * 0.5,
+					&Default::default(),
+					1,
+				)
+				.unwrap();
+			assert!(matches!(hit.offset, 2 | 5), "{source}: {hit:?}");
+		}
+		let mut selection = snapshot.select_all(1).unwrap();
+		selection.anchor.offset = 2;
+		selection.focus.offset = 5;
+		assert_eq!(snapshot.extract_text(selection, 1), "e\u{301}");
+		let rects = snapshot.selection_rects(selection, &Default::default(), 1);
+		assert_eq!(rects.len(), 1);
+		assert!((rects[0].w - cluster.rect.w).abs() < 0.01);
+	}
+}
+
+#[test]
+fn rtl_ligature_continuations_keep_their_text_and_advance() {
+	let snapshot = layout("\u{202e}if\u{202c}");
+	let node = &snapshot.blocks[0].layout.text[0];
+	let ligature = node
+		.clusters
+		.iter()
+		.find(|c| node.text.get(c.range.clone()) == Some("if"))
+		.expect("the pinned serif forms `fi` in visual order");
+	assert!(ligature.rtl);
+	assert!(ligature.rect.w > 0.);
+	let y = snapshot.blocks[0].y + ligature.rect.y + ligature.rect.h * 0.5;
+	for (fraction, offset) in [(0.1, 5), (0.5, 4), (0.9, 3)] {
+		let hit = snapshot
+			.hit_test_text(
+				ligature.rect.x + ligature.rect.w * fraction,
+				y,
+				&Default::default(),
+				1,
+			)
+			.unwrap();
+		assert_eq!(hit.offset, offset);
+	}
+}
+
+#[test]
 fn a_ligature_is_picked_apart_at_its_letters() {
 	let snapshot = layout("The file");
 	let node = &snapshot.blocks[0].layout.text[0];

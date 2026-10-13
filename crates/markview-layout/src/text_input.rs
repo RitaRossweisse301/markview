@@ -413,7 +413,11 @@ impl TextInput {
 					continue;
 				};
 				let run = glyphs.run();
-				let coords: Arc<[i16]> = run.normalized_coords().into();
+				let coords: Arc<[i16]> = run
+					.normalized_coords()
+					.iter()
+					.map(|c| c.to_bits())
+					.collect();
 				for g in glyphs.positioned_glyphs() {
 					text.push(Draw::Glyph(Glyph {
 						font: run.font().clone(),
