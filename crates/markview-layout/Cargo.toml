@@ -7,6 +7,7 @@ license.workspace = true
 publish = false
 
 [dependencies]
+markview-ui-core = { path = "../markview-ui-core" }
 markview-document = { path = "../markview-document" }
 regex.workspace = true
 regex-automata.workspace = true

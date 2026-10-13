@@ -411,10 +411,11 @@ fn viewer_captures_search_input_and_middle_clicks() {
 	button(&mut app, MouseButton::Left, ElementState::Pressed);
 	assert!(app.interaction.viewer.as_ref().unwrap().grab.is_some());
 	assert_ne!(
-		app.interaction.focus,
-		Some(crate::state::Command::FocusInput(
-			crate::state::TextField::Search
-		))
+		app.interaction.widgets.focus,
+		Some(
+			crate::state::Command::FocusInput(crate::state::TextField::Search)
+				.widget_id()
+		)
 	);
 	event(&mut app, WindowEvent::Ime(Ime::Commit("changed".into())));
 	assert_eq!(app.readers.session.search.input.text(), "query");

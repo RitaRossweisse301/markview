@@ -67,7 +67,7 @@ impl<P: super::SendEvent> App<P> {
 			"tab_style":format!("{:?}", self.preferences.values.tab_style),
 			"instance_listener":self.instance.is_some(),
 			"theme": self.preferences.values.theme, "font_size":self.preferences.values.font_size,
-			"font_catalog": self.font_panel.view().catalog.len(),
+			"font_catalog": self.preferences.fonts.view().catalog.len(),
 			"styles":self.preferences.style_entries.iter().map(|e|e.id.clone()).collect::<Vec<_>>(),
 			"font_revision":self.fonts_config.revision,
 			"font_families":markview_layout::fonts::families(&self.fonts_config,false).len(),

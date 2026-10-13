@@ -149,15 +149,9 @@ impl<P: super::SendEvent> App<P> {
 	) {
 		match event {
 			Event::NativeAssetsChanged => {
-				self.handle_user_event(
-					event_loop,
-					Event::Fonts(super::font_panel::Message::Settled(
-						Box::new(crate::fonts::Summary {
-							stored: 1,
-							..Default::default()
-						}),
-					)),
-				);
+				self.register_fonts(1);
+				self.settings_resources.invalidate();
+				self.refresh_settings_resources(false);
 				self.handle_user_event(event_loop, Event::StylesChanged);
 			}
 			Event::SystemThemeChanged(theme) => {
@@ -412,23 +406,7 @@ impl<P: super::SendEvent> App<P> {
 			Event::Exported(outcome) => {
 				self.export_finished(*outcome);
 			}
-			Event::Fonts(message) => {
-				match message {
-					super::font_panel::Message::Progress(progress) => {
-						self.font_panel.progress(*progress)
-					}
-					super::font_panel::Message::Settled(summary) => {
-						self.font_panel.settled(&summary);
-						self.register_fonts(summary.stored);
-						self.settings_resources.invalidate();
-						self.refresh_settings_resources(false);
-						if let Some((_, reason)) = summary.failed.first() {
-							self.notify(reason, true, 6);
-						}
-					}
-				}
-				self.redraw();
-			}
+			Event::Fonts(message) => self.font_message(message),
 			Event::DeviceLost => {
 				if let Err(e) = self.gpu() {
 					self.fatal = Some(

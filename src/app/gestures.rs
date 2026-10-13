@@ -21,6 +21,7 @@ pub(super) enum TouchAction {
 enum Tap {
 	Caption(super::frame::Caption),
 	Command(Command),
+	Widget(markview_ui_core::WidgetId),
 	Link(String),
 	ClearSelection,
 	/// A tap the open option list owns but that lands on none of its options:
@@ -84,7 +85,7 @@ impl<P: super::SendEvent> App<P> {
 	pub(super) fn cancel_gestures(&mut self) {
 		self.frame.pressed = None;
 		if !self.gestures.gesture.contacts.is_empty() {
-			self.interaction.pressed = None;
+			self.interaction.widgets.captured = None;
 		}
 		self.gestures.gesture = Recognizer::default();
 		self.gestures.motion = None;
@@ -107,40 +108,19 @@ impl<P: super::SendEvent> App<P> {
 		// below stay out of reach, so reaching for a covered setting cannot
 		// activate it and the list's padding cannot commit a nearby option.
 		if self.interaction.dropdown.is_some() {
-			let (x, y) = self.interaction.cursor;
-			let hit = self
-				.dropdown_buttons()
-				.into_iter()
-				.find(|button| button.rect.contains(x, y));
-			return Some(hit.map_or(Tap::DismissDropdown, |button| {
-				Tap::Command(button.action)
-			}));
+			let buttons = self.dropdown_buttons();
+			let layout = super::widgets::layout(&buttons);
+			return Some(
+				layout
+					.hit(self.interaction.cursor)
+					.filter(|w| w.enabled)
+					.map_or(Tap::DismissDropdown, |w| Tap::Widget(w.id)),
+			);
 		}
-		let (x, y) = self.interaction.cursor;
 		let buttons = self.buttons();
-		let hit = buttons
-			.iter()
-			.find(|button| button.rect.contains(x, y))
-			.or_else(|| {
-				buttons
-					.iter()
-					.filter(|button| {
-						let rect = button.rect;
-						(x - rect.x - rect.w / 2.0).abs()
-							<= rect.w.max(44.0) / 2.0
-							&& (y - rect.y - rect.h / 2.0).abs()
-								<= rect.h.max(44.0) / 2.0
-					})
-					.min_by(|a, b| {
-						let distance = |rect: markview_layout::scene::Rect| {
-							(x - (rect.x + rect.w / 2.0))
-								.hypot(y - (rect.y + rect.h / 2.0))
-						};
-						distance(a.rect).total_cmp(&distance(b.rect))
-					})
-			});
-		if let Some(button) = hit {
-			return Some(Tap::Command(button.action));
+		let layout = super::widgets::layout(&buttons);
+		if let Some(widget) = layout.hit_touch(self.interaction.cursor, 44.0) {
+			return widget.enabled.then_some(Tap::Widget(widget.id));
 		}
 
 		if self.interaction.modal.is_some() {
@@ -246,7 +226,7 @@ impl<P: super::SendEvent> App<P> {
 			self.interaction.drag_at = None;
 			self.interaction.scrollbar = None;
 			self.interaction.panel_grab = None;
-			self.interaction.focus_visible = false;
+			self.interaction.widgets.focus_visible = false;
 			self.interaction.reset_clicks();
 			self.readers.session.select_all_pending = false;
 			let capture = Capture {
@@ -276,8 +256,9 @@ impl<P: super::SendEvent> App<P> {
 				Some(Tap::Caption(caption)) => Some(*caption),
 				_ => None,
 			};
-			self.interaction.pressed = match &capture.tap {
-				Some(Tap::Command(command)) => Some(*command),
+			self.interaction.widgets.captured = match &capture.tap {
+				Some(Tap::Widget(id)) => Some(*id),
+				Some(Tap::Command(command)) => Some(command.widget_id()),
 				_ => None,
 			};
 			self.gestures.motion =
@@ -285,13 +266,13 @@ impl<P: super::SendEvent> App<P> {
 			self.gestures.gesture.begin(id, point, capture);
 			if self.gestures.gesture.drag.is_none() {
 				self.gestures.motion = None;
-				self.interaction.pressed = None;
+				self.interaction.widgets.captured = None;
 				self.frame.pressed = None;
 			}
 		} else {
 			match self.gestures.gesture.update(id, touch.phase, point) {
 				Some(Gesture::Tap(capture)) => {
-					self.interaction.pressed = None;
+					self.interaction.widgets.captured = None;
 					if capture.tap == self.touch_tap() {
 						match capture.tap {
 							Some(Tap::Caption(caption)) => {
@@ -299,6 +280,15 @@ impl<P: super::SendEvent> App<P> {
 									Some(TouchAction::Caption(caption));
 							}
 							Some(Tap::Command(command)) => self.action(command),
+							Some(Tap::Widget(id)) => {
+								let buttons = self.buttons();
+								if let Some(button) = buttons
+									.iter()
+									.find(|b| b.id == id && b.enabled)
+								{
+									self.action(button.action);
+								}
+							}
 							Some(Tap::Link(link)) => {
 								self.open_link(&link, false)
 							}
@@ -314,7 +304,7 @@ impl<P: super::SendEvent> App<P> {
 					}
 				}
 				Some(Gesture::Pan(capture, delta)) => {
-					self.interaction.pressed = None;
+					self.interaction.widgets.captured = None;
 					self.gestures.swipe_distance += delta.0;
 					if let Some((_, motion)) = &mut self.gestures.motion {
 						motion.sample(delta, Instant::now());
@@ -341,7 +331,7 @@ impl<P: super::SendEvent> App<P> {
 			self.gestures.trackpad = None;
 		}
 		if self.gestures.gesture.contacts.is_empty() {
-			self.interaction.pressed = None;
+			self.interaction.widgets.captured = None;
 			self.interaction.cursor = (f32::NEG_INFINITY, f32::NEG_INFINITY);
 		}
 		self.refresh_hover();

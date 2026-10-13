@@ -96,10 +96,12 @@ fn tabbing_marks_the_row_keyboard_focus_lands_on() {
 		Command::OutlineGoto(1),
 		Command::OutlineGoto(2),
 	];
-	interaction.focus = Some(Command::Outline);
-	interaction.tab_focus(&buttons, false);
+	interaction.widgets.focus = Some(Command::Outline.widget_id());
+	interaction
+		.tab_focus(&crate::app::widgets::command_layout(&buttons), false);
 	assert_eq!(
-		interaction.tab_focus(&buttons, false),
+		interaction
+			.tab_focus(&crate::app::widgets::command_layout(&buttons), false),
 		Some(Command::OutlineGoto(1))
 	);
 	// The frame marks exactly the row that took the focus.
@@ -325,20 +327,31 @@ fn collapsed_outline_keeps_drawing_hits_and_navigation_in_sync() {
 	);
 	assert!(buttons[0].rect.x + buttons[0].rect.w <= buttons[1].rect.x);
 	let mut interaction = InteractionState {
+		widgets: markview_ui_core::Interaction {
+			focus: Some(Command::OutlineGoto(2).widget_id()),
+			..Default::default()
+		},
 		outline_open: true,
 		outline_selection: Some(2),
-		focus: Some(Command::OutlineGoto(2)),
 		outline_scroll: 900.0,
 		..Default::default()
 	};
 	let rows = tree.rows(&entries);
 	normalize(drawer, &rows, &mut interaction);
 	assert_eq!(interaction.outline_selection, Some(1));
-	assert_eq!(interaction.focus, Some(Command::OutlineGoto(1)));
+	assert_eq!(
+		interaction.widgets.focus,
+		Some(Command::OutlineGoto(1).widget_id())
+	);
 	assert_eq!(interaction.outline_scroll, 0.0);
 	assert!(interaction.move_outline(1, &rows));
 	assert_eq!(
-		interaction.enter_action(buttons.iter().map(|b| b.action)),
+		interaction.enter_action(
+			buttons
+				.iter()
+				.filter(|b| b.enabled)
+				.map(|b| (b.id, b.action))
+		),
 		Some(Command::OutlineGoto(3))
 	);
 	assert!(interaction.move_outline(-1, &rows));
@@ -395,9 +408,12 @@ fn bulk_controls_draw_in_the_header_and_collapse_every_level() {
 		drawer.x + drawer.w - INSET
 	);
 	let mut interaction = InteractionState {
+		widgets: markview_ui_core::Interaction {
+			focus: Some(Command::OutlineGoto(2).widget_id()),
+			..Default::default()
+		},
 		outline_open: true,
 		outline_selection: Some(2),
-		focus: Some(Command::OutlineGoto(2)),
 		outline_scroll: 900.0,
 		..Default::default()
 	};
@@ -405,7 +421,10 @@ fn bulk_controls_draw_in_the_header_and_collapse_every_level() {
 	assert_eq!(tree.rows(&entries), [0, 4]);
 	normalize(drawer, &tree.rows(&entries), &mut interaction);
 	assert_eq!(interaction.outline_selection, Some(0));
-	assert_eq!(interaction.focus, Some(Command::OutlineGoto(0)));
+	assert_eq!(
+		interaction.widgets.focus,
+		Some(Command::OutlineGoto(0).widget_id())
+	);
 	assert_eq!(interaction.outline_scroll, 0.0);
 	// Reopening a parent leaves its nested sections collapsed.
 	tree.toggle(0);
@@ -436,9 +455,14 @@ fn bulk_controls_draw_in_the_header_and_collapse_every_level() {
 		assert!(button.rect.contains(x + size, y + size));
 		assert!(button.rect.y >= drawer.y);
 		assert!(button.rect.y + button.rect.h <= viewport(drawer).y);
-		interaction.focus = Some(button.action);
+		interaction.widgets.focus = Some(button.action.widget_id());
 		assert_eq!(
-			interaction.enter_action(controls.iter().map(|b| b.action)),
+			interaction.enter_action(
+				controls
+					.iter()
+					.filter(|b| b.enabled)
+					.map(|b| (b.id, b.action))
+			),
 			Some(button.action)
 		);
 	}

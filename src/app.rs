@@ -6,7 +6,9 @@ mod dm;
 mod document;
 mod dropdown;
 mod export;
+mod export_panel;
 pub(crate) mod font_panel;
+mod font_service;
 mod fonts_command;
 pub(crate) mod frame;
 mod gestures;
@@ -22,7 +24,9 @@ pub(crate) mod search;
 mod security;
 pub(crate) mod session;
 mod settings_load;
+mod settings_panel;
 mod single_instance;
+mod style_edit;
 mod surface;
 mod tab_metrics;
 mod tab_navigation;
@@ -30,8 +34,10 @@ mod tab_strip;
 mod tabs;
 mod text_input;
 mod ui;
+mod ui_model;
 mod viewport;
 mod web_page;
+pub(crate) mod widgets;
 mod window;
 use crate::cli::LaunchOptions;
 use crate::state::{Command, InteractionState};
@@ -177,6 +183,8 @@ impl From<Arc<str>> for Label {
 
 #[derive(Clone)]
 struct Button {
+	id: markview_ui_core::WidgetId,
+	clip: Option<Rect>,
 	kind: chrome::components::ButtonKind,
 	enabled: bool,
 	rect: Rect,
@@ -252,7 +260,7 @@ struct App<P = EventLoopProxy<Event>> {
 	/// The window's Direct Manipulation viewport, when the desktop and the
 	/// initialization both offered one; `None` keeps the wheel paths.
 	dm: Option<dm::DirectManipulation>,
-	font_panel: font_panel::FontPanel,
+	font_downloads: font_service::Downloads,
 	services: Arc<crate::services::Services>,
 	clipboard: markview_platform::Clipboard,
 	text_input: text_input::InputState,
@@ -402,9 +410,7 @@ impl<P: SendEvent> App<P> {
 			settings_resources,
 			wheel_notch: markview_platform::wheel_notch(),
 			dm: None,
-			font_panel: font_panel::FontPanel::with_services(
-				services.handle.clone(),
-			),
+			font_downloads: Default::default(),
 			services,
 			clipboard: Default::default(),
 			text_input: Default::default(),

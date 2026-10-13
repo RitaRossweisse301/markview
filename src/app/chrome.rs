@@ -28,7 +28,9 @@ use crate::{
 	},
 };
 pub(super) use components::panel_rect;
-use controls::{draw_controls, toolbar_controls_at};
+#[cfg(test)]
+use controls::draw_controls;
+use controls::toolbar_controls_at;
 use fonts::draw_fonts;
 use footer::draw_footer;
 use markview_layout::{
@@ -74,6 +76,8 @@ fn banner_buttons(
 	let y = TOP + (BANNER - 22.0) / 2.0;
 	vec![
 		Button {
+			id: crate::app::widgets::id(Command::RemoteDismiss),
+			clip: None,
 			label: (lang.notice_dismiss()).into(),
 			icon: None,
 			marker: None,
@@ -89,6 +93,8 @@ fn banner_buttons(
 			},
 		},
 		Button {
+			id: crate::app::widgets::id(Command::RemoteLoadAll),
+			clip: None,
 			label: (lang.notice_load_all()).into(),
 			icon: None,
 			marker: None,
@@ -315,11 +321,19 @@ impl<'a> Chrome<'a> {
 				self.backend,
 				self.tab_strip.phone,
 			)
+			.without_header()
 			.preview(self.interaction.settings_preview)
 		})
 	}
 
 	pub(super) fn buttons(&mut self) -> Vec<Button> {
+		let form = self.form();
+		self.buttons_for(form.as_ref())
+	}
+	pub(super) fn buttons_for(
+		&mut self,
+		form: Option<&components::Form>,
+	) -> Vec<Button> {
 		let (width, height, _) = (self.width, self.height, 1.0);
 		let mut buttons = if self.interaction.modal.is_some() {
 			modal::modal_buttons(
@@ -360,15 +374,7 @@ impl<'a> Chrome<'a> {
 		} else if self.interaction.panel_open()
 			&& self.interaction.export_open()
 		{
-			export::form(
-				self.ui,
-				self.export,
-				self.interaction.export_scroll,
-				width,
-				height,
-				self.settings.lang(),
-			)
-			.visible_buttons()
+			form.expect("export form").visible_buttons()
 		} else if self.interaction.panel_open() && self.interaction.fonts_open()
 		{
 			fonts::buttons(
@@ -393,19 +399,7 @@ impl<'a> Chrome<'a> {
 				self.settings.lang(),
 			)
 		} else if self.interaction.panel_open() {
-			let form = controls::settings_form(
-				self.ui,
-				self.settings,
-				self.interaction,
-				width,
-				height,
-				self.backend,
-				self.tab_strip.phone,
-			)
-			.without_header()
-			.preview(self.interaction.settings_preview)
-			.visible_buttons();
-			let mut buttons = form;
+			let mut buttons = form.expect("settings form").visible_buttons();
 			buttons.extend(components::settings_header_controls(
 				components::panel_rect(width, height),
 				if self.interaction.panel
@@ -432,7 +426,7 @@ impl<'a> Chrome<'a> {
 			if self.session.path.is_none()
 				&& self.session.snapshot.blocks.is_empty()
 			{
-				// One `Open` command owns keyboard focus; both regions answer the pointer.
+				// Each `Open` control has its own identity and geometry.
 				buttons.extend(empty::buttons(
 					self.ui,
 					width,
@@ -482,7 +476,15 @@ impl<'a> Chrome<'a> {
 		}
 		buttons
 	}
+	#[cfg(test)]
 	pub(super) fn overlay(&mut self) -> Vec<Draw> {
+		let form = self.form();
+		self.overlay_with_form(form.as_ref())
+	}
+	pub(super) fn overlay_with_form(
+		&mut self,
+		form: Option<&components::Form>,
+	) -> Vec<Draw> {
 		let (width, height, _) = (self.width, self.height, 1.0);
 		let mut out = vec![
 			Draw::Rect(
@@ -715,6 +717,7 @@ impl<'a> Chrome<'a> {
 			));
 		} else if self.interaction.panel_open()
 			&& self.interaction.export_open()
+			&& self.interaction.modal.is_none()
 		{
 			let document = self
 				.session
@@ -723,14 +726,14 @@ impl<'a> Chrome<'a> {
 				.and_then(|path| path.file_name())
 				.map(|name| name.to_string_lossy().into_owned())
 				.unwrap_or_else(|| self.settings.lang().tabs_untitled().into());
-			out.extend(export::draw_export(
+			out.extend(export::draw_export_form(
 				self.ui,
 				self.export,
 				self.interaction,
-				&document,
-				self.watching,
+				(&document, self.watching),
 				(width, height),
 				self.settings.lang(),
+				form.expect("export form"),
 			));
 		} else if self.interaction.panel_open() && self.interaction.fonts_open()
 		{
@@ -761,15 +764,15 @@ impl<'a> Chrome<'a> {
 			));
 		} else if self.interaction.panel_open()
 			&& self.interaction.panel != crate::state::PanelPage::Tabs
+			&& self.interaction.modal.is_none()
 		{
-			out.extend(draw_controls(
+			out.extend(controls::draw_controls_form(
 				self.ui,
 				self.settings,
 				self.interaction,
 				(width, height),
-				self.backend,
-				self.tab_strip.phone,
 				self.restart_pending,
+				form.expect("settings form"),
 			));
 		}
 		self.draw_resource_feedback(&mut out);

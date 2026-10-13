@@ -2582,6 +2582,7 @@ dependencies = [
  "markview-platform",
  "markview-render",
  "markview-selection",
+ "markview-ui-core",
  "mermaid-rs-renderer",
  "notify",
  "parley",
@@ -2657,6 +2658,7 @@ dependencies = [
  "markview-commonmark",
  "markview-document",
  "markview-layout",
+ "markview-ui-core",
  "memmap2",
  "parley",
  "ratex-katex-fonts",
@@ -2763,6 +2765,10 @@ dependencies = [
  "markview-layout",
  "web-time",
 ]
+
+[[package]]
+name = "markview-ui-core"
+version = "0.3.0"
 
 [[package]]
 name = "markview-web"

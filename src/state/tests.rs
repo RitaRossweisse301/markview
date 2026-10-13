@@ -758,32 +758,51 @@ fn enter_follows_the_outline_selection_after_a_click_and_a_step() {
 	assert!(interaction.toggle_outline(3, Some(0)));
 	// A press on the first row leaves button focus there, as the pointer path
 	// does, and Enter activates it.
-	interaction.focus = Some(Command::OutlineGoto(0));
+	interaction.widgets.focus = Some(Command::OutlineGoto(0).widget_id());
 	let visible = || [Command::OutlineGoto(0), Command::OutlineGoto(1)];
 	assert_eq!(
-		interaction.enter_action(visible().into_iter()),
+		interaction.enter_action(
+			visible()
+				.into_iter()
+				.map(|action| (action.widget_id(), action))
+		),
 		Some(Command::OutlineGoto(0))
 	);
 	// Down moves the visible selection, and button focus follows it, so Enter
 	// no longer jumps back to the row that was clicked.
 	assert!(interaction.move_outline(1, &[0, 1, 2]));
 	assert_eq!(interaction.outline_selection, Some(1));
-	assert_eq!(interaction.focus, Some(Command::OutlineGoto(1)));
 	assert_eq!(
-		interaction.enter_action(visible().into_iter()),
+		interaction.widgets.focus,
+		Some(Command::OutlineGoto(1).widget_id())
+	);
+	assert_eq!(
+		interaction.enter_action(
+			visible()
+				.into_iter()
+				.map(|action| (action.widget_id(), action))
+		),
 		Some(Command::OutlineGoto(1))
 	);
 	// With no button focus, the selection is still what Enter activates.
-	interaction.focus = None;
+	interaction.widgets.focus = None;
 	assert_eq!(
-		interaction.enter_action(visible().into_iter()),
+		interaction.enter_action(
+			visible()
+				.into_iter()
+				.map(|action| (action.widget_id(), action))
+		),
 		Some(Command::OutlineGoto(1))
 	);
 	// With nothing to select, the drawer leaves the focused button alone.
 	interaction.outline_selection = None;
-	interaction.focus = Some(Command::Outline);
+	interaction.widgets.focus = Some(Command::Outline.widget_id());
 	assert_eq!(
-		interaction.enter_action([Command::Outline].into_iter()),
+		interaction.enter_action(
+			[Command::Outline]
+				.into_iter()
+				.map(|action| (action.widget_id(), action))
+		),
 		Some(Command::Outline)
 	);
 }
@@ -799,36 +818,42 @@ fn tabbing_through_the_drawer_marks_the_row_focus_lands_on() {
 		Command::OutlineGoto(2),
 	];
 	// Tab from the toolbar toggle lands on the first row and marks it.
-	interaction.focus = Some(Command::Outline);
+	interaction.widgets.focus = Some(Command::Outline.widget_id());
 	assert_eq!(
-		interaction.tab_focus(&buttons, false),
+		interaction
+			.tab_focus(&crate::app::widgets::command_layout(&buttons), false),
 		Some(Command::OutlineGoto(0))
 	);
 	assert_eq!(interaction.outline_selection, Some(0));
 	// Tabbing onward moves the visible selection with the focused row.
 	assert_eq!(
-		interaction.tab_focus(&buttons, false),
+		interaction
+			.tab_focus(&crate::app::widgets::command_layout(&buttons), false),
 		Some(Command::OutlineGoto(1))
 	);
 	assert_eq!(interaction.outline_selection, Some(1));
 	assert_eq!(
-		interaction.tab_focus(&buttons, false),
+		interaction
+			.tab_focus(&crate::app::widgets::command_layout(&buttons), false),
 		Some(Command::OutlineGoto(2))
 	);
 	assert_eq!(interaction.outline_selection, Some(2));
 	// Shift+Tab walks back over the same rows.
 	assert_eq!(
-		interaction.tab_focus(&buttons, true),
+		interaction
+			.tab_focus(&crate::app::widgets::command_layout(&buttons), true),
 		Some(Command::OutlineGoto(1))
 	);
 	assert_eq!(interaction.outline_selection, Some(1));
 	// Tabbing onto a toolbar button leaves the drawer's selection where it is.
 	assert_eq!(
-		interaction.tab_focus(&buttons, true),
+		interaction
+			.tab_focus(&crate::app::widgets::command_layout(&buttons), true),
 		Some(Command::OutlineGoto(0))
 	);
 	assert_eq!(
-		interaction.tab_focus(&buttons, true),
+		interaction
+			.tab_focus(&crate::app::widgets::command_layout(&buttons), true),
 		Some(Command::Outline)
 	);
 	assert_eq!(interaction.outline_selection, Some(0));
@@ -840,11 +865,15 @@ fn a_panel_or_a_confirmation_stops_enter_from_reaching_the_outline() {
 	assert!(interaction.toggle_outline(3, Some(2)));
 	// Ctrl+T opens Styles and clears button focus, leaving the selection
 	// behind the panel intact.
-	interaction.focus = None;
+	interaction.widgets.focus = None;
 	let visible = || [Command::Styles, Command::Settings];
 	// With only the drawer open, Enter still jumps to its selection.
 	assert_eq!(
-		interaction.enter_action(visible().into_iter()),
+		interaction.enter_action(
+			visible()
+				.into_iter()
+				.map(|action| (action.widget_id(), action))
+		),
 		Some(Command::OutlineGoto(2))
 	);
 	// A panel owns input: Enter without a focused panel button does nothing
@@ -853,26 +882,48 @@ fn a_panel_or_a_confirmation_stops_enter_from_reaching_the_outline() {
 		crate::state::PanelTab::Generic,
 	));
 	assert!(!interaction.outline_owns_input());
-	assert_eq!(interaction.enter_action(visible().into_iter()), None);
-	// A visible panel button still answers Enter while the panel is open.
-	interaction.focus = Some(Command::Settings);
 	assert_eq!(
-		interaction.enter_action(visible().into_iter()),
+		interaction.enter_action(
+			visible()
+				.into_iter()
+				.map(|action| (action.widget_id(), action))
+		),
+		None
+	);
+	// A visible panel button still answers Enter while the panel is open.
+	interaction.widgets.focus = Some(Command::Settings.widget_id());
+	assert_eq!(
+		interaction.enter_action(
+			visible()
+				.into_iter()
+				.map(|action| (action.widget_id(), action))
+		),
 		Some(Command::Settings)
 	);
 	// A confirmation owns input in the same way.
-	interaction.focus = None;
+	interaction.widgets.focus = None;
 	interaction.show_panel(crate::state::PanelPage::Closed);
 	interaction.modal = Some(Modal::OpenLocal {
 		path: "local.bin".into(),
 		dir: ".".into(),
 		document_dir: None,
 	});
-	assert_eq!(interaction.enter_action(visible().into_iter()), None);
+	assert_eq!(
+		interaction.enter_action(
+			visible()
+				.into_iter()
+				.map(|action| (action.widget_id(), action))
+		),
+		None
+	);
 	// With both gone, Enter reaches the drawer again.
 	interaction.modal = None;
 	assert_eq!(
-		interaction.enter_action(visible().into_iter()),
+		interaction.enter_action(
+			visible()
+				.into_iter()
+				.map(|action| (action.widget_id(), action))
+		),
 		Some(Command::OutlineGoto(2))
 	);
 }
@@ -927,22 +978,6 @@ fn a_heading_nested_in_a_container_is_part_of_the_outline() {
 		.map(|entry| (entry.text.as_str(), entry.level))
 		.collect();
 	assert_eq!(entries, [("Listed", 3), ("Quoted", 2)]);
-}
-
-#[test]
-fn buttons_activate_once_on_matching_release_and_cancel_outside() {
-	for hovered in [Some(Command::Hyphens), Some(Command::CodeWrap), None] {
-		let mut interaction = InteractionState {
-			pressed: Some(Command::Hyphens),
-			..Default::default()
-		};
-		assert_eq!(
-			interaction.release_button(hovered),
-			(hovered == Some(Command::Hyphens)).then_some(Command::Hyphens)
-		);
-		assert!(interaction.pressed.is_none());
-		assert_eq!(interaction.release_button(Some(Command::Hyphens)), None);
-	}
 }
 
 #[test]
@@ -1534,8 +1569,8 @@ fn panel_navigation_preserves_parent_scroll_and_resets_new_visits() {
 	};
 	interaction.toggle_settings();
 	assert_eq!(
-		interaction.focus,
-		Some(Command::SettingsTab(PanelTab::Generic))
+		interaction.widgets.focus,
+		Some(Command::SettingsTab(PanelTab::Generic).widget_id())
 	);
 	interaction.settings_scroll = 120.0;
 	interaction.settings_preview = true;
@@ -1562,7 +1597,10 @@ fn panel_navigation_preserves_parent_scroll_and_resets_new_visits() {
 	interaction.toggle_export();
 	interaction.toggle_export();
 	assert_eq!(interaction.export_scroll, 0.0);
-	assert_eq!(interaction.focus, Some(Command::ExportRun));
+	assert_eq!(
+		interaction.widgets.focus,
+		Some(Command::ExportRun.widget_id())
+	);
 }
 
 #[test]
@@ -1576,15 +1614,18 @@ fn every_panel_transition_clears_transient_input() {
 		PanelPage::ExportStyles,
 	] {
 		let mut interaction = InteractionState {
-			focus: Some(Command::Larger),
-			pressed: Some(Command::Larger),
+			widgets: markview_ui_core::Interaction {
+				focus: Some(Command::Larger.widget_id()),
+				captured: Some(Command::Larger.widget_id()),
+				..Default::default()
+			},
 			panel_grab: Some(10.0),
 			drag_at: Some(Instant::now()),
 			..Default::default()
 		};
 		interaction.show_panel(page);
-		assert_eq!(interaction.focus, None);
-		assert_eq!(interaction.pressed, None);
+		assert_eq!(interaction.widgets.focus, None);
+		assert_eq!(interaction.widgets.captured, None);
 		assert_eq!(interaction.panel_grab, None);
 		assert_eq!(interaction.drag_at, None);
 	}

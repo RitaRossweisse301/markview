@@ -214,12 +214,18 @@ pub(in crate::app) fn normalize(
 		})
 		.last()
 		.or_else(|| rows.first().copied());
-	if let Some(Command::OutlineGoto(index) | Command::OutlineToggle(index)) =
-		interaction.focus
-		&& !rows.contains(&index)
-	{
-		interaction.focus =
-			interaction.outline_selection.map(Command::OutlineGoto);
+	if interaction.widgets.focus.is_some_and(|id| {
+		(id.scope == Command::OutlineGoto(0).widget_id().scope
+			|| id.scope == Command::OutlineToggle(0).widget_id().scope)
+			&& !rows.iter().any(|index| {
+				id == Command::OutlineGoto(*index).widget_id()
+					|| id == Command::OutlineToggle(*index).widget_id()
+			})
+	}) {
+		interaction.widgets.focus = interaction
+			.outline_selection
+			.map(Command::OutlineGoto)
+			.map(Command::widget_id);
 	}
 }
 
@@ -295,8 +301,9 @@ pub(super) fn draw(
 		let rect = row_rect(list, row, interaction.outline_scroll);
 		let entry = &entries[index];
 		let hovered = rect.contains(interaction.cursor.0, interaction.cursor.1);
-		let pressed =
-			hovered && interaction.pressed == Some(Command::OutlineGoto(index));
+		let pressed = hovered
+			&& interaction.widgets.captured
+				== Some(Command::OutlineGoto(index).widget_id());
 		let active = current == Some(index);
 		if active {
 			body.push(Draw::Rect(

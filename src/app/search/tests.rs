@@ -125,8 +125,8 @@ fn slash_opens_empty_search_without_using_selection_or_previous_results() {
 	assert!(h.app.readers.session.search.open);
 	assert!(h.app.readers.session.search.input.text().is_empty());
 	assert_eq!(
-		h.app.interaction.focus,
-		Some(Command::FocusInput(TextField::Search))
+		h.app.interaction.widgets.focus,
+		Some(Command::FocusInput(TextField::Search).widget_id())
 	);
 	for already_open in [false, true] {
 		h.query("needle");
@@ -218,8 +218,8 @@ fn opening_search_uses_document_selection_and_submits_it() {
 		assert_eq!(search.matches.len(), 1);
 		assert_eq!(h.app.interaction.selection, Some(selection));
 		assert_eq!(
-			h.app.interaction.focus,
-			Some(Command::FocusInput(TextField::Search))
+			h.app.interaction.widgets.focus,
+			Some(Command::FocusInput(TextField::Search).widget_id())
 		);
 		h.app.interaction.selection = None;
 	}
@@ -471,8 +471,8 @@ fn search_state_belongs_to_each_tab_and_panels_preserve_query() {
 	h.app.open_search();
 	assert!(!h.app.interaction.panel_open());
 	assert_eq!(
-		h.app.interaction.focus,
-		Some(Command::FocusInput(TextField::Search))
+		h.app.interaction.widgets.focus,
+		Some(Command::FocusInput(TextField::Search).widget_id())
 	);
 	h.app.action(Command::Export);
 	assert!(!h.app.readers.session.search.open);
@@ -494,7 +494,7 @@ fn document_switches_close_search_and_keep_each_query() {
 	h.app.open(one.clone());
 	assert!(!h.app.readers.session.search.open);
 	assert_eq!(h.app.readers.session.search.input.text(), "needle");
-	assert!(h.app.interaction.focus.is_none());
+	assert!(h.app.interaction.widgets.focus.is_none());
 	assert!(h.app.draw_search_highlights().is_empty());
 	h.app.open_search();
 	h.settle();
@@ -614,7 +614,7 @@ fn search_states_match_rendering_baselines() -> anyhow::Result<()> {
 			.snapshot
 			.search_selection(&h.app.readers.session.search.matches[1], 1);
 		h.app.interaction.selection = selection;
-		h.app.interaction.focus = None;
+		h.app.interaction.widgets.focus = None;
 		let overlay = h.app.overlay();
 		let session = &h.app.readers.session;
 		let view = View {

@@ -30,7 +30,8 @@ fn app() -> App<Proxy> {
 	);
 	app.ui = crate::test_support::shaper();
 	app.interaction.show_panel(PanelPage::Export);
-	app.interaction.focus = Some(Command::FocusInput(TextField::ExportTitle));
+	app.interaction.widgets.focus =
+		Some(Command::FocusInput(TextField::ExportTitle).widget_id());
 	app.reveal_panel_focus();
 	app.sync_input();
 	app
@@ -104,8 +105,8 @@ fn form_focus_routes_typing_ime_and_tab_without_document_shortcuts() {
 	app.key_pressed(&Key::Named(NamedKey::Tab));
 	app.sync_input();
 	assert_eq!(
-		app.interaction.focus,
-		Some(actions[(at + 1) % actions.len()].action)
+		app.interaction.widgets.focus,
+		Some(actions[(at + 1) % actions.len()].action.widget_id())
 	);
 	assert_eq!(app.text_input.focused, None);
 	app.interaction.modifiers = ModifiersState::SHIFT;

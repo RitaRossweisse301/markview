@@ -1,6 +1,6 @@
 //! Commands, selection gestures and clipboard actions.
 use crate::cli::Mode;
-use crate::settings::{ReaderSettings, Setting};
+use crate::settings::Setting;
 use crate::state::{Command, Modal, PanelPage, ScrollbarAxis, ScrollbarDrag};
 use markview_layout::text::TextPosition;
 use std::time::{Duration, Instant};
@@ -38,7 +38,8 @@ impl<P: super::SendEvent> App<P> {
 			return;
 		}
 		if let Command::FocusInput(id) = action {
-			self.interaction.focus = Some(Command::FocusInput(id));
+			self.interaction.widgets.focus =
+				Some(Command::FocusInput(id).widget_id());
 			self.sync_input();
 			self.redraw();
 			return;
@@ -57,8 +58,8 @@ impl<P: super::SendEvent> App<P> {
 		// Search navigation keeps the IME open while moving between results.
 		if !matches!(action, Command::SearchNext | Command::SearchPrevious) {
 			self.blur_input();
-			if matches!(self.interaction.focus, Some(Command::FocusInput(_))) {
-				self.interaction.focus = None;
+			if self.focused_input().is_some() {
+				self.interaction.widgets.focus = None;
 			}
 		}
 
@@ -67,7 +68,7 @@ impl<P: super::SendEvent> App<P> {
 		// gesture is abandoned with the reader's own motion.
 		self.abandon_dm();
 		// Export-panel changes own their settings and never reflow the reader.
-		if self.export_command(action) {
+		if self.page_command(action) {
 			return;
 		}
 		match action {
@@ -77,22 +78,20 @@ impl<P: super::SendEvent> App<P> {
 					self.open_web_page(url);
 					self.url_input.set_text(&mut self.ui, "");
 				}
-				return;
 			}
 			Command::SearchOpen => {
 				self.open_new_search();
-				return;
 			}
 			Command::SearchClose => {
 				self.close_search();
-				return;
 			}
 			Command::SearchNext | Command::SearchPrevious => {
 				self.navigate_search(action == Command::SearchPrevious);
-				self.interaction.focus =
-					Some(Command::FocusInput(crate::state::TextField::Search));
+				self.interaction.widgets.focus = Some(
+					Command::FocusInput(crate::state::TextField::Search)
+						.widget_id(),
+				);
 				self.sync_input();
-				return;
 			}
 			Command::SearchCase | Command::SearchWord => {
 				let options = &mut self.readers.session.search.options;
@@ -102,12 +101,10 @@ impl<P: super::SendEvent> App<P> {
 					options.whole_word = !options.whole_word;
 				}
 				self.search_changed();
-				return;
 			}
 			Command::FocusInput(_) => unreachable!("input focus handled above"),
 			Command::OpenProject => {
 				self.launch(env!("CARGO_PKG_REPOSITORY"));
-				return;
 			}
 			Command::CopyDiagnostics => {
 				let text = crate::diagnostics::report(
@@ -133,7 +130,6 @@ impl<P: super::SendEvent> App<P> {
 					),
 				}
 				self.redraw();
-				return;
 			}
 			Command::CopyPath => {
 				let Some(path) = self.readers.session.path.clone() else {
@@ -149,25 +145,6 @@ impl<P: super::SendEvent> App<P> {
 						4,
 					),
 				}
-				return;
-			}
-			Command::TabStyle(style) => {
-				if self.tab_strip.phone {
-					return;
-				}
-				self.preferences.values.tab_style = style;
-				self.setting_changed(Some(Setting::TabStyle));
-				self.close_dropdown();
-				self.refresh_hover();
-				self.redraw();
-				return;
-			}
-			Command::WindowLayout(layout) => {
-				self.preferences.values.window_layout = layout;
-				self.setting_changed(Some(Setting::WindowLayout));
-				self.close_dropdown();
-				self.redraw();
-				return;
 			}
 			Command::Tabs => {
 				if !self.tab_strip.phone {
@@ -198,35 +175,31 @@ impl<P: super::SendEvent> App<P> {
 				}
 				self.refresh_hover();
 				self.redraw();
-				return;
 			}
 			Command::SelectTab(index) => {
 				if self.interaction.panel == PanelPage::Tabs {
 					self.interaction.show_panel(PanelPage::Closed);
 				}
 				self.select_tab(index);
-				return;
 			}
 			Command::ModalDismiss => {
 				self.interaction.modal = None;
-				self.interaction.focus = None;
+				self.interaction.widgets.focus = None;
 				self.refresh_hover();
 				self.redraw();
-				return;
 			}
 			Command::ModalOpenFolder => {
 				if let Some(Modal::OpenLocal { dir, .. }) =
 					self.interaction.modal.clone()
 				{
 					self.interaction.modal = None;
-					self.interaction.focus = None;
+					self.interaction.widgets.focus = None;
 					self.launch(&dir.display().to_string());
 				}
-				return;
 			}
 			Command::ModalConfirm => {
 				if let Some(modal) = self.interaction.modal.take() {
-					self.interaction.focus = None;
+					self.interaction.widgets.focus = None;
 					match modal {
 						Modal::OpenLocal { path, .. } => {
 							self.launch(&path.display().to_string())
@@ -236,84 +209,49 @@ impl<P: super::SendEvent> App<P> {
 						}
 					}
 				}
-				return;
 			}
 			Command::RemoteDismiss => {
 				// Both answers belong to this tab and this content revision.
 				self.readers.session.remote_notice_dismissed = true;
 				self.redraw();
-				return;
 			}
 			Command::RemoteLoadAll => {
 				self.readers.session.remote_notice_dismissed = true;
 				self.readers.session.load_all_images = true;
 				self.request(false);
-				return;
 			}
 			Command::Outline => {
 				self.toggle_outline();
-				return;
 			}
 			Command::OutlineToggle(index) => {
 				self.toggle_outline_entry(index);
-				return;
 			}
 			Command::OutlineExpandAll | Command::OutlineCollapseAll => {
 				self.set_outline_collapsed(
 					action == Command::OutlineCollapseAll,
 				);
-				return;
 			}
 			Command::OutlineGoto(index) => {
 				self.goto_outline(index);
-				return;
 			}
 			Command::CloseTab(index) => {
 				self.close_tab(index);
-				return;
-			}
-			Command::SingleInstance | Command::RestoreSession => {
-				if action == Command::RestoreSession {
-					self.preferences.values.restore_session =
-						!self.preferences.values.restore_session;
-					self.preferences.values.single_instance |=
-						self.preferences.values.restore_session;
-				} else {
-					self.preferences.values.single_instance =
-						!self.preferences.values.single_instance;
-					self.preferences.values.restore_session &=
-						self.preferences.values.single_instance;
-				}
-				self.setting_changed(Some(Setting::RestoreSession));
-				self.setting_changed(Some(Setting::SingleInstance));
-				self.sync_session_settings();
-				self.flush_settings();
-				self.redraw();
-				return;
-			}
-			Command::ScrollSpeed(delta) => {
-				self.preferences.values.step_scroll_speed(delta);
-				self.setting_changed(Some(Setting::ScrollSpeed));
-				self.redraw();
-				return;
 			}
 			Command::Styles => {
 				self.readers.session.cancel_scroll_animation();
 				self.tab_strip.cancel_drag();
 				self.interaction.show_styles(false);
 				self.refresh_settings_resources(true);
-				self.interaction.focus = None;
+				self.interaction.widgets.focus = None;
 				self.redraw();
-				return;
 			}
 			Command::ExportStyles => {
 				self.readers.session.cancel_scroll_animation();
 				self.tab_strip.cancel_drag();
 				self.interaction.show_styles(true);
 				self.refresh_settings_resources(true);
-				self.interaction.focus = None;
+				self.interaction.widgets.focus = None;
 				self.redraw();
-				return;
 			}
 			Command::Export => {
 				self.readers.session.cancel_scroll_animation();
@@ -331,24 +269,21 @@ impl<P: super::SendEvent> App<P> {
 				self.interaction.toggle_export();
 				self.refresh_hover();
 				self.redraw();
-				return;
 			}
 			Command::ExportRun => {
 				self.start_export(false);
-				return;
 			}
 			Command::ExportAndWatch => {
 				self.start_export(true);
-				return;
 			}
-			// Applied by `export_command` before this match.
+			// Applied by `page_command` before this match.
 			Command::ExportFormat(_)
 			| Command::ExportSize(_)
 			| Command::ExportIndent(_)
 			| Command::ExportPaper(_)
 			| Command::ExportOrientation(_)
 			| Command::ExportMargin(_)
-			| Command::ExportScale(_) => return,
+			| Command::ExportScale(_) => {}
 			Command::Fonts(command) => {
 				// Switching the page's view leaves the chooser rows the open
 				// list anchors to, so the list goes with them.
@@ -359,35 +294,22 @@ impl<P: super::SendEvent> App<P> {
 				) {
 					self.interaction.dropdown = None;
 				}
-				let proxy = self.proxy.clone();
-				if self.font_panel.command(
+				self.font_message(super::font_panel::Message::Command {
 					command,
-					self.args.offline,
-					move |message| {
-						proxy.send(Event::Fonts(message));
-					},
-				) {
-					self.notify(
-						self.preferences.values.lang().status_offline(),
-						true,
-						4,
-					);
-				}
+					offline: self.args.offline,
+				});
 				self.refresh_settings_resources(false);
 				self.redraw();
-				return;
 			}
 			Command::RetrySettingsLoad => {
 				self.refresh_settings_resources(true);
 				self.redraw();
-				return;
 			}
 			Command::SettingsTab(tab) => {
 				self.interaction.show_panel(PanelPage::Settings(tab));
 				self.refresh_settings_resources(true);
-				self.interaction.focus = None;
+				self.interaction.widgets.focus = None;
 				self.redraw();
-				return;
 			}
 			Command::StylesFolder => {
 				let result = crate::stylesheet::directory()
@@ -410,89 +332,13 @@ impl<P: super::SendEvent> App<P> {
 					);
 				}
 				self.redraw();
-				return;
 			}
-			Command::StyleToggle(index)
-			| Command::StyleUp(index)
-			| Command::StyleDown(index) => {
-				let Some(entry) = self.preferences.style_entries.get(index)
-				else {
-					return;
-				};
-				let mut ids =
-					self.preferences.values.style.clone().unwrap_or_default();
-				let position = ids.iter().position(|id| id == &entry.id);
-				match action {
-					Command::StyleToggle(_) => {
-						if position.is_some() {
-							ids.retain(|id| id != &entry.id);
-						} else if entry.error.is_none() {
-							ids.insert(0, entry.id.clone());
-						} else {
-							return;
-						}
-					}
-					Command::StyleUp(_) => {
-						if let Some(i) = position.filter(|i| *i > 0) {
-							ids.swap(i, i - 1);
-						}
-					}
-					Command::StyleDown(_) => {
-						if let Some(i) = position.filter(|i| i + 1 < ids.len())
-						{
-							ids.swap(i, i + 1);
-						}
-					}
-					_ => {}
-				}
-				self.preferences.values.style = Some(ids);
-				self.setting_changed(Some(Setting::Theme));
-				self.reload_styles();
-				self.redraw();
-				return;
-			}
-			Command::ExportStyleToggle(index)
-			| Command::ExportStyleUp(index)
-			| Command::ExportStyleDown(index) => {
-				let Some(entry) =
-					self.settings_resources.export_entries.get(index)
-				else {
-					return;
-				};
-				// An export style list never touches the reading view's own
-				// styles, so this only persists and repaints the panel.
-				let mut ids = self.preferences.export.style.clone();
-				let position = ids.iter().position(|id| id == &entry.id);
-				match action {
-					Command::ExportStyleToggle(_) => {
-						if position.is_some() {
-							ids.retain(|id| id != &entry.id);
-						} else if entry.error.is_none() {
-							ids.insert(0, entry.id.clone());
-						} else {
-							return;
-						}
-					}
-					Command::ExportStyleUp(_) => {
-						if let Some(i) = position.filter(|i| *i > 0) {
-							ids.swap(i, i - 1);
-						}
-					}
-					Command::ExportStyleDown(_) => {
-						if let Some(i) = position.filter(|i| i + 1 < ids.len())
-						{
-							ids.swap(i, i + 1);
-						}
-					}
-					_ => {}
-				}
-				let mut export = self.preferences.export.clone();
-				export.style = ids;
-				self.preferences.set_export(export);
-				self.refresh_settings_resources(false);
-				self.redraw();
-				return;
-			}
+			Command::StyleToggle(_)
+			| Command::StyleUp(_)
+			| Command::StyleDown(_)
+			| Command::ExportStyleToggle(_)
+			| Command::ExportStyleUp(_)
+			| Command::ExportStyleDown(_) => unreachable!("page command handled above"),
 			Command::OpenConfig => {
 				let result = self.preferences.ensure_file().and_then(|()| {
 					markview_platform::open_external(
@@ -505,7 +351,6 @@ impl<P: super::SendEvent> App<P> {
 					);
 				}
 				self.redraw();
-				return;
 			}
 			Command::SystemTheme => {
 				self.args.overrides.retain(|f| *f != Setting::Theme);
@@ -514,33 +359,21 @@ impl<P: super::SendEvent> App<P> {
 				self.preferences.follow_system();
 				self.apply_saved_settings();
 				self.preferences.schedule_save();
-				return;
-			}
-			Command::SettingsPreview => {
-				self.interaction.settings_preview =
-					!self.interaction.settings_preview;
-				self.redraw();
-				return;
 			}
 			Command::Settings => {
 				self.readers.session.cancel_scroll_animation();
 				self.tab_strip.cancel_drag();
 				self.interaction.toggle_settings();
+				if self.interaction.panel_open() {
+					self.dispatch_ui(super::ui_model::Message::Settings(
+						super::settings_panel::Message::ResetPreview,
+					));
+				}
 				self.refresh_hover();
 				self.redraw();
-				return;
-			}
-			Command::Reset => {
-				self.preferences.values = ReaderSettings::default();
-				// Reset also drops the saved theme preference, so the system
-				// theme applies again immediately and on the next launch.
-				if let Some(theme) = self.system_theme() {
-					self.preferences.values.theme = theme;
-				}
 			}
 			Command::NewPage => {
 				self.new_page();
-				return;
 			}
 			Command::Open => {
 				if self.interaction.panel == PanelPage::Tabs {
@@ -555,7 +388,6 @@ impl<P: super::SendEvent> App<P> {
 				markview_platform::pick_document(move |path| {
 					proxy.send(Event::Open(path));
 				});
-				return;
 			}
 			Command::RevealFolder => {
 				let dir = self
@@ -589,82 +421,25 @@ impl<P: super::SendEvent> App<P> {
 						);
 					}
 				}
-				return;
 			}
-			Command::Smaller => {
-				self.preferences.values.font_size =
-					(self.preferences.values.font_size - 1.0).max(10.0)
-			}
-			Command::Larger => {
-				self.preferences.values.font_size =
-					(self.preferences.values.font_size + 1.0).min(40.0)
-			}
-			Command::Narrower | Command::Wider if self.tab_strip.phone => {
-				return;
-			}
-			Command::Narrower => {
-				self.preferences.values.width =
-					(self.preferences.values.width - 60.0).max(240.0)
-			}
-			Command::Wider => {
-				self.preferences.values.width =
-					(self.preferences.values.width + 60.0).min(1600.0)
-			}
-			Command::Align => {
-				self.preferences.values.justify =
-					!self.preferences.values.justify
-			}
-			Command::Hyphens => {
-				self.preferences.values.hyphenate =
-					!self.preferences.values.hyphenate
-			}
-			Command::CodeWrap => {
-				self.preferences.values.codeblock_wrap =
-					!self.preferences.values.codeblock_wrap
-			}
-			Command::Indent(em) => {
-				self.preferences.values.paragraph_indent = f32::from(em)
-			}
-			Command::CjkType(value) => {
-				self.preferences.values.cjk_type = value;
-				self.setting_changed(Some(Setting::CjkType));
-				self.request(false);
-				self.redraw();
-				return;
-			}
-			Command::Language(value) => {
-				self.preferences.values.lang = value;
-				self.setting_changed(Some(Setting::Language));
-				// Picking an option ends the list, whether the pointer or the
-				// keyboard committed it, and returns focus to its chooser.
-				self.close_dropdown();
-				// The front matter draws the interface's own label, so the
-				// change reaches the document too: the request relabels that
-				// one block and leaves every other line's geometry alone.
-				self.request(false);
-				self.redraw();
-				return;
-			}
-			Command::FontFamily(role, selection) => {
-				let family = if let Some(selection) = selection {
-					let Some(name) = self.font_panel.resolve(role, selection)
-					else {
-						return;
-					};
-					Some(name)
-				} else {
-					None
-				};
-				self.preferences.values.set_font_family(role, family);
-				self.setting_changed(Some(Setting::FontFamily));
-				// The stylesheet's own definitions are what the override
-				// replaces, so they are read again and every line is laid out
-				// with the family now in force.
-				self.reload_styles();
-				self.close_dropdown();
-				self.redraw();
-				return;
-			}
+			Command::Smaller
+			| Command::Larger
+			| Command::Narrower
+			| Command::Wider
+			| Command::Align
+			| Command::Hyphens
+			| Command::CodeWrap
+			| Command::Indent(_)
+			| Command::CjkType(_)
+			| Command::Language(_)
+			| Command::FontFamily(_, _)
+			| Command::WindowLayout(_)
+			| Command::TabStyle(_)
+			| Command::SingleInstance
+			| Command::RestoreSession
+			| Command::ScrollSpeed(_)
+			| Command::Reset
+			| Command::SettingsPreview => unreachable!("page command handled above"),
 			Command::ToggleDropdown(id, highlight) => {
 				match self.interaction.dropdown {
 					Some(open) if open.id == id => self.close_dropdown(),
@@ -674,26 +449,10 @@ impl<P: super::SendEvent> App<P> {
 					}
 				}
 				self.redraw();
-				return;
 			}
 		}
-		let field = match action {
-			Command::Smaller | Command::Larger => Some(Setting::FontSize),
-			Command::Narrower | Command::Wider => Some(Setting::Width),
-			Command::Align => Some(Setting::Justify),
-			Command::Hyphens => Some(Setting::Hyphenate),
-			Command::CodeWrap => Some(Setting::CodeblockWrap),
-			Command::Indent(_) => Some(Setting::ParagraphIndent),
-			Command::CjkType(_) => Some(Setting::CjkType),
-			_ => None,
-		};
-		self.setting_changed(field);
-		if field.is_none() {
-			self.sync_session_settings();
-		}
-		self.request(false);
-		self.redraw();
 	}
+
 	pub(super) fn setting_changed(&mut self, field: Option<Setting>) {
 		self.services
 			.handle

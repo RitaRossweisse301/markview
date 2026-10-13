@@ -215,6 +215,12 @@ pub(in crate::app) fn modal_buttons(
 	let row = rect.y + rect.h - 46.0;
 	vec![
 		Button {
+			id: crate::app::widgets::id(if permission {
+				Command::ModalDismiss
+			} else {
+				Command::ModalOpenFolder
+			}),
+			clip: None,
 			label: cancel_label.into(),
 			icon: None,
 			marker: None,
@@ -234,6 +240,8 @@ pub(in crate::app) fn modal_buttons(
 			},
 		},
 		Button {
+			id: crate::app::widgets::id(Command::ModalConfirm),
+			clip: None,
 			label: allow_label.into(),
 			icon: None,
 			marker: None,
@@ -249,6 +257,8 @@ pub(in crate::app) fn modal_buttons(
 			},
 		},
 		Button {
+			id: markview_ui_core::WidgetId::new(11, 0),
+			clip: None,
 			label: (lang.modal_close()).into(),
 			icon: Some(icons::CLOSE),
 			marker: None,

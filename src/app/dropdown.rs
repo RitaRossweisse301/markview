@@ -58,7 +58,7 @@ impl<P: super::SendEvent> App<P> {
 			})
 			.map(|button| button.action)
 			.unwrap_or(Command::ToggleDropdown(open.id, open.highlight));
-		self.interaction.focus = Some(anchor);
+		self.interaction.widgets.focus = Some(anchor.widget_id());
 	}
 
 	/// The buttons the open list answers with, before the page's own.
@@ -93,9 +93,11 @@ impl<P: super::SendEvent> App<P> {
 		if stepped {
 			// Measuring again brings the moved highlight into the drawn window
 			// and names the option it now holds.
-			self.interaction.focus =
-				self.dropdown_menu().and_then(|menu| menu.chosen());
-			self.interaction.focus_visible = true;
+			self.interaction.widgets.focus = self
+				.dropdown_menu()
+				.and_then(|menu| menu.chosen())
+				.map(Command::widget_id);
+			self.interaction.widgets.focus_visible = true;
 			self.redraw();
 		}
 	}
@@ -120,8 +122,8 @@ impl<P: super::SendEvent> App<P> {
 		};
 		open.highlight = open.offset + slot;
 		self.interaction.dropdown = Some(open);
-		self.interaction.focus = Some(action);
-		self.interaction.focus_visible = true;
+		self.interaction.widgets.focus = Some(action.widget_id());
+		self.interaction.widgets.focus_visible = true;
 	}
 
 	/// Answers the keys an open list owns, reporting whether it took the key:
@@ -170,9 +172,11 @@ impl<P: super::SendEvent> App<P> {
 		self.interaction.dropdown = Some(open);
 		// The highlight moved: measure again to bring it into view and to name
 		// the option it now holds.
-		self.interaction.focus =
-			self.dropdown_menu().and_then(|menu| menu.chosen());
-		self.interaction.focus_visible = true;
+		self.interaction.widgets.focus = self
+			.dropdown_menu()
+			.and_then(|menu| menu.chosen())
+			.map(Command::widget_id);
+		self.interaction.widgets.focus_visible = true;
 		true
 	}
 }

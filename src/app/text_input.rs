@@ -281,10 +281,18 @@ impl<P: SendEvent> App<P> {
 		self.text_input.dragging = false;
 		self.text_input.deadline = None;
 	}
+	pub(super) fn focused_input(&self) -> Option<TextField> {
+		[TextField::Url, TextField::Search, TextField::ExportTitle]
+			.into_iter()
+			.find(|field| {
+				self.interaction.widgets.focus
+					== Some(Command::FocusInput(*field).widget_id())
+			})
+	}
 	pub(super) fn clear_input_focus(&mut self) {
 		self.blur_input();
-		if matches!(self.interaction.focus, Some(Command::FocusInput(_))) {
-			self.interaction.focus = None;
+		if self.focused_input().is_some() {
+			self.interaction.widgets.focus = None;
 		}
 	}
 	fn reset_input_blink(&mut self) {
@@ -293,7 +301,7 @@ impl<P: SendEvent> App<P> {
 		self.redraw();
 	}
 	pub(super) fn sync_input(&mut self) {
-		let focus = self.interaction.focus;
+		let focus = self.focused_input();
 		let desired = if self.text_input.window_active
 			&& self.text_input.window_visible
 			&& !self.dialog_open
@@ -302,11 +310,7 @@ impl<P: SendEvent> App<P> {
 			&& self.interaction.viewer.is_none()
 		{
 			match focus {
-				Some(Command::FocusInput(id))
-					if self.input_geometry(id).is_some() =>
-				{
-					Some(id)
-				}
+				Some(id) if self.input_geometry(id).is_some() => Some(id),
 				_ => None,
 			}
 		} else {
@@ -473,9 +477,10 @@ impl<P: SendEvent> App<P> {
 				if let Some(id) = self.input_at_cursor() {
 					self.blur_input();
 					self.cancel_gestures();
-					self.interaction.focus = Some(Command::FocusInput(id));
-					self.interaction.focus_visible = false;
-					self.interaction.pressed = None;
+					self.interaction.widgets.focus =
+						Some(Command::FocusInput(id).widget_id());
+					self.interaction.widgets.focus_visible = false;
+					self.interaction.widgets.captured = None;
 					self.sync_input();
 					let (rect, _) = self
 						.input_geometry(id)
@@ -490,11 +495,8 @@ impl<P: SendEvent> App<P> {
 					return true;
 				}
 				self.blur_input();
-				if matches!(
-					self.interaction.focus,
-					Some(Command::FocusInput(_))
-				) {
-					self.interaction.focus = None;
+				if self.focused_input().is_some() {
+					self.interaction.widgets.focus = None;
 				}
 			}
 			WindowEvent::MouseInput {
@@ -569,7 +571,7 @@ impl<P: SendEvent> App<P> {
 		match outcome {
 			Outcome::Submit | Outcome::Cancel | Outcome::Application => {
 				self.blur_input();
-				self.interaction.focus = None;
+				self.interaction.widgets.focus = None;
 				self.redraw();
 			}
 			Outcome::Traverse => {
@@ -593,7 +595,15 @@ impl<P: SendEvent> App<P> {
 		)
 	}
 
+	#[cfg(test)]
 	pub(super) fn draw_inputs(&mut self) -> Vec<Draw> {
+		let form = self.panel_form();
+		self.draw_inputs_with_form(form.as_ref())
+	}
+	pub(super) fn draw_inputs_with_form(
+		&mut self,
+		form: Option<&super::chrome::components::Form>,
+	) -> Vec<Draw> {
 		self.sync_input();
 		if let Some((rect, viewport)) = self.input_geometry(TextField::Url) {
 			let placeholder =
@@ -609,13 +619,13 @@ impl<P: SendEvent> App<P> {
 				),
 			}];
 		}
-		let Some(form) = self.panel_form() else {
+		let Some(form) = form else {
 			return vec![];
 		};
 		let mut out = Vec::new();
 		let placeholder =
 			self.preferences.values.lang().export_title_placeholder();
-		for button in form.buttons {
+		for button in &form.buttons {
 			if let Command::FocusInput(id) = button.action
 				&& button.rect.intersect(form.viewport).is_some()
 			{

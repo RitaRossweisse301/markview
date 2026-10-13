@@ -31,6 +31,7 @@ at the same level, without `[brackets]`.
 
 ### Changed
 
+- Route Settings, Export and Fonts through a pure `markview-ui-core` message flow, sharing stable widget identities, interaction and clipped layout geometry while retaining native drawing.
 - Reduce shaping allocations by reusing layout storage and scanning inline spans once; measure label widths without emitting glyphs.
 - Upgrade Parley to 0.12, adapting font metrics, variation coordinates and cluster styles, preserving RTL ligatures and refreshing rendering baselines.
 - Share template, font and page configuration across reader, file and buffer exports, including CJK selection and numeric validation.
@@ -44,6 +45,8 @@ at the same level, without `[brackets]`.
 
 ### Fixed
 
+- Keep outgoing phone drawer controls in their animated positions when toolbar input resumes.
+- Keep modals safe over open panels, distinguish same-path tabs and separate dismiss controls, and align animated drawer hit clips with their painted rows.
 - Wait for completed layout updates when verifying worker document counts, allowing intermediate snapshots during slower test runs.
 - Keep export-panel size adjustments within the shared 1–200 px range, including sizes outside the former 10–40 px limits.
 - Keep a PNG export's page geometry and scale when export preferences change during the job.

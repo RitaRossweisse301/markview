@@ -138,7 +138,8 @@ fn every_form_action_is_reachable_without_clicking_through_the_clip() {
 			}
 			for button in &initial.buttons {
 				assert_eq!(button.rect.h, CONTROL);
-				let revealed = build(&mut ui, initial.reveal(button.action));
+				let revealed =
+					build(&mut ui, initial.reveal(button.action.widget_id()));
 				let visible = revealed.visible_buttons();
 				let b = visible
 					.iter()
@@ -154,7 +155,11 @@ fn every_form_action_is_reachable_without_clicking_through_the_clip() {
 				for (i, a) in visible.iter().enumerate() {
 					for b in &visible[i + 1..] {
 						assert!(
-							a.rect.intersect(b.rect).is_none(),
+							a.widget()
+								.hit_rect()
+								.unwrap()
+								.intersect(b.widget().hit_rect().unwrap())
+								.is_none(),
 							"overlapping commands: {:?}, {:?}",
 							a.action,
 							b.action
@@ -198,18 +203,27 @@ fn button_feedback_distinguishes_hover_press_selection_and_keyboard_focus() {
 			b.kind = kind;
 			b.active = selected;
 			let mouse = InteractionState {
-				focus: Some(b.action),
+				widgets: markview_ui_core::Interaction {
+					focus: Some(b.action.widget_id()),
+					..Default::default()
+				},
 				..Default::default()
 			};
 			let hover = InteractionState {
+				widgets: markview_ui_core::Interaction {
+					focus: Some(b.action.widget_id()),
+					..Default::default()
+				},
 				cursor: (24.0, 34.0),
-				focus: Some(b.action),
 				..Default::default()
 			};
 			let held = InteractionState {
+				widgets: markview_ui_core::Interaction {
+					captured: Some(b.action.widget_id()),
+					focus: Some(b.action.widget_id()),
+					..Default::default()
+				},
 				cursor: hover.cursor,
-				pressed: Some(b.action),
-				focus: Some(b.action),
 				..Default::default()
 			};
 			let mut fills = Vec::new();
@@ -245,8 +259,11 @@ fn button_feedback_distinguishes_hover_press_selection_and_keyboard_focus() {
 				"held controls have a distinct fill"
 			);
 			let keyboard = InteractionState {
-				focus: Some(b.action),
-				focus_visible: true,
+				widgets: markview_ui_core::Interaction {
+					focus: Some(b.action.widget_id()),
+					focus_visible: true,
+					..Default::default()
+				},
 				..Default::default()
 			};
 			let draws = draw_button(&mut ui, &keyboard, &b, true);
@@ -351,8 +368,11 @@ fn segmented_choices_draw_each_shared_edge_once() {
 				Lang::En,
 			);
 			let state = InteractionState {
-				focus: focus.map(Command::Indent),
-				focus_visible: focus.is_some(),
+				widgets: markview_ui_core::Interaction {
+					focus: focus.map(Command::Indent).map(Command::widget_id),
+					focus_visible: focus.is_some(),
+					..Default::default()
+				},
 				..Default::default()
 			};
 			let draws =
@@ -387,7 +407,7 @@ fn segmented_choices_draw_each_shared_edge_once() {
 					.collect();
 				assert_eq!(shared.len(), 1);
 				let focused =
-					pair.iter().any(|b| state.focus == Some(b.action));
+					pair.iter().any(|b| state.widgets.focus == Some(b.id));
 				let selected = pair.iter().any(|b| b.active);
 				assert_eq!(
 					*shared[0].1,
@@ -533,7 +553,11 @@ fn an_open_option_list_stays_inside_the_panel() {
 				for (index, a) in menu.buttons.iter().enumerate() {
 					for b in &menu.buttons[index + 1..] {
 						assert!(
-							a.rect.intersect(b.rect).is_none(),
+							a.widget()
+								.hit_rect()
+								.unwrap()
+								.intersect(b.widget().hit_rect().unwrap())
+								.is_none(),
 							"{where_}: two options overlap"
 						);
 					}

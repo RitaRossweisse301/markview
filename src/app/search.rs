@@ -227,7 +227,8 @@ impl<P: SendEvent> App<P> {
 				self.search_changed();
 			}
 		}
-		self.interaction.focus = Some(Command::FocusInput(TextField::Search));
+		self.interaction.widgets.focus =
+			Some(Command::FocusInput(TextField::Search).widget_id());
 		self.readers.session.search.input.select_all(&mut self.ui);
 		self.sync_input();
 		self.search_tick();
@@ -520,6 +521,8 @@ impl<P: SendEvent> App<P> {
 			(lang.panel_close(), Command::SearchClose, false),
 		];
 		std::iter::once(Button {
+			id: crate::app::widgets::id(Command::FocusInput(TextField::Search)),
+			clip: None,
 			kind: super::chrome::components::ButtonKind::Quiet,
 			enabled: true,
 			rect: self.search_input_rect(),
@@ -531,6 +534,8 @@ impl<P: SendEvent> App<P> {
 		})
 		.chain(actions.into_iter().enumerate().map(
 			|(i, (label, action, active))| Button {
+				id: crate::app::widgets::id(action),
+				clip: None,
 				kind: super::chrome::components::ButtonKind::Quiet,
 				enabled: true,
 				rect: Rect {

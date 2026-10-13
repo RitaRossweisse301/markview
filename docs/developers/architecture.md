@@ -44,6 +44,11 @@ production dependency on the CommonMark parser.
 
 `markview-pdf` consumes the same snapshot for paper. The application's exporter lays the document out at the page's text measure and uses `markview-layout::paginate` to break the column into pages. The PDF backend writes vector content through `krilla`: text as glyph runs with subset fonts and a character map, math, rules, boxes, images, and link annotations. It owns no window, no GPU, and no source parsing.
 
+`markview-ui-core` owns dependency-free component scheduling, widget identity,
+clipped geometry and interaction. The native chrome uses typed page messages and
+host-executed effects, as described in [Native UI](ui.md). Layout re-exports its
+`Rect` so reader geometry and widget geometry share one type.
+
 The root package owns reader policy: launch parsing, settings persistence, file content validation, file watching, image loading, single-instance communication, UI geometry and asynchronous scheduling. The UI translates gestures into commands; it does not define document semantics.
 
 `markview-platform` owns native services for Windows, macOS, Linux and Android:

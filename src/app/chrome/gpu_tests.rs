@@ -84,17 +84,23 @@ fn settings_and_selection_frame() -> Result<()> {
 			),
 		);
 		let interaction = InteractionState {
+			widgets: markview_ui_core::Interaction {
+				focus_visible: true,
+				focus: Some(
+					(if panel_open {
+						Command::Larger
+					} else {
+						Command::Settings
+					})
+					.widget_id(),
+				),
+				..Default::default()
+			},
 			panel: if panel_open {
 				PanelPage::Settings(PanelTab::Generic)
 			} else {
 				PanelPage::Closed
 			},
-			focus_visible: true,
-			focus: Some(if panel_open {
-				Command::Larger
-			} else {
-				Command::Settings
-			}),
 			..Default::default()
 		};
 		let counts = markview_layout::text::TextCounts::of(
@@ -365,17 +371,25 @@ fn notice_strip_and_confirmation_frames() -> Result<()> {
 		let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("artifacts");
 		let targets = root.join("manual-test/targets");
 		let relative = InteractionState {
+			widgets: markview_ui_core::Interaction {
+				focus_visible: true,
+				focus: Some(Command::ModalOpenFolder.widget_id()),
+				..Default::default()
+			},
 			modal: Some(Modal::OpenLocal {
 				path: targets.join("payload.desktop"),
 				dir: targets.clone(),
 				document_dir: Some(root.join("manual-test")),
 			}),
-			focus_visible: true,
-			focus: Some(Command::ModalOpenFolder),
 			cursor: (620.0, 300.0),
 			..Default::default()
 		};
 		let permission = InteractionState {
+			widgets: markview_ui_core::Interaction {
+				focus_visible: true,
+				focus: Some(Command::ModalDismiss.widget_id()),
+				..Default::default()
+			},
 			modal: Some(Modal::Permission {
 				resource: crate::security::Resource::Network {
 					origin: "http://localhost:8080".into(),
@@ -383,8 +397,6 @@ fn notice_strip_and_confirmation_frames() -> Result<()> {
 				},
 				resume: crate::state::PermissionAction::Images,
 			}),
-			focus_visible: true,
-			focus: Some(Command::ModalDismiss),
 			..Default::default()
 		};
 		for (interaction, name) in [
@@ -393,6 +405,11 @@ fn notice_strip_and_confirmation_frames() -> Result<()> {
 			// A far target has no short relative form; its front is elided.
 			(
 				&InteractionState {
+					widgets: markview_ui_core::Interaction {
+						focus_visible: true,
+						focus: Some(Command::ModalOpenFolder.widget_id()),
+						..Default::default()
+					},
 					modal: Some(Modal::OpenLocal {
 						path: PathBuf::from(
 							"/srv/data/archive/2026/exports/nightly/release-candidates/marketing/payload.desktop",
@@ -402,8 +419,6 @@ fn notice_strip_and_confirmation_frames() -> Result<()> {
 						),
 						document_dir: Some(root.join("manual-test")),
 					}),
-					focus_visible: true,
-					focus: Some(Command::ModalOpenFolder),
 					cursor: (620.0, 300.0),
 					..Default::default()
 				},
@@ -432,14 +447,17 @@ fn notice_strip_and_confirmation_frames() -> Result<()> {
 		}
 		for lang in [Lang::En, Lang::ZhHans, Lang::ZhHant, Lang::Ja] {
 			let narrow = InteractionState {
+				widgets: markview_ui_core::Interaction {
+					focus_visible: true,
+					focus: Some(Command::ModalDismiss.widget_id()),
+					..Default::default()
+				},
 				modal: Some(Modal::Permission {
 					resource: crate::security::Resource::SelectImage(
 						"image.png".into(),
 					),
 					resume: crate::state::PermissionAction::Images,
 				}),
-				focus_visible: true,
-				focus: Some(Command::ModalDismiss),
 				..Default::default()
 			};
 			let overlay =
@@ -959,9 +977,12 @@ fn export_panel_frames() -> Result<()> {
 			&mut ui,
 			&settings,
 			&InteractionState {
+				widgets: markview_ui_core::Interaction {
+					focus_visible: true,
+					focus: Some(Command::ExportRun.widget_id()),
+					..Default::default()
+				},
 				panel: PanelPage::Export,
-				focus_visible: true,
-				focus: Some(Command::ExportRun),
 				..Default::default()
 			},
 			"document.md",
@@ -1065,12 +1086,12 @@ fn previewing_recedes_the_styles_and_fonts_pages() {
 					style_scroll: interaction.styles_scroll,
 					resource_load: (state != "ready").then_some(&load),
 					fonts: crate::app::font_panel::View {
-						choices: {
+						choices: std::borrow::Cow::Owned({
 							let mut c =
 								crate::app::font_panel::Choices::default();
 							c.refresh(&crate::test_support::fonts());
 							c
-						},
+						}),
 						catalog: &catalog,
 						shown: shown.clone(),
 						jobs: &jobs,
@@ -1222,11 +1243,11 @@ fn the_fonts_page_draws_its_open_option_list() {
 		style_scroll: interaction.styles_scroll,
 		resource_load: None,
 		fonts: crate::app::font_panel::View {
-			choices: {
+			choices: std::borrow::Cow::Owned({
 				let mut c = crate::app::font_panel::Choices::default();
 				c.refresh(&crate::test_support::fonts());
 				c
-			},
+			}),
 			catalog: &[],
 			shown: Vec::new(),
 			jobs: &jobs,
@@ -1323,11 +1344,11 @@ fn dismissed_pages_stop_drawing_and_answering_pointers() {
 			style_scroll: interaction.styles_scroll,
 			resource_load: None,
 			fonts: crate::app::font_panel::View {
-				choices: {
+				choices: std::borrow::Cow::Owned({
 					let mut c = crate::app::font_panel::Choices::default();
 					c.refresh(&crate::test_support::fonts());
 					c
-				},
+				}),
 				catalog: &[],
 				shown: shown.clone(),
 				jobs: &jobs,
@@ -1541,6 +1562,18 @@ fn redesigned_chrome_frames() -> Result<()> {
 						continue;
 					}
 					let mut interaction = InteractionState {
+						widgets: markview_ui_core::Interaction {
+							focus_visible: true,
+							focus: Some(
+								(if page == "export" {
+									Command::ExportRun
+								} else {
+									Command::Larger
+								})
+								.widget_id(),
+							),
+							..Default::default()
+						},
 						panel: match page {
 							"settings" | "preview" => {
 								PanelPage::Settings(PanelTab::Generic)
@@ -1584,12 +1617,6 @@ fn redesigned_chrome_frames() -> Result<()> {
 						} else {
 							0.0
 						},
-						focus_visible: true,
-						focus: Some(if page == "export" {
-							Command::ExportRun
-						} else {
-							Command::Larger
-						}),
 						..Default::default()
 					};
 					if page == "confirmation" {
@@ -1598,7 +1625,8 @@ fn redesigned_chrome_frames() -> Result<()> {
 							dir: "/tmp".into(),
 							document_dir: None,
 						});
-						interaction.focus = Some(Command::ModalOpenFolder);
+						interaction.widgets.focus =
+							Some(Command::ModalOpenFolder.widget_id());
 					}
 					// A chooser's option list open on the Fonts page, on its
 					// second option so the frame shows a moving highlight.
@@ -1633,7 +1661,7 @@ fn redesigned_chrome_frames() -> Result<()> {
 							&mut ui, &settings, 0.0, width, height,
 						);
 						interaction.settings_scroll =
-							form.reveal(Command::Larger);
+							form.reveal(Command::Larger.widget_id());
 					}
 					let catalog = font_samples();
 					let shown: Vec<usize> = if page == "fonts-empty" {
@@ -1753,12 +1781,12 @@ fn redesigned_chrome_frames() -> Result<()> {
 						style_scroll: interaction.styles_scroll,
 						resource_load: pending.then_some(&load),
 						fonts: crate::app::font_panel::View {
-							choices: {
+							choices: std::borrow::Cow::Owned({
 								let mut c =
 									crate::app::font_panel::Choices::default();
 								c.refresh(&crate::test_support::fonts());
 								c
-							},
+							}),
 							catalog: &catalog,
 							shown,
 							jobs: &jobs,
@@ -1936,14 +1964,17 @@ fn button_feedback_frames() -> Result<()> {
 					b.enabled = column != 4;
 					b.icon = icon.then_some(super::icons::OPEN);
 					let interaction = InteractionState {
+						widgets: markview_ui_core::Interaction {
+							focus: Some(b.action.widget_id()),
+							focus_visible: column == 3,
+							captured: (column == 2).then_some(b.id),
+							..Default::default()
+						},
 						cursor: if matches!(column, 1 | 2 | 4) {
 							(x + 5.0, y + 5.0)
 						} else {
 							(0.0, 0.0)
 						},
-						focus: Some(b.action),
-						focus_visible: column == 3,
-						pressed: (column == 2).then_some(b.action),
 						..Default::default()
 					};
 					draws.extend(draw_button(&mut ui, &interaction, &b, true));

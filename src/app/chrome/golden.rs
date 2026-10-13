@@ -97,14 +97,17 @@ fn ui_styles_match_rendering_baselines() -> Result<()> {
 				b.active = *state == "selected";
 				b.enabled = *state != "disabled";
 				let state = InteractionState {
+					widgets: markview_ui_core::Interaction {
+						captured: (*state == "pressed").then_some(b.id),
+						focus: (*state == "focus").then_some(b.id),
+						focus_visible: *state == "focus",
+						..Default::default()
+					},
 					cursor: if matches!(*state, "hover" | "pressed") {
 						(rect.x + 5., rect.y + 5.)
 					} else {
 						(-1., -1.)
 					},
-					pressed: (*state == "pressed").then_some(b.action),
-					focus: (*state == "focus").then_some(b.action),
-					focus_visible: *state == "focus",
 					..Default::default()
 				};
 				draws

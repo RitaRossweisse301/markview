@@ -94,8 +94,10 @@ fn window_layout_dropdown_exposes_all_layouts_and_marks_the_saved_choice() {
 			window_layout: selected,
 			..Default::default()
 		};
-		let scroll = form(&mut shaper, &settings, 0.0, 500.0, 300.0)
-			.reveal(Command::ToggleDropdown(DropdownId::WindowLayout, index));
+		let scroll = form(&mut shaper, &settings, 0.0, 500.0, 300.0).reveal(
+			Command::ToggleDropdown(DropdownId::WindowLayout, index)
+				.widget_id(),
+		);
 		let form = form(&mut shaper, &settings, scroll, 500.0, 300.0);
 		assert!(form.buttons.iter().any(|button| {
 			button.action
@@ -124,7 +126,7 @@ fn panel_exposes_first_line_indent_presets() {
 	let mut shaper = crate::test_support::shaper();
 	let settings = ReaderSettings::default();
 	let scroll = form(&mut shaper, &settings, 0.0, 1200.0, 800.0)
-		.reveal(Command::Indent(0));
+		.reveal(Command::Indent(0).widget_id());
 	let buttons =
 		form(&mut shaper, &settings, scroll, 1200.0, 800.0).visible_buttons();
 	for (em, label) in [(0, "Off"), (1, "1 em"), (2, "2 em"), (3, "3 em")] {
@@ -146,7 +148,7 @@ fn panel_toggles_codeblock_wrapping() {
 		let initial = form(&mut shaper, &settings, 0.0, 1200.0, 800.0);
 		// The list is longer than the panel, so the last row is only on
 		// screen once something has revealed it.
-		let scroll = initial.reveal(Command::CodeWrap);
+		let scroll = initial.reveal(Command::CodeWrap.widget_id());
 		form(&mut shaper, &settings, scroll, 1200.0, 800.0)
 			.visible_buttons()
 			.into_iter()
@@ -244,7 +246,11 @@ fn the_chinese_panel_keeps_its_controls_inside_the_panel() {
 		for (index, a) in buttons.iter().enumerate() {
 			for b in &buttons[index + 1..] {
 				assert!(
-					a.rect.intersect(b.rect).is_none(),
+					a.widget()
+						.hit_rect()
+						.unwrap()
+						.intersect(b.widget().hit_rect().unwrap())
+						.is_none(),
 					"{width}x{height}: {:?} overlaps {:?}",
 					a.action,
 					b.action
@@ -559,7 +565,7 @@ fn about_tab_keeps_navigation_and_scrolls_on_short_windows() {
 		);
 		let scrolled = InteractionState {
 			panel: interaction.panel,
-			settings_scroll: form.reveal(Command::OpenProject),
+			settings_scroll: form.reveal(Command::OpenProject.widget_id()),
 			..Default::default()
 		};
 		let bottom = settings_form(

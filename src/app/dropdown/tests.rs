@@ -249,8 +249,8 @@ fn tab_style_commits_from_keyboard_and_pointer_without_document_reflow() {
 	assert_eq!(app.preferences.values.tab_style, TabStyle::Connected);
 	assert!(app.interaction.dropdown.is_none());
 	assert_eq!(
-		app.interaction.focus,
-		Some(Command::ToggleDropdown(DropdownId::TabStyle, 1))
+		app.interaction.widgets.focus,
+		Some(Command::ToggleDropdown(DropdownId::TabStyle, 1).widget_id())
 	);
 	app.action(Command::ToggleDropdown(DropdownId::TabStyle, 1));
 	let at = option_centre(&mut app, Command::TabStyle(TabStyle::Underline));
@@ -285,8 +285,8 @@ fn window_layout_commits_from_keyboard_and_pointer_for_next_launch() {
 	assert!(app.readers.session.requested_options.is_none());
 	assert!(app.interaction.dropdown.is_none());
 	assert_eq!(
-		app.interaction.focus,
-		Some(Command::ToggleDropdown(DropdownId::WindowLayout, 1))
+		app.interaction.widgets.focus,
+		Some(Command::ToggleDropdown(DropdownId::WindowLayout, 1).widget_id())
 	);
 	app.action(Command::ToggleDropdown(DropdownId::WindowLayout, 1));
 	let at =
@@ -355,7 +355,7 @@ fn escape_closes_without_committing_and_tab_reaches_the_page() {
 	app.action(Command::ToggleDropdown(DropdownId::Language, 0));
 	app.key_pressed(&Key::Named(NamedKey::Tab));
 	assert!(app.interaction.dropdown.is_none());
-	assert!(app.interaction.focus.is_some());
+	assert!(app.interaction.widgets.focus.is_some());
 }
 
 #[test]
@@ -378,13 +378,13 @@ fn a_press_outside_the_list_closes_it_without_reaching_the_page() {
 		"the press must not reach the control the list covered"
 	);
 	assert_ne!(
-		app.interaction.focus,
-		Some(covered_action),
+		app.interaction.widgets.focus,
+		Some(covered_action.widget_id()),
 		"the covered control never took the press"
 	);
 	assert_eq!(
-		app.interaction.focus,
-		Some(Command::ToggleDropdown(DropdownId::Language, 0)),
+		app.interaction.widgets.focus,
+		Some(Command::ToggleDropdown(DropdownId::Language, 0).widget_id()),
 		"focus returns to the chooser the list belongs to"
 	);
 }
@@ -749,10 +749,10 @@ fn closing_the_list_returns_focus_to_its_chooser() {
 	app.key_pressed(&Key::Named(NamedKey::Escape));
 	assert!(app.interaction.dropdown.is_none());
 	assert!(
-		matches!(
-			app.interaction.focus,
-			Some(Command::ToggleDropdown(DropdownId::Language, _))
-		),
+		app.interaction.widgets.focus
+			== Some(
+				Command::ToggleDropdown(DropdownId::Language, 0).widget_id()
+			),
 		"focus returns to the chooser"
 	);
 
@@ -771,8 +771,8 @@ fn committing_an_option_returns_focus_to_its_chooser() {
 	app.key_pressed(&Key::Named(NamedKey::Enter));
 	assert_eq!(app.preferences.values.lang, Some(Lang::En));
 	assert_eq!(
-		app.interaction.focus,
-		Some(Command::ToggleDropdown(DropdownId::Language, 1)),
+		app.interaction.widgets.focus,
+		Some(Command::ToggleDropdown(DropdownId::Language, 1).widget_id()),
 		"focus returns to the chooser"
 	);
 }
@@ -788,8 +788,8 @@ fn tab_after_closing_the_list_advances_from_the_chooser() {
 	app.key_pressed(&Key::Named(NamedKey::Tab));
 	assert!(app.interaction.dropdown.is_none());
 	assert_eq!(
-		app.interaction.focus,
-		Some(Command::ScrollSpeed(-1)),
+		app.interaction.widgets.focus,
+		Some(Command::ScrollSpeed(-1).widget_id()),
 		"traversal moved past the chooser, not back to the first control"
 	);
 }
@@ -859,7 +859,10 @@ fn a_family_option_commits_and_the_default_restores_the_chain() {
 		.find_map(|button| match button.action {
 			Command::FontFamily(FontRole::Serif, Some(name)) => Some((
 				button.action,
-				app.font_panel.resolve(FontRole::Serif, name).unwrap(),
+				app.preferences
+					.fonts
+					.resolve(FontRole::Serif, name)
+					.unwrap(),
 			)),
 			_ => None,
 		})
@@ -876,13 +879,11 @@ fn a_family_option_commits_and_the_default_restores_the_chain() {
 	);
 	assert!(app.interaction.dropdown.is_none());
 	assert!(
-		matches!(
-			app.interaction.focus,
-			Some(Command::ToggleDropdown(
-				DropdownId::Font(FontRole::Serif),
-				_
-			))
-		),
+		app.interaction.widgets.focus
+			== Some(
+				Command::ToggleDropdown(DropdownId::Font(FontRole::Serif), 0)
+					.widget_id()
+			),
 		"focus returns to the row the list belongs to"
 	);
 	// The stylesheet in force is the one the document is laid out with.

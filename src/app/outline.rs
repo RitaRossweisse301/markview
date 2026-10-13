@@ -56,7 +56,8 @@ impl<P: super::SendEvent> App<P> {
 		}
 		self.readers.session.outline_tree.toggle(index);
 		self.interaction.outline_selection = Some(index);
-		self.interaction.focus = Some(Command::OutlineToggle(index));
+		self.interaction.widgets.focus =
+			Some(Command::OutlineToggle(index).widget_id());
 		self.ensure_outline();
 		self.reveal_outline(index);
 		self.redraw();

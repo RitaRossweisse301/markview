@@ -45,16 +45,26 @@ impl StyleWarning {
 }
 
 pub(super) struct Preferences {
-	pub(super) values: ReaderSettings,
+	pub(super) ui: markview_ui_core::Runtime<super::ui_model::Model>,
 	/// The export panel's own settings. They are never part of `values`, so
 	/// changing one cannot reflow the document.
-	pub(super) export: ExportSettings,
 	store: SettingsStore,
 	pub(super) style_entries: Vec<crate::stylesheet::Entry>,
 	pub(super) style_warning: Option<StyleWarning>,
 	pub(super) settings_warning: Option<SettingsWarning>,
 	save_at: Option<Instant>,
 	launch_window_layout: WindowLayout,
+}
+impl std::ops::Deref for Preferences {
+	type Target = super::ui_model::Model;
+	fn deref(&self) -> &Self::Target {
+		&self.ui.component
+	}
+}
+impl std::ops::DerefMut for Preferences {
+	fn deref_mut(&mut self) -> &mut Self::Target {
+		&mut self.ui.component
+	}
 }
 impl Preferences {
 	pub(super) fn new(args: &LaunchOptions, ui: &mut TextShaper) -> Self {
@@ -149,8 +159,14 @@ impl Preferences {
 		let export = settings_store.export();
 		Self {
 			launch_window_layout: settings.window_layout,
-			values: settings,
-			export,
+			ui: markview_ui_core::Runtime::new(super::ui_model::Model {
+				settings: super::settings_panel::Model {
+					values: settings,
+					preview: false,
+				},
+				export,
+				fonts: Default::default(),
+			}),
 			store: settings_store,
 			style_entries,
 			style_warning,
@@ -162,9 +178,9 @@ impl Preferences {
 		&mut self,
 		ui: &mut TextShaper,
 	) -> Option<bool> {
-		let ids = self.values.style.clone().unwrap_or_else(|| {
+		let ids = self.ui.component.values.style.clone().unwrap_or_else(|| {
 			vec![
-				if self.values.theme == Theme::Dark {
+				if self.ui.component.values.theme == Theme::Dark {
 					"dark"
 				} else {
 					"light"
@@ -175,15 +191,15 @@ impl Preferences {
 		match crate::stylesheet::load_with_cjk_type(
 			&ids,
 			crate::stylesheet::directory().as_deref(),
-			self.values.cjk_type,
+			self.ui.component.values.cjk_type,
 		) {
 			Ok(sheet) => {
 				let mut sheet = (*sheet).clone();
-				sheet.set_media(self.values.stylesheet.media());
+				sheet.set_media(self.ui.component.values.stylesheet.media());
 				let sheet = Arc::new(sheet);
 				let result = crate::stylesheet::apply_font_overrides(
 					sheet,
-					&self.values.fontdef_overrides,
+					&self.ui.component.values.fontdef_overrides,
 				)
 				.and_then(|sheet| {
 					ui.validate_stylesheet(&sheet)?;
@@ -202,14 +218,14 @@ impl Preferences {
 							.theme
 							.clone();
 						let reflow = sheet.layout_key()
-							!= self.values.stylesheet.layout_key()
+							!= self.ui.component.values.stylesheet.layout_key()
 							|| old_codeblock_theme != new_codeblock_theme
 							// Diagrams are pixels, so a new diagram theme
 							// needs a layout request to redraw them. The key
 							// follows the font definitions the table names.
-							|| self.values.stylesheet.diagram_key()
+							|| self.ui.component.values.stylesheet.diagram_key()
 								!= sheet.diagram_key();
-						self.values.stylesheet = sheet.clone();
+						self.ui.component.values.stylesheet = sheet.clone();
 						ui.set_stylesheet(sheet.clone());
 						ui.appearance = sheet.text(
 							&markview_layout::style::TextAppearance::default(),
@@ -229,7 +245,7 @@ impl Preferences {
 	}
 
 	pub(super) fn restart_pending(&self) -> bool {
-		self.values.window_layout != self.launch_window_layout
+		self.ui.component.values.window_layout != self.launch_window_layout
 	}
 	pub(super) fn path(&self) -> Option<&Path> {
 		self.store.path()
@@ -245,7 +261,7 @@ impl Preferences {
 	}
 	/// Applies and schedules one export-panel change.
 	pub(super) fn set_export(&mut self, export: ExportSettings) {
-		self.export = export.clone();
+		self.ui.component.export = export.clone();
 		self.store.set_export(export);
 		self.schedule_save();
 	}
@@ -262,14 +278,14 @@ impl Preferences {
 		self.save_at = Some(Instant::now() + Duration::from_millis(250));
 	}
 	pub(super) fn changed(&mut self, field: Option<Setting>) {
-		self.store.changed(&self.values, field);
+		self.store.changed(&self.ui.component.values, field);
 		self.schedule_save();
 	}
 	pub(super) fn reload(&mut self) -> bool {
 		match self.store.reload() {
 			Ok(_) => {
 				self.settings_warning = None;
-				self.export = self.store.export();
+				self.ui.component.export = self.store.export();
 				if self.store.has_pending_changes() {
 					self.save_at =
 						Some(Instant::now() + Duration::from_millis(250));

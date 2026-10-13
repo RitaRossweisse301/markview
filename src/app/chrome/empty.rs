@@ -112,6 +112,7 @@ fn layout(ui: &mut TextShaper, width: f32, height: f32, lang: Lang) -> Layout {
 		},
 	);
 	open.kind = components::ButtonKind::Primary;
+	open.id = markview_ui_core::WidgetId::new(2, 1);
 	let button_w = (ui.text_width(lang.empty_open_url(), 13.0) + 24.0)
 		.max(64.0)
 		.min(section_w);
@@ -391,8 +392,12 @@ mod tests {
 				] {
 					let focused = height < 480.0;
 					let interaction = InteractionState {
-						focus: focused
-							.then_some(Command::FocusInput(TextField::Url)),
+						widgets: markview_ui_core::Interaction {
+							focus: focused.then_some(
+								Command::FocusInput(TextField::Url).widget_id(),
+							),
+							..Default::default()
+						},
 						..Default::default()
 					};
 					let mut overlay =

@@ -479,6 +479,7 @@ pub(super) fn settings_form(
 	form
 }
 
+#[cfg(test)]
 pub(super) fn draw_controls(
 	ui: &mut TextShaper,
 	settings: &ReaderSettings,
@@ -488,42 +489,62 @@ pub(super) fn draw_controls(
 	phone: bool,
 	restart_pending: bool,
 ) -> Vec<Draw> {
-	let (width, height) = size;
 	if interaction.panel_open() {
-		let t = settings.lang();
 		let form = settings_form(
 			ui,
 			settings,
 			interaction,
-			width,
-			height,
+			size.0,
+			size.1,
 			backend,
 			phone,
-		);
+		)
+		.without_header()
+		.preview(interaction.settings_preview);
+		draw_controls_form(
+			ui,
+			settings,
+			interaction,
+			size,
+			restart_pending,
+			&form,
+		)
+	} else {
+		draw_toolbar(ui, interaction, size.0, settings.lang())
+	}
+}
+pub(super) fn draw_controls_form(
+	ui: &mut TextShaper,
+	settings: &ReaderSettings,
+	interaction: &InteractionState,
+	size: (f32, f32),
+	restart_pending: bool,
+	form: &Form,
+) -> Vec<Draw> {
+	let (width, height) = size;
+	if interaction.panel_open() {
+		let t = settings.lang();
 		let rect = form.rect;
-		let mut out = form
-			.without_header()
-			.preview(interaction.settings_preview)
-			.draw(
-				ui,
-				interaction,
-				"",
-				if rect.h < 300.0
-					|| interaction.panel == PanelPage::Settings(PanelTab::About)
-				{
-					""
-				} else if restart_pending {
-					t.panel_restart()
-				} else {
-					t.panel_saved()
-				},
-				if restart_pending {
-					C::Warning
-				} else {
-					C::Muted
-				},
-				(width, height),
-			);
+		let mut out = form.draw(
+			ui,
+			interaction,
+			"",
+			if rect.h < 300.0
+				|| interaction.panel == PanelPage::Settings(PanelTab::About)
+			{
+				""
+			} else if restart_pending {
+				t.panel_restart()
+			} else {
+				t.panel_saved()
+			},
+			if restart_pending {
+				C::Warning
+			} else {
+				C::Muted
+			},
+			(width, height),
+		);
 		out.extend(super::components::draw_settings_header(
 			ui,
 			interaction,

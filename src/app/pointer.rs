@@ -196,11 +196,10 @@ impl<P: super::SendEvent> App<P> {
 			.map(str::to_owned)
 	}
 	pub(super) fn button_at_cursor(&mut self) -> bool {
-		self.buttons().into_iter().any(|button| {
-			button
-				.rect
-				.contains(self.interaction.cursor.0, self.interaction.cursor.1)
-		})
+		let buttons = self.buttons();
+		super::widgets::layout(&buttons)
+			.hit(self.interaction.cursor)
+			.is_some()
 	}
 
 	/// Hover state follows scrolling and reflow, not only pointer motion.
@@ -218,6 +217,12 @@ impl<P: super::SendEvent> App<P> {
 			}
 			return;
 		}
+		let controls = self.ui_layout();
+		self.interaction.widgets.handle(
+			&controls.hit,
+			markview_ui_core::Input::Move(self.interaction.cursor),
+		);
+		let over_control = controls.hit.hit(self.interaction.cursor).is_some();
 		let holding = self.interaction.pointer_down.is_some()
 			|| self.interaction.scrollbar.is_some()
 			|| self.tab_strip.drag.is_some();
@@ -260,7 +265,7 @@ impl<P: super::SendEvent> App<P> {
 			}
 		} else if let Some(cursor) = self.frame_cursor() {
 			cursor
-		} else if self.button_at_cursor()
+		} else if over_control
 			|| self.tab_at_cursor().is_some()
 			|| hover.is_some()
 		{
@@ -457,7 +462,8 @@ impl<P: super::SendEvent> App<P> {
 					document_dir: directory.map(std::path::Path::to_path_buf),
 				});
 				// "Open folder" is the default, and Enter activates it.
-				self.interaction.focus = Some(state::Command::ModalOpenFolder);
+				self.interaction.widgets.focus =
+					Some(state::Command::ModalOpenFolder.widget_id());
 				self.refresh_hover();
 				self.redraw();
 			}

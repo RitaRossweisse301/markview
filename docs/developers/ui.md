@@ -1,0 +1,62 @@
+# Native UI message flow
+
+The reader keeps its native vector and glyph drawing. `markview-ui-core` has no
+dependencies and does not access windows, fonts, GPU objects, files, clocks or
+workers. It contains the `Component` protocol, FIFO message scheduling, geometry
+and widget interaction.
+
+```text
+input → widget layout → typed page message → update → effect descriptions
+                                              ↓             ↓
+                                            model       host services
+                                              ↓             ↓
+                                         borrowed view ← completion message
+                                              ↓
+                                    layout → native drawing
+```
+
+`Component::update` mutates its model and returns `Update<Effect>`. The update
+contains ordered effects and an invalidation level: `None`, `Paint` or `Layout`.
+Layout invalidation includes painting. `Runtime::send` queues messages;
+`Runtime::flush` processes them in order and combines invalidation. The host
+executes effects only after updates return, then sends completions through the
+same queue. `Component::view` uses a lifetime-bound associated type so views can
+borrow model data.
+
+`app/ui_model.rs` is the parent component. It routes Settings, Export and Fonts
+messages into independent models. Settings owns its preview flag and reader
+preferences; preview updates only invalidate painting. Reader settings return persistence, session
+and document-reflow effects. Export settings return persistence effects without
+changing reader settings. Both use the same style-priority reducer. Preferences
+owns the runtime and the native settings store; the store remains a host service.
+
+Fonts returns download, cancellation and folder-opening effects. The component
+holds catalogue and progress data; `app/font_service.rs` owns cancellation tokens
+and executes downloads through the shared services. Every progress and settlement
+message carries a run version. The component rejects old messages after retry.
+Catalogue and chooser completions also retain the existing resource-version
+checks before entering the component. Document workers keep their document and
+content-revision checks in their existing host adapters.
+
+`app/widgets.rs` adapts Button/Form/List to the core protocol. A button is a
+description with a stable `WidgetId`, message, rectangle and optional clip.
+Catalogue rows use family or stylesheet IDs; tab-drawer rows use lifetime tab IDs
+that distinguish origins sharing a path and survive renames and reordering.
+Dropdown anchors omit their changing highlighted option from their identity.
+Identity is local to the running UI and is not a persistence format.
+Drawer and toolbar controls use separate identities because both remain painted
+during drawer dismissal.
+
+`UiLayout` supplies visible controls, keyboard traversal and the measured form.
+Painting uses these placed control rectangles; the same clipped rectangles answer
+pointer input. A scrolling form keeps offscreen controls in keyboard order and
+reveals a focused control before painting. `Interaction` owns focus, hover and
+pointer capture by widget identity. A release activates the current message only
+if it still hits the captured widget. Disabled controls block controls behind them
+and are skipped by keyboard navigation. Touch first prefers an exact hit, then
+the nearest expanded target, constrained by its clip. Menus, text input, document
+selection and native window gestures retain their specialized state.
+
+Run the pure protocol tests with `cargo test -p markview-ui-core`. Run reader UI
+tests with `cargo test -p markview --lib app::`; on Linux, select Lavapipe as
+described in [Rendering tests](rendering-tests.md) for the GPU and baseline tests.

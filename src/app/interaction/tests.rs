@@ -1231,6 +1231,135 @@ fn phone_drawer_switches_and_closes_shared_tabs_and_hides_tab_style() {
 }
 
 #[test]
+fn permission_modals_over_forms_keep_close_geometry_and_own_input() {
+	use crate::layout::Draw;
+	use crate::state::{Modal, PanelPage, PanelTab, PermissionAction};
+	for page in [
+		PanelPage::Export,
+		PanelPage::Settings(PanelTab::Generic),
+		PanelPage::Settings(PanelTab::About),
+	] {
+		let (mut app, _) = reader(SOURCE, 760.);
+		app.interaction.show_panel(page);
+		app.overlay();
+		app.interaction.modal = Some(Modal::Permission {
+			resource: crate::security::Resource::File(PathBuf::from(
+				"resource.png",
+			)),
+			resume: PermissionAction::Images,
+		});
+		let draws = app.overlay();
+		let buttons = app.buttons();
+		assert!(buttons.iter().all(|b| matches!(
+			b.action,
+			Command::ModalDismiss | Command::ModalConfirm
+		)));
+		for (index, button) in buttons.iter().enumerate() {
+			assert!(
+				buttons[index + 1..]
+					.iter()
+					.all(|other| button.id != other.id)
+			);
+		}
+		let close = buttons.iter().find(|b| b.icon.is_some()).unwrap();
+		assert!(draws.iter().any(|draw| matches!(draw, Draw::Icon { x, y, size, .. }
+			if *x == close.rect.x + (close.rect.w - size) / 2.0 && *y == close.rect.y + (close.rect.h - size) / 2.0)));
+		app.interaction.cursor = (
+			close.rect.x + close.rect.w / 2.0,
+			close.rect.y + close.rect.h / 2.0,
+		);
+		app.press_widget(&buttons);
+		assert_eq!(app.interaction.widgets.captured, Some(close.id));
+		let action = app.release_widget().unwrap();
+		app.action(action);
+		assert!(app.interaction.modal.is_none());
+		assert_eq!(app.interaction.panel, page);
+		app.overlay();
+	}
+}
+
+#[test]
+fn touch_drawer_distinguishes_same_path_tabs_and_keeps_ids_when_reordered() {
+	use crate::security::{Security, Trust};
+	use crate::state::PanelPage;
+	use winit::event::Touch;
+	let dir = tempfile::tempdir().unwrap();
+	let path = dir.path().join("shared.md");
+	std::fs::write(&path, SOURCE).unwrap();
+	let (mut app, _) = reader(SOURCE, 320.);
+	app.readers.open(path.clone(), Instant::now());
+	assert!(app.readers.open_background_secure(
+		path,
+		None,
+		Security::local(Trust::Untrusted)
+	));
+	app.tab_strip.phone = true;
+	app.interaction.show_panel(PanelPage::Tabs);
+	app.interaction.tabs_animation = None;
+	let before = app.buttons();
+	for (index, button) in before.iter().enumerate() {
+		assert!(
+			before[index + 1..]
+				.iter()
+				.all(|other| button.id != other.id)
+		);
+	}
+	assert!(
+		app.focus_buttons()
+			.iter()
+			.all(|button| !button.label.is_empty())
+	);
+	let ids = |buttons: &[crate::app::Button], action| {
+		buttons.iter().find(|b| b.action == action).unwrap().id
+	};
+	for action in [Command::SelectTab, Command::CloseTab] {
+		assert_ne!(ids(&before, action(0)), ids(&before, action(1)));
+	}
+	app.readers.move_tab(0, 1);
+	let moved = app.buttons();
+	for action in [Command::SelectTab, Command::CloseTab] {
+		assert_eq!(ids(&before, action(0)), ids(&moved, action(1)));
+		assert_eq!(ids(&before, action(1)), ids(&moved, action(0)));
+	}
+	app.readers.move_tab(1, 0);
+	for action in [Command::SelectTab(1), Command::CloseTab(1)] {
+		app.interaction.show_panel(PanelPage::Tabs);
+		app.interaction.tabs_animation = None;
+		app.overlay();
+		let target = app
+			.buttons()
+			.into_iter()
+			.find(|b| b.action == action)
+			.unwrap();
+		for phase in [TouchPhase::Started, TouchPhase::Ended] {
+			app.handle_touch(Touch {
+				device_id: DeviceId::dummy(),
+				phase,
+				id: 1,
+				force: None,
+				location: PhysicalPosition::new(
+					f64::from(target.rect.x + target.rect.w / 2.0),
+					f64::from(target.rect.y + target.rect.h / 2.0),
+				),
+			});
+		}
+		if action == Command::SelectTab(1) {
+			assert_eq!(app.readers.active(), 1);
+			assert_eq!(
+				app.readers.session.security.origin.trust(),
+				Trust::Untrusted
+			);
+		} else {
+			assert_eq!(app.readers.entries().len(), 1);
+			assert_eq!(
+				ids(&app.buttons(), Command::SelectTab(0)),
+				ids(&before, Command::SelectTab(0))
+			);
+		}
+	}
+}
+
+#[test]
 fn only_window_layout_changes_replace_the_saved_hint_until_reverted() {
 	use crate::layout::{Draw, Paint};
 	use crate::settings::WindowLayout;

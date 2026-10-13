@@ -347,7 +347,7 @@ impl<P: super::SendEvent> App<P> {
 		self.cancel_gestures();
 		self.tab_strip.cancel_drag();
 		self.interaction.reset_clicks();
-		self.interaction.pressed = None;
+		self.interaction.widgets.captured = None;
 		self.interaction.pointer_down = None;
 		self.interaction.drag_at = None;
 		self.interaction.scrollbar = None;

@@ -4,11 +4,12 @@
 //! spawned thread, and only the PNG strips come back to the main thread, where
 //! the one GPU device lives. Nothing here changes the reader's layout options.
 use super::{App, Event, ExportOutcome};
+#[cfg(test)]
+use crate::state::Command;
 use crate::{
 	export::{self, draw_tile, write_png},
 	layout::LayoutSnapshot,
 	settings::{ExportFormat, ExportSettings, FontDefOverride},
-	state::Command,
 };
 use markview_layout::{
 	fonts::FontConfig,
@@ -73,51 +74,6 @@ pub(super) struct PngExport {
 }
 
 impl<P: super::SendEvent> App<P> {
-	/// Applies an export-panel change, and reports whether it owned the
-	/// command. It never requests a reader layout, so the window cannot move.
-	pub(super) fn export_command(&mut self, action: Command) -> bool {
-		let mut settings = self.preferences.export.clone();
-		match action {
-			Command::ExportFormat(format) => settings.format = format,
-			Command::ExportSize(delta) => {
-				settings.font_size = (settings.font_size + f32::from(delta))
-					.clamp(
-						export::config::MIN_FONT_SIZE_PX,
-						export::config::MAX_FONT_SIZE_PX,
-					)
-			}
-			Command::ExportIndent(em) => {
-				settings.paragraph_indent = f32::from(em)
-			}
-			Command::ExportPaper(index) => {
-				let Some((_, paper)) = PAPER_PRESETS.get(index as usize) else {
-					return true;
-				};
-				settings.paper = (*paper).into();
-			}
-			Command::ExportOrientation(landscape) => {
-				settings.landscape = landscape
-			}
-			Command::ExportMargin(index) => {
-				let Some((margin, _)) = MARGIN_PRESETS.get(index as usize)
-				else {
-					return true;
-				};
-				settings.margin = *margin;
-			}
-			Command::ExportScale(index) => {
-				let Some((scale, _)) = SCALE_PRESETS.get(index as usize) else {
-					return true;
-				};
-				settings.scale = *scale;
-			}
-			_ => return false,
-		}
-		self.preferences.set_export(settings);
-		self.redraw();
-		true
-	}
-
 	/// Shows a transient status line; a zero `seconds` clears it.
 	pub(super) fn notify(&mut self, message: &str, error: bool, seconds: u64) {
 		self.status = message.to_owned();
@@ -162,7 +118,7 @@ impl<P: super::SendEvent> App<P> {
 		// The panel closes so the document and the status line stay visible
 		// while the file is written.
 		self.interaction.show_panel(crate::state::PanelPage::Closed);
-		self.interaction.focus = None;
+		self.interaction.widgets.focus = None;
 		self.interaction.pointer_down = None;
 		self.dialog_open = true;
 		self.export_rebuild = false;
@@ -704,7 +660,7 @@ mod tests {
 		] {
 			app.preferences.export.font_size = size;
 			app.preferences.export.validate().unwrap();
-			assert!(app.export_command(Command::ExportSize(delta)));
+			assert!(app.page_command(Command::ExportSize(delta)));
 			assert_eq!(app.preferences.export.font_size, expected);
 			app.preferences.export.validate().unwrap();
 		}

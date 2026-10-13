@@ -5,6 +5,138 @@ use super::{
 };
 use crate::layout::{Draw, Scrollbar};
 impl<P: super::SendEvent> App<P> {
+	pub(super) fn page_command(
+		&mut self,
+		action: crate::state::Command,
+	) -> bool {
+		use super::{settings_panel, ui_model::Message};
+		use crate::state::Command;
+		if self.tab_strip.phone
+			&& matches!(
+				action,
+				Command::Narrower | Command::Wider | Command::TabStyle(_)
+			) {
+			return true;
+		}
+		let message = match action {
+			Command::Reset => {
+				let mut values = crate::settings::ReaderSettings::default();
+				if let Some(theme) = self.system_theme() {
+					values.theme = theme;
+				}
+				Some(Message::Settings(settings_panel::Message::Reset(
+					Box::new(values),
+				)))
+			}
+			Command::StyleToggle(index)
+			| Command::StyleUp(index)
+			| Command::StyleDown(index)
+			| Command::ExportStyleToggle(index)
+			| Command::ExportStyleUp(index)
+			| Command::ExportStyleDown(index) => {
+				let export = matches!(
+					action,
+					Command::ExportStyleToggle(_)
+						| Command::ExportStyleUp(_)
+						| Command::ExportStyleDown(_)
+				);
+				let entries = if export {
+					&self.settings_resources.export_entries
+				} else {
+					&self.preferences.style_entries
+				};
+				let Some(entry) = entries.get(index) else {
+					return true;
+				};
+				let operation = match action {
+					Command::StyleToggle(_) | Command::ExportStyleToggle(_) => {
+						super::style_edit::Operation::Toggle
+					}
+					Command::StyleUp(_) | Command::ExportStyleUp(_) => {
+						super::style_edit::Operation::Up
+					}
+					_ => super::style_edit::Operation::Down,
+				};
+				let edit = super::style_edit::Edit {
+					id: entry.id.clone(),
+					operation,
+					valid: entry.error.is_none(),
+				};
+				Some(if export {
+					Message::Export(super::export_panel::Message::Style(edit))
+				} else {
+					Message::Settings(settings_panel::Message::Style(edit))
+				})
+			}
+			Command::FontFamily(role, selection) => {
+				let family = if let Some(selection) = selection {
+					let Some(name) =
+						self.preferences.fonts.resolve(role, selection)
+					else {
+						return true;
+					};
+					Some(name)
+				} else {
+					None
+				};
+				Some(Message::Settings(settings_panel::Message::FontFamily(
+					role, family,
+				)))
+			}
+			_ => settings_panel::Message::from_command(action)
+				.map(Message::Settings)
+				.or_else(|| {
+					super::export_panel::Message::from_command(action)
+						.map(Message::Export)
+				}),
+		};
+		let Some(message) = message else {
+			return false;
+		};
+		self.dispatch_ui(message);
+		true
+	}
+
+	pub(super) fn dispatch_ui(&mut self, message: super::ui_model::Message) {
+		use super::{settings_panel, ui_model::Effect};
+		self.preferences.ui.send(message);
+		let update = self.preferences.ui.flush();
+		for effect in update.effects {
+			match effect {
+				Effect::Settings(effect) => match effect {
+					settings_panel::Effect::Preview(value) => {
+						self.interaction.settings_preview = value
+					}
+					settings_panel::Effect::Persist(field) => {
+						self.setting_changed(field)
+					}
+					settings_panel::Effect::Reflow => self.request(false),
+					settings_panel::Effect::ReloadStyles => {
+						self.reload_styles()
+					}
+					settings_panel::Effect::CloseDropdown => {
+						self.close_dropdown()
+					}
+					settings_panel::Effect::SyncSession => {
+						self.sync_session_settings()
+					}
+					settings_panel::Effect::Flush => {
+						self.flush_settings();
+					}
+				},
+				Effect::PersistExport => {
+					let export = self.preferences.export.clone();
+					self.preferences.set_export(export);
+					self.refresh_settings_resources(false);
+				}
+				Effect::Fonts(effect) => self.font_effect(effect),
+			}
+		}
+		if update.invalidation != markview_ui_core::Invalidation::None {
+			self.refresh_hover();
+			self.redraw();
+		}
+	}
 	/// The remote-image deferral count while its banner is worth showing.
 	pub(super) fn remote_notice(&self) -> Option<usize> {
 		self.readers.session.remote_notice()
@@ -49,7 +181,8 @@ impl<P: super::SendEvent> App<P> {
 			let load = self.settings_resources.load(kind);
 			load.displayed && load.cached
 		});
-		let mut fonts = self.font_panel.view();
+		let view = self.preferences.ui.view();
+		let mut fonts = view.fonts;
 		if !show_snapshot {
 			fonts.catalog = &[];
 			fonts.shown.clear();
@@ -66,9 +199,9 @@ impl<P: super::SendEvent> App<P> {
 			tab_strip: &self.tab_strip,
 			tab_widths: &self.tab_metrics.widths,
 			restart_pending: self.preferences.restart_pending(),
-			settings: &self.preferences.values,
+			settings: view.settings,
 			font_config: &self.fonts_config,
-			export: &self.preferences.export,
+			export: view.export,
 			interaction: &self.interaction,
 			style_entries: if !show_snapshot {
 				&[]
@@ -97,31 +230,7 @@ impl<P: super::SendEvent> App<P> {
 		self.chrome().form()
 	}
 	pub(super) fn focus_buttons(&mut self) -> Vec<Button> {
-		if let Some(form) = self.panel_form() {
-			// The settings header is not part of the scrolling form, but its
-			// tabs are still reachable by keyboard: they lead the order.
-			let mut buttons: Vec<Button> = self
-				.buttons()
-				.into_iter()
-				.filter(|b| {
-					matches!(b.action, crate::state::Command::SettingsTab(_))
-				})
-				.collect();
-			buttons.extend(form.buttons.into_iter().filter(|b| b.enabled));
-			buttons
-		} else {
-			let mut buttons: Vec<Button> = Vec::new();
-			for button in self.buttons() {
-				// The footer's path takes the pointer only: the band draws no
-				// focus ring, so the keyboard has nothing to show for it.
-				if !matches!(button.action, crate::state::Command::CopyPath)
-					&& !buttons.iter().any(|b| b.action == button.action)
-				{
-					buttons.push(button);
-				}
-			}
-			buttons
-		}
+		self.ui_layout().focus
 	}
 	/// The scrolling list of whichever panel page shows one, if any.
 	///
@@ -155,7 +264,7 @@ impl<P: super::SendEvent> App<P> {
 				self.interaction.styles_scroll,
 			))
 		} else if self.interaction.fonts_open() {
-			let fonts = self.font_panel.view();
+			let fonts = self.preferences.fonts.view();
 			Some(super::font_panel::view::list(
 				width,
 				height,
@@ -191,7 +300,7 @@ impl<P: super::SendEvent> App<P> {
 		{
 			self.interaction.export_scroll = scroll;
 		} else if self.interaction.fonts_open() {
-			self.font_panel.set_scroll(scroll);
+			self.preferences.fonts.set_scroll(scroll);
 		} else if self.interaction.styles_open()
 			|| self.interaction.export_styles_open()
 		{
@@ -210,15 +319,16 @@ impl<P: super::SendEvent> App<P> {
 			return;
 		};
 		self.set_panel_scroll((scroll + delta).clamp(0.0, max));
-		self.interaction.pressed = None;
+		self.interaction.widgets.captured = None;
 		self.redraw();
 	}
 	pub(super) fn reveal_panel_focus(&mut self) {
 		if let Some(form) = self.panel_form() {
 			let scroll = self
 				.interaction
+				.widgets
 				.focus
-				.map_or(form.scroll, |action| form.reveal(action));
+				.map_or(form.scroll, |id| form.reveal(id));
 			self.set_panel_scroll(scroll);
 		}
 	}
@@ -249,19 +359,53 @@ impl<P: super::SendEvent> App<P> {
 		}
 	}
 
-	pub(super) fn buttons(&mut self) -> Vec<Button> {
+	pub(super) fn ui_layout(&mut self) -> super::widgets::UiLayout {
 		self.ensure_outline();
-		// An open option list answers for itself: its options are pressed,
-		// released and tabbed on like any other control, so they lead the list
-		// the pointer and the keyboard both read. They are painted over the
-		// page, and a hit test reads the same order, so the first option a
-		// point falls in wins before any control the list covers. Nothing else
-		// is open at once.
 		let mut buttons = self.dropdown_buttons();
-		let mut page = self.chrome().buttons();
-		buttons.append(&mut page);
+		let form = self.panel_form();
+		buttons.extend(self.chrome().buttons_for(form.as_ref()));
 		buttons.extend(self.search_buttons());
-		buttons
+		let mut focus = Vec::new();
+		if let Some(form) = &form {
+			focus.extend(
+				buttons
+					.iter()
+					.filter(|b| {
+						matches!(
+							b.action,
+							crate::state::Command::SettingsTab(_)
+						)
+					})
+					.cloned(),
+			);
+			focus.extend(
+				form.buttons
+					.iter()
+					.filter(|b| {
+						b.enabled && self.settings_action_enabled(b.action)
+					})
+					.cloned(),
+			);
+		} else {
+			for button in &buttons {
+				if button.widget().focusable
+					&& button.enabled
+					&& !focus.iter().any(|b: &Button| b.id == button.id)
+				{
+					focus.push(button.clone());
+				}
+			}
+		}
+		let hit = super::widgets::layout(&buttons);
+		super::widgets::UiLayout {
+			buttons,
+			focus,
+			form,
+			hit,
+		}
+	}
+	pub(super) fn buttons(&mut self) -> Vec<Button> {
+		self.ui_layout().buttons
 	}
 	pub(super) fn overlay(&mut self) -> Vec<Draw> {
 		self.refresh_viewer();
@@ -289,7 +433,9 @@ impl<P: super::SendEvent> App<P> {
 				)
 			});
 		}
-		let mut inputs = self.draw_inputs();
+		let layout = self.ui_layout();
+		self.interaction.controls = Some(layout.hit);
+		let mut inputs = self.draw_inputs_with_form(layout.form.as_ref());
 		if self.readers.session.search.open {
 			inputs.extend(self.draw_search());
 			inputs.extend(self.draw_search_input());
@@ -297,7 +443,7 @@ impl<P: super::SendEvent> App<P> {
 		let mut out = self.draw_search_highlights();
 		let mut chrome = self.chrome();
 		chrome.input_draws = inputs;
-		out.extend(chrome.overlay());
+		out.extend(chrome.overlay_with_form(layout.form.as_ref()));
 		if markview_platform::touch_layout() {
 			use crate::layout::{Paint, Rect};
 			use markview_layout::style::{ColorField, Condition};

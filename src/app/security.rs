@@ -13,7 +13,8 @@ impl<P: super::SendEvent> App<P> {
 		resume: PermissionAction,
 	) {
 		self.interaction.modal = Some(Modal::Permission { resource, resume });
-		self.interaction.focus = Some(Command::ModalDismiss);
+		self.interaction.widgets.focus =
+			Some(Command::ModalDismiss.widget_id());
 		self.refresh_hover();
 		self.redraw();
 	}

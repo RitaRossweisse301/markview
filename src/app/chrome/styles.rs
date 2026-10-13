@@ -192,6 +192,8 @@ pub(super) fn style_controls(
 	}
 	for (label, icon, action, x, w) in headers {
 		out.push(Button {
+			id: crate::app::widgets::id(action),
+			clip: None,
 			label: label.into(),
 			icon,
 			marker: None,
@@ -239,6 +241,11 @@ pub(super) fn style_rows(
 		let y = list.row_rect(row).y + (ROW - CONTROL) / 2.0;
 		if e.error.is_none() || pos.is_some() {
 			out.push(Button {
+				id: crate::app::widgets::row_id(
+					if target == StylesTarget::Reader { 3 } else { 6 },
+					&entries[index].id,
+				),
+				clip: None,
 				label: (if pos.is_some() {
 					lang.styles_disable()
 				} else {
@@ -281,6 +288,19 @@ pub(super) fn style_rows(
 					continue;
 				}
 				out.push(Button {
+					id: crate::app::widgets::row_id(
+						match (target, action) {
+							(StylesTarget::Reader, Command::StyleUp(_)) => 4,
+							(StylesTarget::Reader, _) => 5,
+							(
+								StylesTarget::Export,
+								Command::ExportStyleUp(_),
+							) => 7,
+							(StylesTarget::Export, _) => 8,
+						},
+						&entries[index].id,
+					),
+					clip: None,
 					label: label.into(),
 					icon: Some(icon),
 					marker: None,
@@ -376,6 +396,7 @@ pub(super) fn draw_styles(
 	// A pointer below the fold must not light up the row hidden under the
 	// footer, so the body only sees the cursor while it is inside the clip.
 	let body_interaction = InteractionState {
+		widgets: interaction.widgets,
 		cursor: if list
 			.viewport
 			.contains(interaction.cursor.0, interaction.cursor.1)
@@ -384,9 +405,7 @@ pub(super) fn draw_styles(
 		} else {
 			(f32::NEG_INFINITY, f32::NEG_INFINITY)
 		},
-		focus: interaction.focus,
-		focus_visible: interaction.focus_visible,
-		pressed: interaction.pressed,
+		controls: interaction.controls.clone(),
 		..Default::default()
 	};
 	for row in list.visible() {

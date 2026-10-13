@@ -41,6 +41,7 @@ members = [
 	"crates/markview-platform",
 	"crates/markview-render",
 	"crates/markview-selection",
+	"crates/markview-ui-core",
 	"crates/markview-web",
 	"xtask",
 ]
@@ -149,6 +150,7 @@ markview-pdf = { path = "crates/markview-pdf" }
 markview-platform = { path = "crates/markview-platform" }
 markview-render = { path = "crates/markview-render", features = ["readback"] }
 markview-selection = { path = "crates/markview-selection" }
+markview-ui-core = { path = "crates/markview-ui-core" }
 anyhow.workspace = true
 env_logger.workspace = true
 log.workspace = true

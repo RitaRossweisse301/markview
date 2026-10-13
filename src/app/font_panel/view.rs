@@ -171,6 +171,11 @@ fn chooser_button(
 		.find(|entry| entry.active)
 		.or_else(|| entries.first());
 	Button {
+		id: crate::app::widgets::id(Command::ToggleDropdown(
+			DropdownId::Font(role),
+			entries.iter().position(|entry| entry.active).unwrap_or(0),
+		)),
+		clip: None,
 		label: chosen.map_or_else(|| "".into(), |entry| entry.label.clone()),
 		icon: None,
 		marker: Some(crate::app::chrome::icons::CHEVRON),
@@ -353,6 +358,10 @@ fn fonts_controls(
 	);
 	if !markview_platform::touch_layout() {
 		out.push(Button {
+			id: crate::app::widgets::id(Command::Fonts(
+				FontCommand::OpenFolder,
+			)),
+			clip: None,
 			label: (lang.fonts_open_folder()).into(),
 			icon: None,
 			marker: None,
@@ -401,6 +410,12 @@ fn fonts_controls(
 			(lang.fonts_filter_set(), None, true),
 		] {
 			out.push(Button {
+				id: crate::app::widgets::id(Command::Fonts(if set {
+					FontCommand::Choosers
+				} else {
+					FontCommand::StatusFilter(state)
+				})),
+				clip: None,
 				label: label.into(),
 				icon: None,
 				marker: None,
@@ -443,6 +458,8 @@ fn fonts_controls(
 		),
 	] {
 		out.push(Button {
+			id: crate::app::widgets::id(Command::Fonts(action)),
+			clip: None,
 			label: label.into(),
 			icon: None,
 			marker: None,
@@ -527,6 +544,8 @@ fn font_rows(
 			_ => Command::Fonts(FontCommand::DownloadOne(row)),
 		};
 		out.push(Button {
+			id: crate::app::widgets::row_id(1, &family.family.id),
+			clip: None,
 			label: label.into(),
 			icon: if running {
 				Some(crate::app::chrome::icons::CLOSE)
@@ -663,6 +682,7 @@ pub(in crate::app) fn draw_fonts(
 	// A pointer below the fold must not light up the row hidden under the
 	// footer, so the body only sees the cursor while it is inside the clip.
 	let body_interaction = InteractionState {
+		widgets: interaction.widgets,
 		cursor: if list
 			.viewport
 			.contains(interaction.cursor.0, interaction.cursor.1)
@@ -671,9 +691,7 @@ pub(in crate::app) fn draw_fonts(
 		} else {
 			(f32::NEG_INFINITY, f32::NEG_INFINITY)
 		},
-		focus: interaction.focus,
-		focus_visible: interaction.focus_visible,
-		pressed: interaction.pressed,
+		controls: interaction.controls.clone(),
 		..Default::default()
 	};
 	let mut body = Vec::new();
@@ -993,11 +1011,11 @@ mod tests {
 			Some(State::Provided),
 		] {
 			let view = super::super::View {
-				choices: {
+				choices: std::borrow::Cow::Owned({
 					let mut c = super::super::Choices::default();
 					c.refresh(&crate::test_support::fonts());
 					c
-				},
+				}),
 				catalog: &[],
 				shown: vec![],
 				jobs: &jobs,
@@ -1066,11 +1084,11 @@ mod tests {
 		let fonts = crate::test_support::fonts();
 		for (choosers, open) in [(true, false), (false, true)] {
 			let view = super::super::View {
-				choices: {
+				choices: std::borrow::Cow::Owned({
 					let mut c = super::super::Choices::default();
 					c.refresh(&crate::test_support::fonts());
 					c
-				},
+				}),
 				catalog: &catalog,
 				shown: shown.clone(),
 				jobs: &jobs,
@@ -1141,11 +1159,11 @@ mod tests {
 		for (w, h) in [(360., 740.), (500., 300.), (820., 600.)] {
 			let panel = panel_rect(w, h);
 			let view = super::super::View {
-				choices: {
+				choices: std::borrow::Cow::Owned({
 					let mut c = super::super::Choices::default();
 					c.refresh(&crate::test_support::fonts());
 					c
-				},
+				}),
 				catalog: &catalog,
 				shown: shown.clone(),
 				jobs: &jobs,
@@ -1446,11 +1464,11 @@ mod tests {
 		);
 		let jobs = HashMap::from([("a".into(), progress)]);
 		let view = super::super::View {
-			choices: {
+			choices: std::borrow::Cow::Owned({
 				let mut c = super::super::Choices::default();
 				c.refresh(&crate::test_support::fonts());
 				c
-			},
+			}),
 			catalog: &catalog,
 			shown: vec![0],
 			jobs: &jobs,
@@ -1568,11 +1586,11 @@ mod tests {
 		let families = markview_layout::fonts::families(&fonts, false);
 		let jobs = HashMap::new();
 		let view = super::super::View {
-			choices: {
+			choices: std::borrow::Cow::Owned({
 				let mut c = super::super::Choices::default();
 				c.refresh(&crate::test_support::fonts());
 				c
-			},
+			}),
 			catalog: &[],
 			shown: vec![],
 			jobs: &jobs,
@@ -1628,11 +1646,11 @@ mod tests {
 		let fonts = crate::test_support::fonts();
 		let jobs = HashMap::new();
 		let view = super::super::View {
-			choices: {
+			choices: std::borrow::Cow::Owned({
 				let mut c = super::super::Choices::default();
 				c.refresh(&crate::test_support::fonts());
 				c
-			},
+			}),
 			catalog: &[],
 			shown: vec![],
 			jobs: &jobs,
@@ -1694,11 +1712,11 @@ mod tests {
 		let settings = ReaderSettings::default();
 		let jobs = HashMap::new();
 		let view = |scroll: f32| super::super::View {
-			choices: {
+			choices: std::borrow::Cow::Owned({
 				let mut c = super::super::Choices::default();
 				c.refresh(&crate::test_support::fonts());
 				c
-			},
+			}),
 			catalog: &[],
 			shown: vec![],
 			jobs: &jobs,

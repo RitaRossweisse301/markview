@@ -1,4 +1,5 @@
 //! Downloadable-font UI state and operations, independent of the application.
+use markview_ui_core::{Component, Invalidation, Update};
 use std::{collections::HashMap, sync::Arc};
 
 pub(super) mod view;
@@ -17,8 +18,41 @@ pub(crate) enum Command {
 }
 
 pub(super) enum Message {
-	Progress(Box<crate::fonts::Progress>),
-	Settled(Box<crate::fonts::Summary>),
+	Catalog(Vec<crate::fonts::Family>),
+	Choices(Choices),
+	Command {
+		command: Command,
+		offline: bool,
+	},
+	Progress {
+		run: u64,
+		progress: Box<crate::fonts::Progress>,
+	},
+	Settled {
+		run: u64,
+		summary: Box<crate::fonts::Summary>,
+	},
+	Failed {
+		run: u64,
+		ids: Vec<String>,
+		note: String,
+	},
+	Note(String),
+}
+
+pub(super) enum Effect {
+	Download {
+		run: u64,
+		families: Vec<markview_layout::style::FontFamily>,
+	},
+	Cancel(String),
+	OpenFolder,
+	Offline,
+	Completed {
+		run: u64,
+		stored: usize,
+		failure: Option<String>,
+	},
 }
 
 #[derive(Clone, Default)]
@@ -57,8 +91,8 @@ pub(super) struct FontPanel {
 	// Built only when a page needs it; catalogue scans must not delay launch.
 	font_catalog: Vec<crate::fonts::Family>,
 	font_jobs: HashMap<String, crate::fonts::Progress>,
-	font_cancel: HashMap<String, tokio_util::sync::CancellationToken>,
-	services: Option<crate::services::Handle>,
+	job_runs: HashMap<String, u64>,
+	next_run: u64,
 	font_note: Option<String>,
 	font_status_filter: Option<crate::fonts::State>,
 	/// Whether the page shows its chooser rows rather than the catalogue.
@@ -67,7 +101,7 @@ pub(super) struct FontPanel {
 }
 
 pub(super) struct View<'a> {
-	pub(super) choices: Choices,
+	pub(super) choices: std::borrow::Cow<'a, Choices>,
 	pub(super) catalog: &'a [crate::fonts::Family],
 	pub(super) shown: Vec<usize>,
 	pub(super) jobs: &'a HashMap<String, crate::fonts::Progress>,
@@ -78,15 +112,9 @@ pub(super) struct View<'a> {
 }
 
 impl FontPanel {
-	pub(super) fn with_services(services: crate::services::Handle) -> Self {
-		Self {
-			services: Some(services),
-			..Default::default()
-		}
-	}
 	pub(super) fn view(&self) -> View<'_> {
 		View {
-			choices: self.choices.clone(),
+			choices: std::borrow::Cow::Borrowed(&self.choices),
 			catalog: &self.font_catalog,
 			shown: self.shown_fonts(),
 			jobs: &self.font_jobs,
@@ -122,7 +150,7 @@ impl FontPanel {
 	pub(super) fn settled(&mut self, summary: &crate::fonts::Summary) {
 		for id in &summary.requested {
 			self.font_jobs.remove(id);
-			self.font_cancel.remove(id);
+			self.job_runs.remove(id);
 		}
 		self.font_note =
 			match (summary.failed.first(), summary.cancelled.first()) {
@@ -136,13 +164,7 @@ impl FontPanel {
 				(None, None) => Some("Nothing to download".into()),
 			};
 	}
-	/// Returns whether an offline notification should be shown.
-	pub(super) fn command(
-		&mut self,
-		command: Command,
-		offline: bool,
-		send: impl Fn(Message) + Send + 'static,
-	) -> bool {
+	fn command(&mut self, command: Command, offline: bool) -> Update<Effect> {
 		let (ids, scope) = match command {
 			Command::DownloadMissing => {
 				(self.shown_font_ids(), crate::fonts::Scope::Missing)
@@ -152,7 +174,7 @@ impl FontPanel {
 			}
 			Command::DownloadOne(index) | Command::RedownloadOne(index) => {
 				let Some(id) = self.shown_font_id(index) else {
-					return false;
+					return Update::new(Invalidation::None);
 				};
 				let scope = if matches!(command, Command::RedownloadOne(_)) {
 					crate::fonts::Scope::All
@@ -163,27 +185,28 @@ impl FontPanel {
 			}
 			Command::Cancel(index) => {
 				if let Some(id) = self.shown_font_id(index) {
-					self.cancel_font(&id);
+					return Update::new(Invalidation::Paint)
+						.effect(Effect::Cancel(id));
 				}
-				return false;
+				return Update::new(Invalidation::None);
 			}
 			Command::OpenFolder => {
-				self.open_fonts_folder();
-				return false;
+				return Update::new(Invalidation::None)
+					.effect(Effect::OpenFolder);
 			}
 			Command::StatusFilter(state) => {
 				self.font_status_filter = state;
 				self.font_choosers = false;
 				self.scroll = 0.0;
-				return false;
+				return Update::new(Invalidation::Layout);
 			}
 			Command::Choosers => {
 				self.font_choosers = true;
 				self.scroll = 0.0;
-				return false;
+				return Update::new(Invalidation::Layout);
 			}
 		};
-		self.download_fonts(&ids, scope, offline, send)
+		self.download_fonts(&ids, scope, offline)
 	}
 	/// The catalogue positions the Fonts page shows, filters applied.
 	fn shown_fonts(&self) -> Vec<usize> {
@@ -213,106 +236,115 @@ impl FontPanel {
 			.collect()
 	}
 
-	pub(super) fn set_catalog(&mut self, catalog: Vec<crate::fonts::Family>) {
-		self.font_catalog = catalog;
-	}
-	pub(super) fn set_choices(&mut self, choices: Choices) {
-		self.choices = choices;
-	}
 	pub(super) fn choosers(&self) -> bool {
 		self.font_choosers
 	}
 
-	/// Starts downloading the named families that still need a download.
-	///
-	/// Every family comes from the catalogued stylesheets and the builtin
-	/// recommendations, so a download is exactly that set; nothing here runs on
-	/// its own. A family already being downloaded is left to the run that owns
-	/// it, so two runs never write the same files.
 	fn download_fonts(
 		&mut self,
 		ids: &[String],
 		scope: crate::fonts::Scope,
 		offline: bool,
-		mut send: impl FnMut(Message) + Send + 'static,
-	) -> bool {
-		let ids: Vec<String> = ids
+	) -> Update<Effect> {
+		let ids: Vec<_> = ids
 			.iter()
 			.filter(|id| !self.font_jobs.contains_key(*id))
 			.cloned()
 			.collect();
-		let missing: Vec<markview_layout::style::FontFamily> =
+		let families: Vec<_> =
 			crate::fonts::select(&self.font_catalog, &ids, scope)
 				.into_iter()
 				.cloned()
 				.collect();
-		if missing.is_empty() {
-			return false;
+		if families.is_empty() {
+			return Update::new(Invalidation::None);
 		}
-
 		if offline {
 			self.font_note =
 				Some("Offline: font downloads are unavailable".into());
-			return true;
+			return Update::new(Invalidation::Paint).effect(Effect::Offline);
 		}
-		let Some(dir) = crate::fonts::directory() else {
-			self.font_note = Some("No user configuration directory".into());
-			return false;
-		};
-		let services =
-			self.services.as_ref().expect("font panel services").clone();
-		let mut cancels = HashMap::new();
-		for family in &missing {
+		self.next_run += 1;
+		let run = self.next_run;
+		for family in &families {
 			self.font_jobs.insert(
 				family.id.clone(),
 				crate::fonts::Progress::queued(&family.id),
 			);
-			let cancel = services.cancel.child_token();
-			self.font_cancel.insert(family.id.clone(), cancel.clone());
-			cancels.insert(family.id.clone(), cancel);
+			self.job_runs.insert(family.id.clone(), run);
 		}
 		self.font_note = None;
-		let ids: Vec<_> =
-			missing.iter().map(|family| family.id.clone()).collect();
-		let handle = services.clone();
-		if !services.submit(async move {
-			let transport = crate::net::Downloader::new("Font");
-			let summary = crate::fonts::run_async(
-				&missing,
-				&dir,
-				&transport,
-				&handle,
-				cancels,
-				|progress| send(Message::Progress(Box::new(progress))),
-			)
-			.await;
-			send(Message::Settled(Box::new(summary)));
-		}) {
-			for id in ids {
-				self.font_jobs.remove(&id);
-				self.font_cancel.remove(&id);
+		Update::new(Invalidation::Layout)
+			.effect(Effect::Download { run, families })
+	}
+}
+
+impl Component for FontPanel {
+	type Message = Message;
+	type Effect = Effect;
+	type View<'a> = View<'a>;
+
+	fn view(&self) -> View<'_> {
+		self.view()
+	}
+	fn update(&mut self, message: Message) -> Update<Effect> {
+		match message {
+			Message::Catalog(catalog) => {
+				self.font_catalog = catalog;
+				Update::new(Invalidation::Layout)
 			}
-			self.font_note = Some("Font service closed".into());
-		}
-		false
-	}
-
-	/// Asks one family's running download to stop.
-	fn cancel_font(&mut self, id: &str) {
-		self.font_cancel.entry(id.to_owned()).or_default().cancel();
-	}
-
-	/// Opens the download directory, creating it when it does not exist yet.
-	fn open_fonts_folder(&mut self) {
-		let result = crate::fonts::directory()
-			.ok_or_else(|| anyhow::anyhow!("No user configuration directory"))
-			.and_then(|dir| {
-				std::fs::create_dir_all(&dir)?;
-				markview_platform::open_external(dir)?;
-				Ok(())
-			});
-		if let Err(error) = result {
-			self.font_note = Some(format!("{error:#}"));
+			Message::Choices(choices) => {
+				self.choices = choices;
+				Update::new(Invalidation::Layout)
+			}
+			Message::Command { command, offline } => {
+				self.command(command, offline)
+			}
+			Message::Progress { run, progress } => {
+				if self.job_runs.get(&progress.id) != Some(&run) {
+					return Update::new(Invalidation::None);
+				}
+				self.progress(*progress);
+				Update::new(Invalidation::Paint)
+			}
+			Message::Settled { run, summary } => {
+				if summary.requested.is_empty()
+					|| !summary
+						.requested
+						.iter()
+						.all(|id| self.job_runs.get(id) == Some(&run))
+				{
+					return Update::new(Invalidation::None);
+				}
+				self.settled(&summary);
+				Update::new(Invalidation::Layout).effect(Effect::Completed {
+					run,
+					stored: summary.stored,
+					failure: summary
+						.failed
+						.first()
+						.map(|(_, reason)| reason.clone()),
+				})
+			}
+			Message::Failed { run, ids, note } => {
+				let mut accepted = false;
+				for id in ids {
+					if self.job_runs.get(&id) == Some(&run) {
+						self.job_runs.remove(&id);
+						self.font_jobs.remove(&id);
+						accepted = true;
+					}
+				}
+				if !accepted {
+					return Update::new(Invalidation::None);
+				}
+				self.font_note = Some(note);
+				Update::new(Invalidation::Layout)
+			}
+			Message::Note(note) => {
+				self.font_note = Some(note);
+				Update::new(Invalidation::Paint)
+			}
 		}
 	}
 }
@@ -385,27 +417,27 @@ mod tests {
 		panel.command(
 			Command::StatusFilter(Some(crate::fonts::State::Missing)),
 			true,
-			|_| unreachable!(),
 		);
 		assert_eq!(panel.view().shown, vec![0, 1]);
 		assert_eq!(panel.view().scroll, 0.0);
 		let id = panel.font_catalog[1].family.id.clone();
 		panel.progress(crate::fonts::Progress::queued(&id));
-		panel.command(Command::Cancel(1), true, |_| unreachable!());
-		assert!(panel.font_cancel[&id].is_cancelled());
+		panel.command(Command::Cancel(1), true);
+		assert!(
+			matches!(panel.command(Command::Cancel(1), true).effects.as_slice(), [Effect::Cancel(cancelled)] if cancelled == &id)
+		);
 		panel.progress(crate::fonts::Progress::queued(
 			&panel.font_catalog[0].family.id,
 		));
-		panel.command(Command::DownloadMissing, true, |_| unreachable!());
+		panel.command(Command::DownloadMissing, true);
 		assert!(panel.view().note.is_none());
 		panel.command(
 			Command::StatusFilter(Some(crate::fonts::State::Downloaded)),
 			true,
-			|_| unreachable!(),
 		);
 		assert!(panel.view().shown.is_empty());
 		panel.set_scroll(88.0);
-		panel.command(Command::StatusFilter(None), true, |_| unreachable!());
+		panel.command(Command::StatusFilter(None), true);
 		assert_eq!(panel.view().shown, vec![0, 1, 2]);
 		assert_eq!(panel.view().scroll, 0.0);
 		assert!(panel.view().status_filter.is_none());
@@ -413,14 +445,13 @@ mod tests {
 		// The chooser rows are a view of their own: opening one resets the
 		// scroll, and any status filter leaves it again.
 		panel.set_scroll(72.0);
-		panel.command(Command::Choosers, true, |_| unreachable!());
+		panel.command(Command::Choosers, true);
 		assert!(panel.view().choosers);
 		assert_eq!(panel.view().scroll, 0.0);
 		panel.set_scroll(72.0);
 		panel.command(
 			Command::StatusFilter(Some(crate::fonts::State::Missing)),
 			true,
-			|_| unreachable!(),
 		);
 		assert!(!panel.view().choosers);
 		assert_eq!(panel.view().scroll, 0.0);
@@ -436,28 +467,31 @@ mod tests {
 			for entry in &mut panel.font_catalog {
 				entry.state = state;
 			}
-			assert!(!panel.command(
-				Command::DownloadMissing,
-				true,
-				|_| unreachable!()
-			));
+			assert!(
+				panel
+					.command(Command::DownloadMissing, true)
+					.effects
+					.is_empty()
+			);
 			assert_eq!(
-				panel.command(Command::DownloadAll, true, |_| unreachable!()),
+				!panel.command(Command::DownloadAll, true).effects.is_empty(),
 				state == crate::fonts::State::Provided
 			);
 		}
 		for entry in &mut panel.font_catalog {
 			entry.state = crate::fonts::State::Missing;
 		}
-		assert!(panel.command(
-			Command::DownloadMissing,
-			true,
-			|_| unreachable!()
+		assert!(matches!(
+			panel
+				.command(Command::DownloadMissing, true)
+				.effects
+				.as_slice(),
+			[Effect::Offline]
 		));
 		for id in panel.shown_font_ids() {
 			panel.progress(crate::fonts::Progress::queued(&id));
 		}
-		assert!(!panel.command(Command::DownloadAll, true, |_| unreachable!()));
+		assert!(panel.command(Command::DownloadAll, true).effects.is_empty());
 	}
 
 	#[test]
@@ -474,14 +508,87 @@ mod tests {
 		});
 		assert!(!panel.view().jobs.contains_key(&ids[0]));
 		assert!(panel.view().jobs.contains_key(&ids[1]));
-		assert!(panel.command(
-			Command::DownloadOne(0),
-			true,
-			|_| unreachable!()
+		assert!(matches!(
+			panel
+				.command(Command::DownloadOne(0), true)
+				.effects
+				.as_slice(),
+			[Effect::Offline]
 		));
 		assert_eq!(
 			panel.view().note,
 			Some("Offline: font downloads are unavailable")
 		);
+	}
+
+	#[test]
+	fn retry_rejects_progress_and_completion_from_the_previous_run() {
+		let mut panel = panel();
+		let first = panel.update(Message::Command {
+			command: Command::DownloadOne(0),
+			offline: false,
+		});
+		let [Effect::Download { run, families }] = first.effects.as_slice()
+		else {
+			panic!("download effect");
+		};
+		let run = *run;
+		let id = families[0].id.clone();
+		let summary = || {
+			Box::new(crate::fonts::Summary {
+				requested: vec![id.clone()],
+				stored: 1,
+				..Default::default()
+			})
+		};
+		assert!(matches!(
+			panel
+				.update(Message::Settled {
+					run,
+					summary: summary()
+				})
+				.effects
+				.as_slice(),
+			[Effect::Completed { stored: 1, .. }]
+		));
+		let retry = panel.update(Message::Command {
+			command: Command::RedownloadOne(0),
+			offline: false,
+		});
+		let [Effect::Download { run: next, .. }] = retry.effects.as_slice()
+		else {
+			panic!("retry effect");
+		};
+		assert_ne!(run, *next);
+		assert_eq!(
+			panel
+				.update(Message::Progress {
+					run,
+					progress: Box::new(crate::fonts::Progress::queued(&id))
+				})
+				.invalidation,
+			Invalidation::None
+		);
+		assert!(
+			panel
+				.update(Message::Settled {
+					run,
+					summary: summary()
+				})
+				.effects
+				.is_empty()
+		);
+		assert!(panel.view().jobs.contains_key(&id));
+		assert!(matches!(
+			panel
+				.update(Message::Settled {
+					run: *next,
+					summary: summary()
+				})
+				.effects
+				.as_slice(),
+			[Effect::Completed { stored: 1, .. }]
+		));
+		assert!(!panel.view().jobs.contains_key(&id));
 	}
 }

@@ -44,6 +44,8 @@ pub(super) fn button(
 	rect: Rect,
 ) -> Button {
 	Button {
+		id: crate::app::widgets::id(action),
+		clip: None,
 		label: label.into(),
 		action,
 		rect,
@@ -310,8 +312,8 @@ pub(in crate::app) fn draw_segmented_button(
 	let priority = |b: &Button| {
 		(
 			b.enabled
-				&& interaction.focus_visible
-				&& interaction.focus == Some(b.action),
+				&& interaction.widgets.focus_visible
+				&& interaction.widgets.focus == Some(b.id),
 			b.enabled && b.active,
 		)
 	};
@@ -336,18 +338,32 @@ fn draw_button_edges(
 	edges: [bool; 2],
 	icon_size: f32,
 ) -> Vec<Draw> {
-	let hovered = b.enabled
-		&& b.rect.contains(interaction.cursor.0, interaction.cursor.1);
-	let pressed = b.enabled && interaction.pressed == Some(b.action) && hovered;
-	let primary = b.enabled && b.kind == ButtonKind::Primary;
+	let placed = interaction
+		.controls
+		.as_ref()
+		.and_then(|layout| layout.get(b.id));
+	let rect = placed.map_or(b.rect, |w| w.rect);
+	let enabled = placed.map_or(b.enabled, |w| w.enabled);
+	let hovered = enabled
+		&& interaction.controls.as_ref().map_or_else(
+			|| b.contains(interaction.cursor),
+			|layout| {
+				layout
+					.hit(interaction.cursor)
+					.is_some_and(|w| w.id == b.id && w.enabled)
+			},
+		);
+	let pressed =
+		enabled && interaction.widgets.captured == Some(b.id) && hovered;
+	let primary = enabled && b.kind == ButtonKind::Primary;
 	let link = b.kind == ButtonKind::Link;
 	let quiet = matches!(b.kind, ButtonKind::Quiet | ButtonKind::Link)
 		|| b.icon.is_some()
 		|| !panel;
-	let focused = b.enabled
-		&& interaction.focus_visible
-		&& interaction.focus == Some(b.action);
-	let selected = b.enabled && b.active;
+	let focused = enabled
+		&& interaction.widgets.focus_visible
+		&& interaction.widgets.focus == Some(b.id);
+	let selected = enabled && b.active;
 	let styled = |field| Paint::Styled(Condition::Button, field);
 	let fill = if primary {
 		if pressed || hovered {
@@ -376,25 +392,25 @@ fn draw_button_edges(
 	};
 	let mut out = Vec::new();
 	if primary || selected || pressed || hovered || !quiet {
-		out.push(Draw::Rect(b.rect, fill));
+		out.push(Draw::Rect(rect, fill));
 	}
 	// A single edge carries focus, replacing the resting border instead of stacking rings.
 	if focused {
 		out.extend(outline(
-			b.rect,
+			rect,
 			if primary { C::Color } else { C::FocusColor },
 			2.0,
 			edges,
 		));
 	} else if !quiet && !primary {
 		out.extend(outline(
-			b.rect,
+			rect,
 			if selected { C::Accent } else { C::BorderColor },
 			1.0,
 			edges,
 		));
 	}
-	let color = if !b.enabled {
+	let color = if !enabled {
 		C::DisabledColor
 	} else if primary {
 		C::Background
@@ -410,8 +426,8 @@ fn draw_button_edges(
 		out.push(Draw::Icon {
 			paths,
 			paint: Paint::Styled(Condition::Button, color),
-			x: b.rect.x + (b.rect.w - icon_size) / 2.0,
-			y: b.rect.y + (b.rect.h - icon_size) / 2.0,
+			x: rect.x + (rect.w - icon_size) / 2.0,
+			y: rect.y + (rect.h - icon_size) / 2.0,
 			size: icon_size,
 		});
 	} else {
@@ -420,18 +436,18 @@ fn draw_button_edges(
 		} else {
 			0.0
 		};
-		let text = ui.fit(&b.label, 13.0, (b.rect.w - 8.0 - room).max(0.0));
+		let text = ui.fit(&b.label, 13.0, (rect.w - 8.0 - room).max(0.0));
 		let width = ui.text_width(&text, 13.0);
 		let x = if link {
-			b.rect.x
+			rect.x
 		} else {
-			b.rect.x + (b.rect.w - width - room) / 2.0
+			rect.x + (rect.w - width - room) / 2.0
 		};
 		if link {
 			out.push(line(
 				Rect {
 					x,
-					y: b.rect.y + b.rect.h / 2.0 + 7.0,
+					y: rect.y + rect.h / 2.0 + 7.0,
 					w: width,
 					h: 1.0,
 				},
@@ -443,7 +459,7 @@ fn draw_button_edges(
 			&text,
 			13.0,
 			x,
-			b.rect.y + b.rect.h / 2.0,
+			rect.y + rect.h / 2.0,
 			Paint::Styled(Condition::Button, color),
 		));
 		if let Some(paths) = b.marker {
@@ -451,7 +467,7 @@ fn draw_button_edges(
 				paths,
 				paint: Paint::Styled(Condition::Button, color),
 				x: x + width + 4.0,
-				y: b.rect.y + (b.rect.h - MARKER) / 2.0,
+				y: rect.y + (rect.h - MARKER) / 2.0,
 				size: MARKER,
 			});
 		}
@@ -855,16 +871,17 @@ impl Form {
 				}
 				let mut b = b.clone();
 				if (self.body_start..self.body_end).contains(&i) {
-					b.rect = b.rect.intersect(self.viewport)?;
+					b.rect.intersect(self.viewport)?;
+					b.clip = Some(self.viewport);
 				}
 				Some(b)
 			})
 			.collect()
 	}
-	pub fn reveal(&self, action: Command) -> f32 {
+	pub fn reveal(&self, id: markview_ui_core::WidgetId) -> f32 {
 		let Some(b) = self.buttons[self.body_start..self.body_end]
 			.iter()
-			.find(|b| b.action == action)
+			.find(|b| b.id == id)
 		else {
 			return self.scroll;
 		};
@@ -1023,6 +1040,7 @@ impl Form {
 			}
 		}
 		let body_interaction = InteractionState {
+			widgets: interaction.widgets,
 			cursor: if self
 				.viewport
 				.contains(interaction.cursor.0, interaction.cursor.1)
@@ -1031,9 +1049,7 @@ impl Form {
 			} else {
 				(f32::NEG_INFINITY, f32::NEG_INFINITY)
 			},
-			focus: interaction.focus,
-			focus_visible: interaction.focus_visible,
-			pressed: interaction.pressed,
+			controls: interaction.controls.clone(),
 			..Default::default()
 		};
 
@@ -1277,10 +1293,14 @@ pub(in crate::app) fn draw_menu(
 	// A list always has an option under the keyboard, so it wears the focus
 	// ring whether the pointer put it there or the arrow keys did.
 	let targeted = InteractionState {
+		widgets: markview_ui_core::Interaction {
+			captured: interaction.widgets.captured,
+			focus: menu.chosen().map(Command::widget_id),
+			focus_visible: true,
+			..Default::default()
+		},
 		cursor: interaction.cursor,
-		pressed: interaction.pressed,
-		focus: menu.chosen(),
-		focus_visible: true,
+		controls: interaction.controls.clone(),
 		..Default::default()
 	};
 	for b in &menu.buttons {

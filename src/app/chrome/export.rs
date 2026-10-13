@@ -187,6 +187,7 @@ fn export_controls(
 	form(ui, settings, 0.0, width, height, lang).visible_buttons()
 }
 
+#[cfg(test)]
 pub(super) fn draw_export(
 	ui: &mut TextShaper,
 	settings: &ExportSettings,
@@ -196,6 +197,34 @@ pub(super) fn draw_export(
 	size: (f32, f32),
 	lang: Lang,
 ) -> Vec<Draw> {
+	let form = form(
+		ui,
+		settings,
+		interaction.export_scroll,
+		size.0,
+		size.1,
+		lang,
+	);
+	draw_export_form(
+		ui,
+		settings,
+		interaction,
+		(document, watching),
+		size,
+		lang,
+		&form,
+	)
+}
+pub(super) fn draw_export_form(
+	ui: &mut TextShaper,
+	settings: &ExportSettings,
+	interaction: &InteractionState,
+	status: (&str, bool),
+	size: (f32, f32),
+	lang: Lang,
+	form: &Form,
+) -> Vec<Draw> {
+	let (document, watching) = status;
 	let (width, height) = size;
 	let (detail, color) = match export::geometry_summary(settings, lang) {
 		Ok(summary) if watching => {
@@ -204,7 +233,7 @@ pub(super) fn draw_export(
 		Ok(summary) => (lang.export_status(document, summary), C::Muted),
 		Err(error) => (lang.export_status_failed(document, error), C::Error),
 	};
-	form(ui, settings, interaction.export_scroll, width, height, lang).draw(
+	form.draw(
 		ui,
 		interaction,
 		lang.export_title(),

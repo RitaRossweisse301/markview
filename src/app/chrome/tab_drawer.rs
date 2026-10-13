@@ -45,6 +45,9 @@ pub(super) fn slide_buttons(
 		} else {
 			button.rect.x += panel.x;
 		}
+		if let Some(clip) = &mut button.clip {
+			clip.x += panel.x;
+		}
 	}
 }
 
@@ -108,6 +111,7 @@ fn row_buttons(
 				..row
 			},
 		);
+		select.id = markview_ui_core::WidgetId::new(9, tabs[index].id);
 		select.active = index == active;
 		select.kind = ButtonKind::Quiet;
 		rows.push(select);
@@ -121,6 +125,7 @@ fn row_buttons(
 				h: 44.,
 			},
 		);
+		close.id = markview_ui_core::WidgetId::new(10, tabs[index].id);
 		close.icon = Some(icons::CLOSE);
 		close.kind = ButtonKind::Quiet;
 		rows.push(close);
@@ -138,6 +143,8 @@ fn controls(panel: Rect, width: f32, lang: Lang) -> Vec<Button> {
 			h: 44.,
 		},
 	);
+	// Drawer controls coexist with the toolbar while closing.
+	close.id = markview_ui_core::WidgetId::new(12, 1);
 	close.icon = Some(icons::CLOSE);
 	close.kind = ButtonKind::Quiet;
 	let mut new_page = button(
@@ -150,6 +157,7 @@ fn controls(panel: Rect, width: f32, lang: Lang) -> Vec<Button> {
 			h: 44.,
 		},
 	);
+	new_page.id = markview_ui_core::WidgetId::new(12, 2);
 	new_page.icon = Some(icons::PLUS);
 	new_page.kind = ButtonKind::Quiet;
 	let mut open = button(
@@ -162,9 +170,10 @@ fn controls(panel: Rect, width: f32, lang: Lang) -> Vec<Button> {
 			h: 44.,
 		},
 	);
+	open.id = markview_ui_core::WidgetId::new(12, 3);
 	open.kind = ButtonKind::Quiet;
 	// The scrim dismisses the drawer without activating the document below.
-	let scrim = button(
+	let mut scrim = button(
 		"",
 		Command::Tabs,
 		Rect {
@@ -174,6 +183,7 @@ fn controls(panel: Rect, width: f32, lang: Lang) -> Vec<Button> {
 			h: panel.h,
 		},
 	);
+	scrim.id = markview_ui_core::WidgetId::new(12, 0);
 	vec![close, new_page, open, scrim]
 }
 pub(super) fn buttons(
@@ -352,6 +362,88 @@ mod tests {
 	use super::*;
 
 	#[test]
+	fn outgoing_controls_keep_drawer_geometry_when_the_toolbar_owns_input() {
+		let mut ui = crate::test_support::shaper();
+		let (width, height) = (400., 760.);
+		let mut toolbar =
+			super::super::controls::toolbar_controls(width, false, Lang::En);
+		toolbar.push(toggle(Lang::En));
+		let open = toolbar.iter().find(|b| b.action == Command::Open).unwrap();
+		let interaction = InteractionState {
+			controls: Some(crate::app::widgets::layout(&toolbar)),
+			cursor: (
+				open.rect.x + open.rect.w / 2.,
+				open.rect.y + open.rect.h / 2.,
+			),
+			..Default::default()
+		};
+		// Freeze outgoing geometry at several points after input returns to the toolbar.
+		for reveal in [1.0, 0.75, 0.5, 0.25] {
+			let mut outgoing = controls(rect(width, height), width, Lang::En);
+			slide_buttons(&mut outgoing, width, height, reveal);
+			for button in outgoing.iter().filter(|b| !b.label.is_empty()) {
+				let draws = if button.action == Command::Open {
+					draw_entry(&mut ui, &interaction, button)
+				} else {
+					components::draw_button(&mut ui, &interaction, button, true)
+				};
+				assert!(draws.iter().any(|draw| matches!(draw, Draw::Icon { x, y, size, .. }
+					if *x == button.rect.x + if button.action == Command::Open { 8. } else { (button.rect.w - size) / 2. }
+					&& *y == button.rect.y + (button.rect.h - size) / 2.)), "{:?} at reveal {reveal}", button.action);
+				assert!(
+					!draws.iter().any(
+						|draw| matches!(draw, Draw::Rect(rect, _) if *rect == open.rect)
+					),
+					"drawer feedback moved onto the toolbar"
+				);
+				assert!(toolbar.iter().all(|other| button.id != other.id));
+			}
+		}
+	}
+
+	#[test]
+	fn animated_rows_hit_inside_the_translated_clip() {
+		let mut ui = crate::test_support::shaper();
+		let tabs = [ReaderTab::new("tab.md".into())];
+		let (width, height) = (320., 760.);
+		for reveal in [0.25, 0.5, 0.75, 1.0] {
+			let mut buttons =
+				buttons(&mut ui, &tabs, 0, 0., (width, height), Lang::En);
+			slide_buttons(&mut buttons, width, height, reveal);
+			let target = buttons
+				.iter()
+				.find(|b| b.action == Command::SelectTab(0))
+				.unwrap();
+			let mut clip = list(width, height, tabs.len(), 0.).viewport;
+			clip.x += animated_rect(width, height, reveal).x;
+			assert_eq!(target.clip, Some(clip));
+			let visible = target
+				.widget()
+				.hit_rect()
+				.unwrap()
+				.intersect(Rect {
+					x: 0.,
+					y: 0.,
+					w: width,
+					h: height,
+				})
+				.unwrap();
+			let layout = crate::app::widgets::layout(&buttons);
+			let point =
+				(visible.x + visible.w / 2., visible.y + visible.h / 2.);
+			assert_eq!(
+				layout.hit(point).unwrap().message,
+				Command::SelectTab(0)
+			);
+			assert_eq!(
+				layout.hit_touch(point, 44.).unwrap().message,
+				Command::SelectTab(0)
+			);
+			assert!(!target.contains((point.0, clip.y - 1.)));
+		}
+	}
+
+	#[test]
 	fn moving_buttons_and_scrim_follow_the_visible_drawer() {
 		let mut ui = crate::test_support::shaper();
 		for reveal in [0.0, 0.25, 0.875, 1.0] {
@@ -431,7 +523,8 @@ mod tests {
 				.find(|b| b.action == Command::SelectTab(0))
 				.unwrap();
 			assert!(select.rect.contains(scrolled.0, scrolled.1));
-			assert_eq!(select.rect.y, 64.);
+			assert_eq!(select.rect.y, 47.);
+			assert_eq!(select.widget().hit_rect().unwrap().y, 64.);
 		}
 	}
 
@@ -463,14 +556,20 @@ mod tests {
 			);
 			for (i, a) in buttons.iter().enumerate() {
 				for b in &buttons[i + 1..] {
-					assert!(a.rect.intersect(b.rect).is_none());
+					assert!(
+						a.widget()
+							.hit_rect()
+							.unwrap()
+							.intersect(b.widget().hit_rect().unwrap())
+							.is_none()
+					);
 				}
 				if matches!(
 					a.action,
 					Command::SelectTab(_) | Command::CloseTab(_)
 				) {
 					assert!(
-						a.rect.y >= list.viewport.y
+						a.widget().hit_rect().unwrap().y >= list.viewport.y
 							&& a.rect.y + a.rect.h
 								<= list.viewport.y + list.viewport.h
 					);

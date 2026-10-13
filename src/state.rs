@@ -126,6 +126,12 @@ pub(crate) enum Command {
 	OutlineCollapseAll,
 }
 
+impl Command {
+	pub(crate) fn widget_id(self) -> markview_ui_core::WidgetId {
+		crate::app::widgets::id(self)
+	}
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum TextField {
 	Url,
@@ -173,8 +179,8 @@ impl InteractionState {
 			self.panel == PanelPage::Tabs,
 		);
 		self.panel = page;
-		self.focus = None;
-		self.pressed = None;
+		self.widgets.focus = None;
+		self.widgets.captured = None;
 		self.pointer_down = None;
 		self.pressed_image = None;
 		self.drag_at = None;
@@ -194,7 +200,8 @@ impl InteractionState {
 		if open {
 			self.settings_scroll = 0.0;
 			self.settings_preview = false;
-			self.focus = Some(Command::SettingsTab(PanelTab::Generic));
+			self.widgets.focus =
+				Some(Command::SettingsTab(PanelTab::Generic).widget_id());
 		}
 	}
 
@@ -207,7 +214,7 @@ impl InteractionState {
 		});
 		if open {
 			self.export_scroll = 0.0;
-			self.focus = Some(Command::ExportRun);
+			self.widgets.focus = Some(Command::ExportRun.widget_id());
 		}
 	}
 
@@ -597,6 +604,8 @@ impl ReaderSession {
 }
 
 pub(crate) struct ReaderTab {
+	/// Lifetime identity, retained across renames and reordering.
+	pub(crate) id: u64,
 	pub(crate) path: PathBuf,
 	pub(crate) session: ReaderSession,
 	pub(crate) last_active: Instant,
@@ -604,7 +613,10 @@ pub(crate) struct ReaderTab {
 
 impl ReaderTab {
 	pub(crate) fn new(path: PathBuf) -> Self {
+		use std::sync::atomic::{AtomicU64, Ordering};
+		static NEXT_ID: AtomicU64 = AtomicU64::new(0);
 		Self {
+			id: NEXT_ID.fetch_add(1, Ordering::Relaxed),
 			path,
 			session: ReaderSession::default(),
 			last_active: Instant::now(),
@@ -614,6 +626,7 @@ impl ReaderTab {
 
 #[derive(Default)]
 pub(crate) struct InteractionState {
+	pub(crate) controls: Option<markview_ui_core::Layout<Command>>,
 	pub(crate) tabs_animation: Option<DrawerAnimation>,
 	pub(crate) outline_animation: Option<DrawerAnimation>,
 	pub(crate) selection_counts: Option<(TextSelection, TextCounts)>,
@@ -638,10 +651,7 @@ pub(crate) struct InteractionState {
 	pub(crate) hover_image: Option<String>,
 	/// The wide block whose horizontal scrollbar the pointer is over.
 	pub(crate) hover_overflow: Option<(usize, usize)>,
-	pub(crate) focus: Option<Command>,
-	/// Keyboard navigation shows a focus outline; pointer activation does not.
-	pub(crate) focus_visible: bool,
-	pub(crate) pressed: Option<Command>,
+	pub(crate) widgets: markview_ui_core::Interaction,
 	pub(crate) scrollbar: Option<ScrollbarDrag>,
 	pub(crate) last_click: Option<(Instant, (f32, f32), u8)>,
 	/// A pending local-file confirmation; while it is set it owns input.
@@ -789,16 +799,6 @@ pub(crate) struct ScrollbarDrag {
 }
 
 impl InteractionState {
-	/// Activate only when the release still targets the pressed control.
-	pub(crate) fn release_button(
-		&mut self,
-		hovered: Option<Command>,
-	) -> Option<Command> {
-		self.pressed
-			.take()
-			.filter(|command| Some(*command) == hovered)
-	}
-
 	/// Toggles the outline drawer. Opening puts the keyboard selection on the
 	/// heading at the reading position, so Up/Down and Enter work at once.
 	/// Returns whether the drawer is now open.
@@ -814,7 +814,7 @@ impl InteractionState {
 		);
 		self.outline_open = !self.outline_open;
 		if self.outline_open {
-			self.focus = None;
+			self.widgets.focus = None;
 			self.outline_scroll = 0.0;
 			self.outline_selection =
 				(entries > 0).then_some(current.unwrap_or(0));
@@ -868,7 +868,7 @@ impl InteractionState {
 	) -> bool {
 		if rows.is_empty() {
 			self.outline_selection = None;
-			self.focus = None;
+			self.widgets.focus = None;
 			return false;
 		}
 		let base = rows
@@ -880,7 +880,7 @@ impl InteractionState {
 		self.outline_selection = Some(next);
 		// The visible selection is what Enter activates, so button focus has
 		// to follow it; a row clicked before the move must not outrank it.
-		self.focus = Some(Command::OutlineGoto(next));
+		self.widgets.focus = Some(Command::OutlineGoto(next).widget_id());
 		true
 	}
 
@@ -891,12 +891,12 @@ impl InteractionState {
 	/// never reaches the document behind one.
 	pub(crate) fn enter_action(
 		&self,
-		mut visible: impl Iterator<Item = Command>,
+		mut visible: impl Iterator<Item = (markview_ui_core::WidgetId, Command)>,
 	) -> Option<Command> {
-		if let Some(focus) = self.focus
-			&& visible.any(|action| action == focus)
+		if let Some(focus) = self.widgets.focus
+			&& let Some((_, action)) = visible.find(|(id, _)| *id == focus)
 		{
-			return Some(focus);
+			return Some(action);
 		}
 		self.outline_owns_input()
 			.then_some(self.outline_selection)
@@ -919,20 +919,12 @@ impl InteractionState {
 	/// with it; otherwise Tab would leave the marker on another heading.
 	pub(crate) fn tab_focus(
 		&mut self,
-		buttons: &[Command],
+		layout: &markview_ui_core::Layout<Command>,
 		backward: bool,
 	) -> Option<Command> {
-		let current = buttons.iter().position(|b| Some(*b) == self.focus);
-		let index = match current {
-			Some(i) => {
-				(i + if backward { buttons.len() - 1 } else { 1 })
-					% buttons.len()
-			}
-			None if backward => buttons.len().checked_sub(1)?,
-			None => 0,
-		};
-		let action = *buttons.get(index)?;
-		self.focus = Some(action);
+		self.widgets
+			.handle(layout, markview_ui_core::Input::Navigate { backward });
+		let action = self.widgets.focus.and_then(|id| layout.get(id))?.message;
 		if let Command::OutlineGoto(row) | Command::OutlineToggle(row) = action
 		{
 			self.outline_selection = Some(row);
@@ -1281,7 +1273,7 @@ impl Host for InteractionState {
 			click.map(|(at, point, count)| (at, (point.x, point.y), count));
 	}
 	fn blur(&mut self) {
-		self.focus = None;
+		self.widgets.focus = None;
 	}
 	fn release_pointer(&mut self) {
 		self.pressed_image = None;

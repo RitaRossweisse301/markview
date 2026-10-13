@@ -264,7 +264,7 @@ impl<P: SendEvent> App<P> {
 		} else if self.interaction.styles_open() {
 			Some(Kind::Reader)
 		} else if self.interaction.fonts_open() {
-			Some(if self.font_panel.choosers() {
+			Some(if self.preferences.fonts.choosers() {
 				Kind::Choices
 			} else {
 				Kind::Catalog
@@ -417,6 +417,7 @@ impl<P: SendEvent> App<P> {
 			completion.started.elapsed().as_secs_f64() * 1000.,
 			load.cached
 		);
+		let mut font_message = None;
 		match completion.result {
 			Ok(snapshot) => {
 				match snapshot {
@@ -429,10 +430,12 @@ impl<P: SendEvent> App<P> {
 						self.preferences.style_entries = entries
 					}
 					Snapshot::Catalog(catalog) => {
-						self.font_panel.set_catalog(catalog)
+						font_message =
+							Some(super::font_panel::Message::Catalog(catalog))
 					}
 					Snapshot::Choices(choices) => {
-						self.font_panel.set_choices(choices)
+						font_message =
+							Some(super::font_panel::Message::Choices(choices))
 					}
 				}
 				load.cached = true;
@@ -441,6 +444,9 @@ impl<P: SendEvent> App<P> {
 			Err(error) => load.status = Status::Failed(error.to_string()),
 		}
 		self.refresh_hover();
+		if let Some(message) = font_message {
+			self.font_message(message);
+		}
 		self.redraw();
 	}
 }

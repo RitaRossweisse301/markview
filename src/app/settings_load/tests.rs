@@ -88,8 +88,8 @@ fn styles_draw_feedback_before_work_and_refresh_without_losing_the_list() {
 	work.run();
 	app.settings_loaded(completion(&events));
 	assert!(!app.settings_load().unwrap().blocked());
-	assert!(app.font_panel.view().catalog.is_empty());
-	assert_eq!(app.font_panel.view().choices.generation, 0);
+	assert!(app.preferences.fonts.view().catalog.is_empty());
+	assert_eq!(app.preferences.fonts.view().choices.generation, 0);
 	app.action(Command::Styles);
 	let work = task(&tasks);
 	app.interaction.show_panel(PanelPage::Closed);
@@ -154,11 +154,11 @@ fn fonts_load_catalogue_and_candidates_independently_and_reject_old_results() {
 	assert!(!app.chrome().overlay().is_empty());
 	let kind = app.settings_kind();
 	app.settings_resources.presented(kind);
-	assert_eq!(app.font_panel.view().choices.generation, 0);
+	assert_eq!(app.preferences.fonts.view().choices.generation, 0);
 	catalog.run();
 	app.settings_loaded(completion(&events));
-	assert!(!app.font_panel.view().catalog.is_empty());
-	assert_eq!(app.font_panel.view().choices.generation, 0);
+	assert!(!app.preferences.fonts.view().catalog.is_empty());
+	assert_eq!(app.preferences.fonts.view().choices.generation, 0);
 	app.action(Command::Fonts(super::super::font_panel::Command::Choosers));
 	task(&tasks).run();
 	let old = completion(&events);
@@ -173,12 +173,14 @@ fn fonts_load_catalogue_and_candidates_independently_and_reject_old_results() {
 	app.settings_loaded(completion(&events));
 	assert!(!app.settings_load().unwrap().blocked());
 	assert!(
-		app.font_panel
+		app.preferences
+			.fonts
 			.resolve(
 				crate::settings::FontRole::Serif,
 				super::super::font_panel::Selection {
 					catalog_generation: app
-						.font_panel
+						.preferences
+						.fonts
 						.view()
 						.choices
 						.generation,
@@ -187,14 +189,14 @@ fn fonts_load_catalogue_and_candidates_independently_and_reject_old_results() {
 			)
 			.is_some()
 	);
-	let generation = app.font_panel.view().choices.generation;
+	let generation = app.preferences.fonts.view().choices.generation;
 	app.action(Command::SettingsTab(PanelTab::Generic));
 	app.action(Command::SettingsTab(PanelTab::Fonts));
 	assert!(
 		tasks.try_recv().is_err(),
 		"unchanged candidates should be a cache hit"
 	);
-	assert_eq!(app.font_panel.view().choices.generation, generation);
+	assert_eq!(app.preferences.fonts.view().choices.generation, generation);
 }
 
 #[test]

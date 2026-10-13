@@ -292,8 +292,8 @@ impl<P: super::SendEvent> App<P> {
 			} => {
 				self.cancel_gestures();
 				self.tab_strip.cancel_drag();
-				self.interaction.focus_visible = false;
-				self.interaction.pressed = None;
+				self.interaction.widgets.focus_visible = false;
+				self.interaction.widgets.captured = None;
 				self.interaction.pressed_image = None;
 				self.readers.session.select_all_pending = false;
 				// A new press always ends a drag left over from a release the
@@ -303,15 +303,8 @@ impl<P: super::SendEvent> App<P> {
 				// A confirmation owns input: only its buttons answer.
 				if self.interaction.modal.is_some() {
 					self.interaction.reset_clicks();
-					let (x, y) = self.interaction.cursor;
-					if let Some(button) = self
-						.buttons()
-						.into_iter()
-						.find(|b| b.rect.contains(x, y))
-					{
-						self.interaction.focus = Some(button.action);
-						self.interaction.pressed = Some(button.action);
-					}
+					let buttons = self.buttons();
+					self.press_widget(&buttons);
 					self.redraw();
 					return;
 				}
@@ -323,18 +316,10 @@ impl<P: super::SendEvent> App<P> {
 				// dispatch.
 				if self.interaction.dropdown.is_some() {
 					self.interaction.reset_clicks();
-					let (x, y) = self.interaction.cursor;
-					match self
-						.dropdown_buttons()
-						.into_iter()
-						.find(|button| button.rect.contains(x, y))
-						.map(|button| button.action)
-					{
-						Some(action) => {
-							self.interaction.focus = Some(action);
-							self.interaction.pressed = Some(action);
-						}
-						None => self.close_dropdown(),
+					let buttons = self.dropdown_buttons();
+					self.press_widget(&buttons);
+					if self.interaction.widgets.captured.is_none() {
+						self.close_dropdown();
 					}
 					self.redraw();
 					return;
@@ -356,25 +341,19 @@ impl<P: super::SendEvent> App<P> {
 					.flatten()
 				{
 					self.interaction.reset_clicks();
-					self.interaction.focus = None;
+					self.interaction.widgets.focus = None;
 					self.action(Command::CloseTab(index));
 				} else if let Some(index) = (!self.interaction.panel_open())
 					.then(|| self.tab_at_cursor())
 					.flatten()
 				{
 					self.interaction.reset_clicks();
-					self.interaction.focus = None;
+					self.interaction.widgets.focus = None;
 					self.begin_tab_drag(index);
-				} else if let Some(button) =
-					self.buttons().into_iter().find(|b| {
-						b.rect.contains(
-							self.interaction.cursor.0,
-							self.interaction.cursor.1,
-						)
-					}) {
+				} else if self.button_at_cursor() {
 					self.interaction.reset_clicks();
-					self.interaction.focus = Some(button.action);
-					self.interaction.pressed = Some(button.action);
+					let buttons = self.buttons();
+					self.press_widget(&buttons);
 					self.redraw();
 				} else if self.interaction.panel_open() {
 					// A panel draws over the drawer, so it answers first: its
@@ -393,7 +372,7 @@ impl<P: super::SendEvent> App<P> {
 					// must not start a document selection underneath.
 					self.interaction.reset_clicks();
 				} else if !self.pointer_in_panel() {
-					self.interaction.focus = None;
+					self.interaction.widgets.focus = None;
 					if self.begin_scrollbar_drag() {
 						self.redraw();
 					} else if self.interaction.cursor.1
@@ -466,18 +445,8 @@ impl<P: super::SendEvent> App<P> {
 			} => {
 				self.tab_strip.cancel_drag();
 				let pressed_image = self.interaction.pressed_image.take();
-				let was_pressed = self.interaction.pressed.is_some();
-				let hovered = self
-					.buttons()
-					.into_iter()
-					.find(|b| {
-						b.rect.contains(
-							self.interaction.cursor.0,
-							self.interaction.cursor.1,
-						)
-					})
-					.map(|b| b.action);
-				let action = self.interaction.release_button(hovered);
+				let was_pressed = self.interaction.widgets.captured.is_some();
+				let action = self.release_widget();
 				self.interaction.scrollbar = None;
 				self.interaction.panel_grab = None;
 				if was_pressed {
@@ -528,9 +497,9 @@ impl<P: super::SendEvent> App<P> {
 				// The gesture dies with the focus: the OS cancels it, and
 				// the page is still when the window is revisited.
 				self.abandon_dm();
-				self.interaction.focus_visible = false;
+				self.interaction.widgets.focus_visible = false;
 				self.tab_strip.cancel_drag();
-				self.interaction.pressed = None;
+				self.interaction.widgets.captured = None;
 				self.interaction.pointer_down = None;
 				self.interaction.pressed_image = None;
 				self.interaction.drag_at = None;
@@ -685,7 +654,7 @@ impl<P: super::SendEvent> App<P> {
 				if event.state == ElementState::Pressed =>
 			{
 				self.cancel_gestures();
-				self.interaction.focus_visible = true;
+				self.interaction.widgets.focus_visible = true;
 				let command = self.interaction.modifiers.control_key()
 					|| self.interaction.modifiers.super_key();
 				// A confirmation answers to Tab, Enter and Escape only.
@@ -935,15 +904,8 @@ impl<P: super::SendEvent> App<P> {
 				self.horizontal_by(self.line_step());
 			}
 			Key::Named(NamedKey::Tab) => {
-				let actions: Vec<Command> = self
-					.focus_buttons()
-					.into_iter()
-					.map(|button| button.action)
-					.collect();
 				let backward = self.interaction.modifiers.shift_key();
-				if let Some(action) =
-					self.interaction.tab_focus(&actions, backward)
-				{
+				if let Some(action) = self.navigate_widgets(backward) {
 					if let Command::OutlineGoto(index)
 					| Command::OutlineToggle(index) = action
 					{
@@ -955,10 +917,12 @@ impl<P: super::SendEvent> App<P> {
 			}
 			Key::Named(NamedKey::Enter) => {
 				let buttons = self.buttons();
-				if let Some(action) = self
-					.interaction
-					.enter_action(buttons.iter().map(|b| b.action))
-				{
+				if let Some(action) = self.interaction.enter_action(
+					buttons
+						.iter()
+						.filter(|b| b.enabled)
+						.map(|b| (b.id, b.action)),
+				) {
 					self.action(action);
 				}
 			}
@@ -976,8 +940,8 @@ impl<P: super::SendEvent> App<P> {
 				self.frame.pressed = None;
 				self.frame.last_click = None;
 				self.tab_strip.cancel_drag();
-				self.interaction.pressed = None;
-				self.interaction.focus = None;
+				self.interaction.widgets.captured = None;
+				self.interaction.widgets.focus = None;
 				self.interaction.modal = None;
 				self.interaction.show_panel(crate::state::PanelPage::Closed);
 				self.interaction.selection = None;

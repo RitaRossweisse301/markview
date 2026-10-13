@@ -94,7 +94,8 @@ impl List {
 		buttons
 			.into_iter()
 			.filter_map(|mut b| {
-				b.rect = b.rect.intersect(self.viewport)?;
+				b.rect.intersect(self.viewport)?;
+				b.clip = Some(self.viewport);
 				Some(b)
 			})
 			.collect()
@@ -205,6 +206,8 @@ mod tests {
 			.map(|index| {
 				let row = list.row_rect(index);
 				Button {
+					id: crate::app::widgets::id(Command::StyleToggle(index)),
+					clip: None,
 					label: ("Row").into(),
 					icon: None,
 					marker: None,
@@ -247,10 +250,9 @@ mod tests {
 		// The clip really did drop rows, and no reachable one is clipped off.
 		assert!(reached.len() < 12);
 		assert!(hit.iter().all(|b| {
-			list.viewport.contains(b.rect.x, b.rect.y)
-				&& list
-					.viewport
-					.contains(b.rect.x + b.rect.w, b.rect.y + b.rect.h)
+			let rect = b.widget().hit_rect().unwrap();
+			list.viewport.contains(rect.x, rect.y)
+				&& list.viewport.contains(rect.x + rect.w, rect.y + rect.h)
 		}));
 	}
 
