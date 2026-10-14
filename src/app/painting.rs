@@ -158,6 +158,7 @@ impl<P: super::SendEvent> App<P> {
 					renderer.save_png(&texture, output)?;
 				}
 			}
+			self.worker.presented(update.version);
 		}
 		// Exercise completion too, while the diagnostic above records only the
 		// first readable frame (which may contain a prefix of the document).

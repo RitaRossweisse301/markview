@@ -2669,6 +2669,7 @@ dependencies = [
  "ratex-layout",
  "ratex-parser",
  "ratex-types",
+ "rayon",
  "regex",
  "regex-automata",
  "serde",

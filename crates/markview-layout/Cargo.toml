@@ -33,12 +33,17 @@ skrifa.workspace = true
 web-time.workspace = true
 memmap2 = { workspace = true, optional = true }
 
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+rayon = { version = "1.11", optional = true }
+
 [features]
 # Reading faces out of directories needs a filesystem, so it is off by
 # default: the plain build is the one a front end without one links against,
 # and it supplies its faces as bytes through `FontConfig::from_faces`.
 # A native caller that scans a directory opts in.
 default = []
+# Native block workers; WASM keeps the same API with a serial fallback.
+parallel = ["dep:rayon"]
 font-directories = ["dep:memmap2"]
 # Harness-only: relaxes visibility for `fuzz/`; never changes default behavior.
 fuzz = []

@@ -193,7 +193,7 @@ fn cancellation_interrupts_a_large_closed_container_before_publication() {
 		"Another paragraph.\n\n".repeat(100)
 	);
 	let document = markview_commonmark::parse(source);
-	let checks = std::cell::Cell::new(0);
+	let checks = std::sync::atomic::AtomicUsize::new(0);
 	let mut engine = LayoutEngine::new();
 	let result = engine.layout_progressive_cancellable(
 		&document,
@@ -203,10 +203,7 @@ fn cancellation_interrupts_a_large_closed_container_before_publication() {
 			assert!(prefix.blocks.is_empty());
 			true
 		},
-		|| {
-			checks.set(checks.get() + 1);
-			checks.get() >= 20
-		},
+		|| checks.fetch_add(1, std::sync::atomic::Ordering::Relaxed) >= 19,
 	);
 	assert!(result.is_none());
 	let snapshot = engine.layout(&document, &options());

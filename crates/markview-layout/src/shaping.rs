@@ -321,6 +321,19 @@ impl TextShaper {
 		}
 	}
 
+	/// Shares loaded font blobs while retaining independent shaping scratch.
+	#[cfg(all(feature = "parallel", not(target_arch = "wasm32")))]
+	pub(crate) fn fork(&mut self) -> Self {
+		let mut fork = Self::with_fonts(self.font_config.clone());
+		let fonts = self
+			.fonts
+			.get_or_insert_with(|| default_fonts(&fork.font_config));
+		fonts.source_cache.make_shared();
+		fork.fonts = Some(fonts.clone());
+		fork.set_stylesheet(self.stylesheet.clone());
+		fork
+	}
+
 	/// Replaces the font sources, dropping every face resolved from the old
 	/// ones. The collection itself is shared per configuration, so two shapers
 	/// that ask for the same faces scan the disk once.

@@ -359,6 +359,7 @@ fn edit_scenario(
 				sample.layout_ms = update.layout_ms;
 				sample.first_frame_blocks = reader.layout.blocks.len();
 				sample.reused_blocks = reader.layout.reused;
+				worker.presented(*version);
 			}
 			if reader.complete {
 				sample.complete_ms = millis(start);
@@ -508,6 +509,7 @@ pub fn run(
 	);
 	let (cold, last_snapshot) = measure_cold_open(
 		&mut bench,
+		&worker,
 		&rx,
 		version,
 		viewport,
@@ -611,6 +613,7 @@ pub fn run(
 
 fn measure_cold_open(
 	bench: &mut Bench,
+	worker: &Worker,
 	rx: &Receiver<Update>,
 	version: u64,
 	viewport: f32,
@@ -642,6 +645,7 @@ fn measure_cold_open(
 			cold.layout_ms = update.layout_ms;
 			cold.first_frame_blocks = reader.layout.blocks.len();
 			cold.reused_blocks = reader.layout.reused;
+			worker.presented(version);
 		}
 		if reader.complete {
 			cold.process_start_to_complete_ms = millis(process_start);

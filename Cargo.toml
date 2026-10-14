@@ -124,6 +124,10 @@ wgpu = { version = "29.0.4", default-features = false, features = ["std", "parki
 # The reader draws its own caption; do not initialize Adwaita decorations.
 winit = { version = "0.30.13", default-features = false, features = ["rwh_06", "x11", "wayland", "wayland-dlopen"] }
 
+[features]
+default = ["parallel-layout"]
+parallel-layout = ["markview-layout/parallel"]
+
 [dependencies]
 markview-commonmark = { path = "crates/markview-commonmark" }
 markview-document = { path = "crates/markview-document" }

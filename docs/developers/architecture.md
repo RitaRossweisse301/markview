@@ -104,6 +104,55 @@ highlight tasks use the existing injected `Executor`, or its default executor
 when none is supplied. Source parsing remains an ordinary function call, and
 the document representation schedules no work.
 
+Block measurement produces immutable local geometry; publication resolves
+disclosure flow and places that geometry in source order. Native Rust hosts can
+opt into block workers through the layout crate's `parallel` Cargo feature
+(forwarded as `parallel-layout`, enabled by default in the root package):
+
+```rust
+let mut engine = markview_layout::layout::LayoutEngine::new();
+let effective_threads = engine.set_parallelism(4)?;
+let snapshot = engine.layout(&document, &options);
+```
+
+Library engines remain serial until configured. The native GUI calls
+`set_auto_parallelism()`: half the available logical CPUs, clamped to 1–8. `set_parallelism(0)` or `(1)` disables
+the pool. Without the feature, or on WASM even when the feature is enabled, the
+same call succeeds and returns one. Rayon is a native-only optional dependency;
+browser hosts need no threads, shared memory or cross-origin isolation.
+
+The full and progressive layout calls prefetch at most four blocks per configured
+thread after publishing the first visible block. Thread and shaping-context creation
+waits for eligible work. Each worker retains its own shaping context and shares
+the coordinator's font-data cache, preserving glyph-cache identities and avoiding
+repeated file loads; the coordinator owns geometry caches and publishes every continuous
+prefix in source order. Cache hits and duplicate content stay on the coordinator.
+Unpublished geometry is discarded on cancellation. The cancellation callback
+must implement `Sync`, since workers also check it inside nested containers;
+the progress callback runs only on the calling thread.
+
+Blocks containing formulas, including formulas in summaries, tables and nested
+containers, stay serial to preserve the ordered math cache and whole-pass byte
+budget. Other containers are each one job, with serial children. Workers read
+the image and syntax-highlight inputs of the current pass. This pool is separate
+from the injected background executor, so hosts should account for both when
+choosing concurrency. Stage profiler totals accumulate worker time and must not
+be interpreted as parallel wall-clock latency.
+
+`begin_layout` / `advance` keep their serial block loop and time budget even on
+an engine configured with workers. Web animation-frame scheduling is unchanged.
+The native GUI sets `set_parallel_start(coverage)` and `set_parallel_ready`
+to keep workers idle until the first readable GPU frame of that request has
+completed. The bounded opening parse stays serial. Documents under 32 KiB
+stay serial because they normally publish only on completion. `latency` uses
+the same GPU acknowledgement as the GUI; a diagnostic that never acknowledges
+a frame keeps its worker serial. `--no-default-features` disables native block
+workers at build time.
+
+Parallel batches can reduce full-layout latency but wait for their slowest
+block before publication; measure first-prefix latency and memory as well as
+throughput before enabling them in a reader.
+
 A future input crate can produce the same `Document` for the host to pass into
 layout. The current experimental web article reader still converts extracted
 content into Markdown; this split preserves its behavior and the existing

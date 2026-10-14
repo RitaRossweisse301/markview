@@ -270,6 +270,12 @@ pub struct LayoutEngine {
 	/// later passes are abandoned before touching every block.
 	completed: Option<u64>,
 	highlights: highlights::Highlights,
+	#[cfg(all(feature = "parallel", not(target_arch = "wasm32")))]
+	parallel: Option<progressive::parallel::Parallel>,
+	#[cfg(all(feature = "parallel", not(target_arch = "wasm32")))]
+	parallel_start: f32,
+	#[cfg(all(feature = "parallel", not(target_arch = "wasm32")))]
+	parallel_ready: Option<Arc<dyn Fn() -> bool + Send + Sync>>,
 }
 
 /// A cached block geometry. The `Arc` is shared with the snapshot that
@@ -327,6 +333,81 @@ impl LayoutEngine {
 			pass: 0,
 			completed: None,
 			highlights: highlights::Highlights::new(executor, wake),
+			#[cfg(all(feature = "parallel", not(target_arch = "wasm32")))]
+			parallel: None,
+			#[cfg(all(feature = "parallel", not(target_arch = "wasm32")))]
+			parallel_start: 0.,
+			#[cfg(all(feature = "parallel", not(target_arch = "wasm32")))]
+			parallel_ready: None,
+		}
+	}
+	/// Selects native block concurrency; zero or one disables parallel layout.
+	/// Returns the effective concurrency. Without the `parallel` feature, and
+	/// on WASM, this is always one. Engines start in serial mode.
+	///
+	/// Workers prefetch at most four blocks per thread in full/progressive
+	/// layout calls. `begin_layout`/`advance` remain serial and budgeted.
+	pub fn set_parallelism(&mut self, threads: usize) -> anyhow::Result<usize> {
+		Ok(self.configure_parallelism(threads))
+	}
+	fn configure_parallelism(&mut self, threads: usize) -> usize {
+		#[cfg(all(feature = "parallel", not(target_arch = "wasm32")))]
+		{
+			if self.parallel.as_ref().map_or(1, |p| p.threads())
+				!= threads.max(1)
+			{
+				self.parallel = if threads > 1 {
+					Some(progressive::parallel::Parallel::new(threads))
+				} else {
+					None
+				};
+			}
+			self.parallel.as_ref().map_or(1, |p| p.threads())
+		}
+		#[cfg(not(all(feature = "parallel", not(target_arch = "wasm32"))))]
+		{
+			let _ = threads;
+			1
+		}
+	}
+	/// Reserves CPU capacity for the UI and background resources, with at most
+	/// eight block workers. Thread creation waits for eligible work.
+	pub fn set_auto_parallelism(&mut self) -> usize {
+		#[cfg(all(feature = "parallel", not(target_arch = "wasm32")))]
+		let threads = progressive::parallel::recommended_threads(
+			std::thread::available_parallelism().map_or(1, |n| n.get()),
+		);
+		#[cfg(not(all(feature = "parallel", not(target_arch = "wasm32"))))]
+		let threads = 1;
+		self.configure_parallelism(threads)
+	}
+
+	/// Keeps each new pass serial until its published height covers `height`.
+	/// A reader supplies its initial viewport and prefetch coverage; infinity
+	/// keeps the whole pass serial. This changes scheduling, not geometry.
+	pub fn set_parallel_start(&mut self, height: f32) {
+		#[cfg(all(feature = "parallel", not(target_arch = "wasm32")))]
+		{
+			self.parallel_start = height.max(0.);
+		}
+		#[cfg(not(all(feature = "parallel", not(target_arch = "wasm32"))))]
+		{
+			let _ = height;
+		}
+	}
+	/// Lets a host defer block workers until its first frame has completed.
+	/// The coordinator checks `ready` before each speculative batch.
+	pub fn set_parallel_ready(
+		&mut self,
+		ready: Arc<dyn Fn() -> bool + Send + Sync>,
+	) {
+		#[cfg(all(feature = "parallel", not(target_arch = "wasm32")))]
+		{
+			self.parallel_ready = Some(ready);
+		}
+		#[cfg(not(all(feature = "parallel", not(target_arch = "wasm32"))))]
+		{
+			let _ = ready;
 		}
 	}
 	pub fn clear_document_cache(&mut self) {
@@ -394,26 +475,29 @@ impl LayoutEngine {
 	}
 
 	/// Checks cancellation between nested blocks as well as published prefixes.
+	/// With block workers enabled, they also call `cancelled`; `progress` runs
+	/// only on the caller's thread. Cancelled speculation never enters the cache.
 	pub fn layout_progressive_cancellable(
 		&mut self,
 		document: &Document,
 		options: &LayoutOptions,
 		images: &crate::image::ImageSnapshot,
 		mut progress: impl FnMut(&LayoutSnapshot) -> bool,
-		cancelled: impl Fn() -> bool,
+		cancelled: impl Fn() -> bool + Sync,
 	) -> Option<LayoutSnapshot> {
 		let mut layout = self.begin_layout(document, options, images);
 		while !layout.is_complete() {
 			if cancelled() || !progress(layout.snapshot()) {
 				return None;
 			}
-			// A zero budget lays out exactly one block, so the closure sees
+			// A zero budget publishes exactly one block, so the closure sees
 			// every prefix.
 			self.advance_cancellable(
 				&mut layout,
 				document,
 				Duration::ZERO,
 				&cancelled,
+				true,
 			);
 			if cancelled() {
 				return None;

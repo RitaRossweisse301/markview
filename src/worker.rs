@@ -104,6 +104,7 @@ pub struct Worker {
 	_services: Arc<crate::services::Services>,
 	inbox: Arc<(Mutex<Inbox>, Condvar)>,
 	control: Arc<crate::mailbox::Control>,
+	presented: Arc<std::sync::atomic::AtomicU64>,
 	handle: Option<thread::JoinHandle<()>>,
 }
 impl Worker {
@@ -145,6 +146,8 @@ impl Worker {
 		control
 			.coverage
 			.store(f32::INFINITY.to_bits(), Ordering::Relaxed);
+		let presented = Arc::new(std::sync::atomic::AtomicU64::new(0));
+		let rendered = presented.clone();
 		let current = control.clone();
 		let target = control.clone();
 		let io = services.handle.clone();
@@ -166,6 +169,7 @@ impl Worker {
 				});
 				let mut engine =
 					LayoutEngine::with_executor(io.cpu.clone(), wake.clone());
+				engine.set_auto_parallelism();
 				let mut images = crate::images::Images::with_services(
 					offline,
 					crate::images::cache_directory(),
@@ -216,6 +220,10 @@ impl Worker {
 					};
 					let mut request = request;
 					last = Some(request.clone());
+					engine.set_parallel_start(request.coverage);
+					let rendered = rendered.clone();
+					let version = request.version;
+					engine.set_parallel_ready(Arc::new(move || rendered.load(Ordering::Relaxed) == version));
 					let mut update = Update {
 						version: request.version,
 						path: request.path.clone(),
@@ -401,6 +409,13 @@ impl Worker {
 								&request.options.stylesheet,
 								&request.options.fonts,
 							);
+							// Small documents publish on completion; avoid starting workers
+							// before that first readable snapshot.
+							engine.set_parallel_start(if document.source.len() < 32 * 1024 {
+								f32::INFINITY
+							} else {
+								request.coverage
+							});
 							let mut publication =
 								PrefixPublication::new(document.source.len());
 							let layout = engine
@@ -517,6 +532,7 @@ impl Worker {
 			_services: services,
 			inbox,
 			control,
+			presented,
 			handle: Some(handle),
 		}
 	}
@@ -534,6 +550,10 @@ impl Worker {
 		}
 		inbox.pending = Some(request);
 		wake.notify_one();
+	}
+	/// Allows background block workers after this revision's readable GPU frame.
+	pub fn presented(&self, version: u64) {
+		self.presented.store(version, Ordering::Relaxed);
 	}
 	pub fn prioritize(&self, coverage: f32) {
 		self.control

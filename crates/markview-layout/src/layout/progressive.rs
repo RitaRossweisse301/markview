@@ -8,14 +8,19 @@
 //! Because the pass is never restarted, a step pays only for the blocks it has
 //! not reached yet, however long the already-laid-out prefix has grown.
 
+#[cfg(all(feature = "parallel", not(target_arch = "wasm32")))]
+pub(super) mod parallel;
+
 use super::{
 	BlockContext, CacheEntry, CacheKey, LayoutEngine, LayoutOptions,
 	blocks::anchor_only, external_key,
 };
 use crate::{
-	document::Document,
+	document::{Block, Document},
 	image::ImageSnapshot,
-	scene::{BoxDecoration, Draw, LayoutSnapshot, PlacedBlock, Rect},
+	scene::{
+		BlockLayout, BoxDecoration, Draw, LayoutSnapshot, PlacedBlock, Rect,
+	},
 	style::{Condition, TextAppearance},
 };
 use std::{sync::Arc, time::Duration};
@@ -40,10 +45,14 @@ pub struct ProgressiveLayout {
 	/// The source of the document this pass belongs to. It is the same `Arc`
 	/// the document holds, so the two compare by identity on every call.
 	source: Arc<str>,
+	#[cfg(all(feature = "parallel", not(target_arch = "wasm32")))]
+	pending: std::collections::VecDeque<(CacheKey, Arc<BlockLayout>)>,
 }
 
 /// What a pass resolves once and uses for every block.
 struct Pass {
+	#[cfg(all(feature = "parallel", not(target_arch = "wasm32")))]
+	parallel_start: f32,
 	options: LayoutOptions,
 	images: ImageSnapshot,
 	pad: [f32; 4],
@@ -190,6 +199,8 @@ impl LayoutEngine {
 				|| completed.is_some() && entry.completed == completed
 		});
 		let pass = Pass {
+			#[cfg(all(feature = "parallel", not(target_arch = "wasm32")))]
+			parallel_start: self.parallel_start,
 			options: options.clone(),
 			images: images.clone(),
 			pad,
@@ -226,6 +237,8 @@ impl LayoutEngine {
 				.filter(|b| !anchor_only(b))
 				.count(),
 			source: document.source.clone(),
+			#[cfg(all(feature = "parallel", not(target_arch = "wasm32")))]
+			pending: Default::default(),
 		};
 		// An empty document has nothing to advance, so it closes here.
 		if layout.is_complete() {
@@ -246,7 +259,7 @@ impl LayoutEngine {
 		document: &Document,
 		budget: Duration,
 	) -> bool {
-		self.advance_cancellable(layout, document, budget, &|| false)
+		self.advance_cancellable(layout, document, budget, &|| false, false)
 	}
 
 	pub(super) fn advance_cancellable(
@@ -254,7 +267,8 @@ impl LayoutEngine {
 		layout: &mut ProgressiveLayout,
 		document: &Document,
 		budget: Duration,
-		cancelled: &dyn Fn() -> bool,
+		cancelled: &(dyn Fn() -> bool + Sync),
+		_prefetch: bool,
 	) -> bool {
 		// A pass is a position in one document's block list, so advancing it
 		// with another document would read past the end or silently lay out a
@@ -284,7 +298,7 @@ impl LayoutEngine {
 		}
 		let started = Instant::now();
 		loop {
-			self.block(layout, document, cancelled);
+			self.block(layout, document, cancelled, _prefetch);
 			if cancelled() {
 				return false;
 			}
@@ -297,133 +311,61 @@ impl LayoutEngine {
 		}
 	}
 
-	/// Lays out the block at the pass's cursor.
+	/// Measures local geometry, then publishes one block in document order.
 	fn block(
 		&mut self,
 		layout: &mut ProgressiveLayout,
 		document: &Document,
-		cancelled: &dyn Fn() -> bool,
+		cancelled: &(dyn Fn() -> bool + Sync),
+		_prefetch: bool,
 	) {
-		{
-			let index = layout.index;
-			let child_index = layout.visible_index;
-			let child_count = layout.visible_count;
-			let visible = !anchor_only(&document.blocks[index]);
-			layout.visible_index += usize::from(visible);
-			let ProgressiveLayout { result, pass, .. } = layout;
-			let block = &document.blocks[index];
-			let key = CacheKey {
-				position: if visible
-					&& pass.options.stylesheet.has_child_rules()
-				{
-					u8::from(child_index == 0)
-						| (u8::from(child_index + 1 == child_count) << 1)
-				} else {
-					0
-				},
-				external: external_key(
-					block,
-					&pass.images,
-					self.highlights.results(),
-					pass.codeblock_theme.as_deref(),
-					&pass.options,
-				),
-				content: block.content_key,
-				width: pass.options.width.to_bits(),
-				size: pass.options.font_size.to_bits(),
-				justify: pass.options.justify,
-				hyphenate: pass.options.hyphenate,
-				justification: pass.options.justification.bits(),
-				paragraph_indent: pass.options.paragraph_indent.to_bits(),
-				greedy: pass.options.greedy,
-				codeblock_wrap: pass.options.codeblock_wrap,
-				codeblock_theme: pass.codeblock_theme_key,
-				style: pass.style_key,
-			};
-			let cached = self.cache.get_mut(&key).map(|entry| {
-				entry.pass = pass.id;
-				entry.layout.clone()
-			});
-			let geometry = if let Some(cached) = cached {
-				result.reused += 1;
-				cached
-			} else {
-				let measured = crate::profile::measure(
-					crate::profile::Stage::Blocks,
-					|| {
-						let mut out = crate::scene::BlockLayout::default();
-						self.shaper.appearance = if visible {
-							pass.options.stylesheet.child(
-								&pass.appearance,
-								child_index,
-								child_count,
-							)
-						} else {
-							pass.appearance.clone()
-						};
-						BlockContext {
-							nested: Some(super::cache::NestedCache {
-								entries: &self.nested_cache,
-								base: &key,
-							}),
-							cancelled,
-							search_fields: crate::search::layout_fields(block),
-							shaper: &mut self.shaper,
-							math: &mut self.math,
-							images: &pass.images,
-							highlight_cache: self.highlights.results(),
-							marker_depth: 0,
-							enum_depth: 0,
-						}
-						.block(
-							block,
-							pass.pad[3],
-							0.0,
-							pass.content_width,
-							&pass.options,
-							&mut out,
-						);
-						out.seal_scene();
-						Arc::new(out)
-					},
-				);
+		let block = &document.blocks[layout.index];
+		let job = layout.pass.job(
+			block,
+			layout.visible_index,
+			layout.visible_count,
+			self.highlights.results(),
+		);
+		let cached = self.cache.get_mut(&job.key).map(|entry| {
+			entry.pass = layout.pass.id;
+			entry.layout.clone()
+		});
+		let geometry = if let Some(cached) = cached {
+			layout.result.reused += 1;
+			cached
+		} else {
+			#[cfg(all(feature = "parallel", not(target_arch = "wasm32")))]
+			if _prefetch {
+				self.prefetch(layout, document, cancelled);
 				if cancelled() {
 					return;
 				}
-				self.cache.insert(
-					key,
-					CacheEntry {
-						layout: measured.clone(),
-						pass: pass.id,
-						completed: None,
-					},
-				);
-				measured
-			};
-			self.retain_children(&geometry, pass.id);
-			let flow = Arc::new(geometry.resolve_flow(
-				&pass.options.details_open,
-				pass.options.force_open,
-			));
-			result.height += flow.height;
-			result.blocks.push(PlacedBlock {
-				id: block.id,
-				source: block.source.clone(),
-				y: result.height - flow.height,
-				flow,
-				layout: geometry.clone(),
-			});
-			result.degraded += geometry.degraded;
-			result.math_errors += geometry.math_errors;
-			// The body box is the document's background, so it must cover every
-			// block the prefix has published, this one included; leaving it at
-			// the height from before the block would paint a prefix without a
-			// background behind its newest block.
-			if let Some(Draw::Box { rect, .. }) = &mut result.document_box {
-				rect.h = result.height;
 			}
-		}
-		layout.index += 1;
+			let measured =
+				layout.take_prefetched(&job.key).unwrap_or_else(|| {
+					Measurement {
+						pass: &layout.pass,
+						nested: &self.nested_cache,
+						highlights: self.highlights.results(),
+						cancelled,
+					}
+					.measure(&job, &mut self.shaper, &mut self.math)
+				});
+			if cancelled() {
+				return;
+			}
+			self.cache.insert(
+				job.key,
+				CacheEntry {
+					layout: measured.clone(),
+					pass: layout.pass.id,
+					completed: None,
+				},
+			);
+			measured
+		};
+		self.retain_children(&geometry, layout.pass.id);
+		layout.place(block, geometry);
 		if layout.is_complete() {
 			self.close(layout);
 		}
@@ -452,5 +394,158 @@ impl LayoutEngine {
 			entry.completed = Some(id);
 		}
 		self.completed = Some(id);
+	}
+}
+
+struct BlockJob<'a> {
+	block: &'a Block,
+	key: CacheKey,
+	child_index: usize,
+	child_count: usize,
+}
+
+impl Pass {
+	fn job<'a>(
+		&self,
+		block: &'a Block,
+		child_index: usize,
+		child_count: usize,
+		highlights: &std::collections::HashMap<
+			u64,
+			super::highlights::HighlightResult,
+		>,
+	) -> BlockJob<'a> {
+		let visible = !anchor_only(block);
+		let options = &self.options;
+		let key = CacheKey {
+			position: if visible && options.stylesheet.has_child_rules() {
+				u8::from(child_index == 0)
+					| (u8::from(child_index + 1 == child_count) << 1)
+			} else {
+				0
+			},
+			external: external_key(
+				block,
+				&self.images,
+				highlights,
+				self.codeblock_theme.as_deref(),
+				options,
+			),
+			content: block.content_key,
+			width: options.width.to_bits(),
+			size: options.font_size.to_bits(),
+			justify: options.justify,
+			hyphenate: options.hyphenate,
+			justification: options.justification.bits(),
+			paragraph_indent: options.paragraph_indent.to_bits(),
+			greedy: options.greedy,
+			codeblock_wrap: options.codeblock_wrap,
+			codeblock_theme: self.codeblock_theme_key,
+			style: self.style_key,
+		};
+		BlockJob {
+			block,
+			key,
+			child_index,
+			child_count,
+		}
+	}
+}
+
+struct Measurement<'a> {
+	pass: &'a Pass,
+	nested: &'a std::collections::HashMap<u64, super::cache::NestedEntry>,
+	highlights:
+		&'a std::collections::HashMap<u64, super::highlights::HighlightResult>,
+	cancelled: &'a (dyn Fn() -> bool + Sync),
+}
+
+impl Measurement<'_> {
+	fn measure(
+		&self,
+		job: &BlockJob<'_>,
+		shaper: &mut super::TextShaper,
+		math: &mut crate::math::MathEngine,
+	) -> Arc<BlockLayout> {
+		crate::profile::measure(crate::profile::Stage::Blocks, || {
+			let mut out = BlockLayout::default();
+			shaper.appearance = if anchor_only(job.block) {
+				self.pass.appearance.clone()
+			} else {
+				self.pass.options.stylesheet.child(
+					&self.pass.appearance,
+					job.child_index,
+					job.child_count,
+				)
+			};
+			BlockContext {
+				nested: Some(super::cache::NestedCache {
+					entries: self.nested,
+					base: &job.key,
+				}),
+				cancelled: self.cancelled,
+				search_fields: crate::search::layout_fields(job.block),
+				shaper,
+				math,
+				images: &self.pass.images,
+				highlight_cache: self.highlights,
+				marker_depth: 0,
+				enum_depth: 0,
+			}
+			.block(
+				job.block,
+				self.pass.pad[3],
+				0.,
+				self.pass.content_width,
+				&self.pass.options,
+				&mut out,
+			);
+			out.seal_scene();
+			Arc::new(out)
+		})
+	}
+}
+
+impl ProgressiveLayout {
+	fn take_prefetched(&mut self, key: &CacheKey) -> Option<Arc<BlockLayout>> {
+		#[cfg(all(feature = "parallel", not(target_arch = "wasm32")))]
+		{
+			self.pending.pop_front().map(|(prepared, geometry)| {
+				assert!(
+					prepared == *key,
+					"prefetched geometry must match its block"
+				);
+				geometry
+			})
+		}
+		#[cfg(not(all(feature = "parallel", not(target_arch = "wasm32"))))]
+		{
+			let _ = key;
+			None
+		}
+	}
+
+	fn place(&mut self, block: &Block, geometry: Arc<BlockLayout>) {
+		let flow = Arc::new(geometry.resolve_flow(
+			&self.pass.options.details_open,
+			self.pass.options.force_open,
+		));
+		let result = &mut self.result;
+		result.height += flow.height;
+		let y = result.height - flow.height;
+		result.degraded += geometry.degraded;
+		result.math_errors += geometry.math_errors;
+		result.blocks.push(PlacedBlock {
+			id: block.id,
+			source: block.source.clone(),
+			y,
+			flow,
+			layout: geometry,
+		});
+		if let Some(Draw::Box { rect, .. }) = &mut result.document_box {
+			rect.h = result.height;
+		}
+		self.index += 1;
+		self.visible_index += usize::from(!anchor_only(block));
 	}
 }

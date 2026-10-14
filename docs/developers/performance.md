@@ -386,6 +386,76 @@ cargo test --release -p markview-layout --locked --test shaping_performance -- -
 The preserved executables, raw samples, binary hashes and memory measurements
 are under `artifacts/shaping-optimization/` (ignored by Git).
 
+## Automatic native block layout
+
+The GUI enables block workers by default. It selects half the available logical
+CPUs, clamped to 1–8, and batches at most four blocks per worker. Pool creation
+and worker font contexts wait until the initial coverage is published and the
+GUI acknowledges a readable GPU frame for that request. Documents under 32 KiB
+stay serial because they normally publish only on completion. Formula-containing
+blocks remain serial to preserve whole-pass budgets. Cache hits do not enter
+the pool. Workers share the coordinator's font-data cache, preserving font blob
+identities for the renderer while keeping shaping scratch independent.
+
+The 2026-10-14 tuning used Linux x86_64, an Intel Core Ultra 5 125H with 18
+logical CPUs, the `balanced` power profile, Rust 1.98.1 and release thin LTO.
+Geometry-only measurements use committed font subsets, 18 px text and a 760 px
+column. Five independent processes per thread count each run six full/cached
+pairs; warm medians exclude the first full pass. Parsing and initial font
+collection discovery are excluded. The first 1,098 px remain serial.
+
+| Fixture | Serial full reflow (ms) | 2 workers | 4 workers | 8 workers | Serial / 8-worker cold prefix (ms) |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Unique prose, 100 KiB | 103.61 | 82.52 | 52.93 | 36.66 | 3.38 / 3.38 |
+| Unique prose, 400 KiB | 414.67 | 325.44 | 200.94 | 125.00 | 3.13 / 3.12 |
+| 4,000 short paragraphs, 280 KiB | 295.62 | 269.05 | 177.66 | 109.55 | 2.54 / 2.43 |
+| Unique mixed CJK prose, 100 KiB | 114.19 | 95.38 | 63.00 | 40.06 | 3.88 / 3.81 |
+
+A one-block-per-worker batch made two workers slower than serial on these
+fixtures. Four-block batches reduced scheduling overhead and made two workers
+useful; eight workers gave the best long-document results among the tested
+counts. This is the basis for the automatic cap, rather than using every CPU.
+Repeated-content ordinary and math fixtures showed little benefit: with eight
+workers, their warm full reflows were 1.49 and 4.49 ms against serial 1.51 and
+4.64 ms. These are geometry timings, not GPU frame timings.
+
+The production `latency` harness uses the same GPU acknowledgement as the GUI.
+Eight alternating process pairs per fixture, with three top/far edits per process,
+used Intel Arc Vulkan, system fonts and a 1200 × 800 offscreen target at scale 1:
+
+| Fixture | Serial / automatic complete (ms) | Serial / automatic first GPU (ms) | Serial / automatic RSS after full load (MiB) |
+| --- | ---: | ---: | ---: |
+| Unique prose, 100 KiB | 174.49 / 104.55 | 62.45 / 67.83 | 79.12 / 81.88 |
+| Unique prose, 400 KiB | 537.98 / 204.81 | 68.47 / 64.76 | 135.53 / 138.38 |
+| Repeated CJK prose, 100 KiB | 71.11 / 74.21 | 71.03 / 74.14 | 69.73 / 70.06 |
+
+Four alternating process pairs of a 300-code-block fixture, including concurrent
+syntax highlighting, completed in 136.07 / 86.57 ms; first GPU frame was
+56.60 / 57.99 ms and RSS was 93.62 / 96.69 MiB.
+
+Native `smoke` runs at 1200 × 800 logical pixels and DPR 2 checked that worker
+startup logs follow the readable-GPU-frame log. First-frame times varied
+materially across groups: the final eight-pair medians were 117.44 / 124.00 ms
+for unique 100 KiB prose and 117.60 / 117.25 ms for 400 KiB. An earlier twenty-pair
+confirmation group ranged from 112 to 253 ms on those fixtures. These samples
+do not establish end-to-end first-frame equivalence or acceleration; the serial
+first-screen path and delayed startup are enforced by tests. The complete-layout
+and geometry gains must not be presented as a first-frame speedup.
+
+Reproduce geometry timings with:
+
+```sh
+python3 scripts/generate_stress_fixtures.py
+cargo build --release -p markview-layout --features parallel --example parallel_bench
+# Arguments: document, worker count, full/cached pair count.
+target/release/examples/parallel_bench artifacts/perf-analysis/unique-400k.md 8 6
+```
+
+The initial serial executable, final automatic executable, hashes, thread-count
+sweeps, native GPU logs, intermediate confirmation runs and raw reports are under
+`artifacts/parallel-tuning/` (ignored by Git). `--no-default-features` disables
+block workers in the native application; Web retains serial stepped layout.
+
 ## What can change the result
 
 Color Emoji preserve their RGBA pixels through the image pipeline. The renderer
