@@ -24,6 +24,7 @@ at the same level, without `[brackets]`.
 ### Added
 
 - Add a Rust cyclomatic complexity check with a configurable maximum of 15, excluding tests and test support, with reasoned function-level exemptions and mandatory CI enforcement.
+- Add editor-side system and downloaded font indexing, family matching, and cancellable native process transport.
 - Export unsaved Markdown through `markview export --stdin` to PDF or PNG, with templates, resource directories, JSON progress and cancellation.
 - Cover nested disclosures in quotes and lists, styled container edges, selection and horizontal scrolling with rendering baselines.
 - Compare document rendering with committed PNG baselines on Lavapipe, with explicit updates and CI difference images.
@@ -38,6 +39,7 @@ at the same level, without `[brackets]`.
 - Reduce shaping allocations by reusing layout storage and scanning inline spans once; measure label widths without emitting glyphs.
 - Upgrade Parley to 0.12, adapting font metrics, variation coordinates and cluster styles, preserving RTL ligatures and refreshing rendering baselines.
 - Share template, font and page configuration across reader, file and buffer exports, including CJK selection and numeric validation.
+- Move VS Code extension sources and tooling to `web/app/vsc-ext/`.
 - Split source parsing, semantic documents and layout into `markview-commonmark`, `markview-document` and `markview-layout`, preserving host scheduling and reader behavior.
 - Skip vertex emission during a glyph prewarm pass, which only prepares atlases for a frame it discards.
 - Reuse the per-frame paint order buffers instead of allocating them on every frame.
