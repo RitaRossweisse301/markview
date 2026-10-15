@@ -553,7 +553,10 @@ fn line_end(source: &str, end: usize) -> usize {
 
 /// The offset just past the line that closes the front matter `source` opens,
 /// or `None` when the document opens none or never closes one. Comrak closes
-/// on the next line that is exactly `---`; without one, the opening line is an
+/// on the next line that is exactly `---` **after a body line**: it scans for
+/// the delimiter from the end of the opening line, so a `---` on the line right
+/// below the opener is body text, and a document whose only later `---` is that
+/// line holds no front matter at all. Without a closer, the opening line is an
 /// ordinary thematic break and a prefix may cut through it.
 fn front_matter_close(source: &str) -> Option<usize> {
 	let lines = line_ranges(source);
@@ -562,7 +565,7 @@ fn front_matter_close(source: &str) -> Option<usize> {
 	}
 	lines
 		.into_iter()
-		.skip(1)
+		.skip(2)
 		.find(|range| &source[range.clone()] == "---")
 		.map(|range| range.end)
 }

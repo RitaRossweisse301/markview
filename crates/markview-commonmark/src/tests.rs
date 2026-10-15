@@ -1972,6 +1972,28 @@ fn a_prefix_never_cuts_through_front_matter() {
 }
 
 #[test]
+fn a_prefix_never_cuts_through_front_matter_whose_second_line_is_a_delimiter() {
+	// Comrak scans for the closing delimiter from the end of the opening line,
+	// so a `---` on the line right below the opener is body text: the document
+	// is one front-matter block, and a cut inside it made of the opener a
+	// prefix that published the `---` as a thematic break.
+	for source in ["---\n---\n\n---\n", "---\n---\n---\n"] {
+		let source: Arc<str> = Arc::from(source);
+		let full = parse(source.as_ref());
+		assert!(matches!(full.blocks[0].kind, BlockKind::FrontMatter { .. }));
+		for cut in 1..source.len() {
+			if let Some(prefix) = parse_prefix(&source, cut) {
+				assert_eq!(
+					prefix.blocks,
+					full.blocks[..prefix.blocks.len()],
+					"cut {cut}"
+				);
+			}
+		}
+	}
+}
+
+#[test]
 fn a_prefix_never_cuts_through_an_open_container() {
 	// The full parse drops the opener into a transparent container, so a
 	// prefix that ends inside it would show the raw `<div>` block instead.
