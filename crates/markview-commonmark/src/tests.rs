@@ -872,6 +872,17 @@ fn prefix_parse_resolves_definitions_that_follow_the_cut() {
 }
 
 #[test]
+fn prefix_parse_resolves_an_indented_definition() {
+	// A definition may sit up to three spaces deep, which the parser reads and
+	// the prefix's own scan used to skip: the prefix block stayed a literal
+	// `[foo]` where the full parse links it.
+	assert_prefix_matches(
+		"[foo]\n\nfirst line of the paragraph here is long\nsecond line of the paragraph is also long\n\n  [foo]: /url\n",
+		3,
+	);
+}
+
+#[test]
 fn prefix_parse_accepts_containers_and_cuts_them_at_a_boundary() {
 	let source: Arc<str> = Arc::from(
 		"# T\n\n- a\n- b\n\n```rust\nfn main() {}\n\nmore();\n```\n\nEnd.\n",

@@ -253,10 +253,12 @@ fn definition_label(line: &str) -> Option<&str> {
 /// The reference and footnote definitions of `source`, rewritten so they can be
 /// appended to a prefix.
 ///
-/// Only column-zero lines outside a fence are taken, because a `[x]: ...` line
-/// inside code is text the full parse would not resolve either. A definition
-/// whose destination is on the next line, or a footnote body, is not needed:
-/// the reference only needs its target and its number.
+/// A definition may be indented up to three spaces (four make an indented code
+/// block), so an indented `[x]: ...` line is taken like a flush one: comrak
+/// reads it as a definition, and a prefix that skipped it kept a literal `[x]`
+/// where the full parse links it. Lines inside a fence are text either way. A
+/// definition whose destination is on the next line, or a footnote body, is not
+/// needed: the reference only needs its target and its number.
 ///
 /// A link reference definition cannot interrupt a paragraph, so a `[x]: y` line
 /// that continues one is ordinary text. Taking it as a definition would let the
@@ -290,7 +292,7 @@ pub(super) fn definitions(source: &str) -> String {
 		if fence.is_some() {
 			continue;
 		}
-		if indent == 0
+		if indent <= 3
 			&& !paragraph
 			&& rest.starts_with('[')
 			&& let Some(close) = rest.find("]:")
