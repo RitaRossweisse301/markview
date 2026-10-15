@@ -15,7 +15,7 @@ To AI Agents: NO editing of this file is allowed. This file is for human editing
 
 - Use English for all comments in code.
 - Write comments using Markdown syntax, even though they are not rendered. For example, "// `object` is borrowed", not "// object is borrowed".
-- Keep comments concise: let the code explain itself if possible.
+- Keep comments concise: only comment on WHAT, sometimes WHY, never HOW.
 
 ## Rust Specific Instructions:
 
