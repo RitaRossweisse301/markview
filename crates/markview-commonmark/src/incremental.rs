@@ -265,16 +265,25 @@ fn definition_label(line: &str) -> Option<&str> {
 /// appended copy resolve a reference the full parse leaves alone, changing a
 /// prefix block or a `<details>` body that the document itself parses as plain
 /// text.
+///
+/// Two definitions the source separated by anything else are emitted apart: a
+/// `[x]: ...` line comrak rejects is a paragraph, and a paragraph swallows the
+/// definition line after it, so gluing the two together dropped a definition
+/// the full parse resolves. Adjacent lines stay adjacent, which is what the
+/// source did.
 pub(super) fn definitions(source: &str) -> String {
 	let mut out = String::new();
 	let mut fence = None;
 	// Whether a paragraph is open going into this line, which is what decides
 	// whether a `[x]: y` line can start a definition here.
 	let mut paragraph = false;
+	// The line the last emitted definition came from, so a gap in the source
+	// becomes a blank line in the rewrite.
+	let mut last = None;
 	// The parser's lines: a lone carriage return ends one too, so `lines()`
 	// would glue a definition onto the text before it and miss the marker.
 	let ranges = line_ranges(source);
-	for range in &ranges {
+	for (index, range) in ranges.iter().enumerate() {
 		let line = &source[range.clone()];
 		let rest = line.trim_start_matches(' ');
 		let indent = line.len() - rest.len();
@@ -300,6 +309,9 @@ pub(super) fn definitions(source: &str) -> String {
 			let label = &rest[1..close];
 			let value = rest[close + 2..].trim();
 			if !label.is_empty() && !value.is_empty() {
+				if last.is_some_and(|last| last + 1 != index) {
+					out.push('\n');
+				}
 				out.push('[');
 				out.push_str(label);
 				out.push_str("]: ");
@@ -307,6 +319,7 @@ pub(super) fn definitions(source: &str) -> String {
 				// expects.
 				out.push_str(if label.starts_with('^') { "x" } else { value });
 				out.push('\n');
+				last = Some(index);
 				paragraph = false;
 				continue;
 			}

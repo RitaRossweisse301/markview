@@ -883,6 +883,16 @@ fn prefix_parse_resolves_an_indented_definition() {
 }
 
 #[test]
+fn prefix_parse_keeps_a_rejected_definition_from_swallowing_the_next() {
+	// `[foo]: /a "unterminated` is not a definition: the full parse reads it as
+	// a paragraph and takes the definition after the blank line. Appending both
+	// lines adjacently made the first one a paragraph that swallowed the
+	// second, so the prefix block kept a literal `[foo]`.
+	let source = "[foo]\n\n[foo]: /a \"unterminated\n\n[foo]: /b\n";
+	assert_prefix_matches(source, 3);
+}
+
+#[test]
 fn prefix_parse_accepts_containers_and_cuts_them_at_a_boundary() {
 	let source: Arc<str> = Arc::from(
 		"# T\n\n- a\n- b\n\n```rust\nfn main() {}\n\nmore();\n```\n\nEnd.\n",

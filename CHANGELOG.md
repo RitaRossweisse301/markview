@@ -65,6 +65,7 @@ at the same level, without `[brackets]`.
 - Refresh web scroll-sync coordinates after disclosure toggles and align footnote labels and backlinks with visible content.
 - Allow two RGBA8 levels of cross-driver rounding in rendering baselines while still rejecting larger pixel differences and mismatched dimensions.
 - Resolve an indented reference definition in a prefix parse the way the full parse does, so the prefix never keeps a literal reference the document links.
+- Keep a definition line the parser rejects from swallowing the definition that follows it in a prefix rewrite.
 - Cap a re-raster request with one uniform scale factor rounded to the nearest pixel, so a zoomed diagram keeps its proportions and repeated updates settle on one raster.
 - Redraw a diagram only when its demand outgrows the raster by more than a sixteenth or falls under half of it, so a fixed zoom stops re-rasterizing.
 - Ignore system fonts in SVG rendering baselines and pin CJK font selection in localized search baselines.
