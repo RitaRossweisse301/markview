@@ -39,7 +39,7 @@ fi
 if [[ ${1:-} == --full ]]; then
 	cargo +nightly build --release \
 		--bin parse --bin reparse --bin prefix --bin mvss --bin layout \
-		--bin layout_diff --bin math --bin highlight --bin shaping \
+		--bin layout_diff --bin layout_parallel --bin math --bin highlight --bin shaping \
 		--bin fonts --bin pdf --bin geometry --bin refdef \
 		--bin sourcepos_content --bin details_structure --bin anchors \
 		2>&1 | tail -5

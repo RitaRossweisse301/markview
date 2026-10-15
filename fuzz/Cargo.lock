@@ -1319,6 +1319,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "markview-geometry"
+version = "0.3.0"
+
+[[package]]
 name = "markview-layout"
 version = "0.3.0"
 dependencies = [
@@ -1329,11 +1333,13 @@ dependencies = [
  "icu_segmenter",
  "log",
  "markview-document",
+ "markview-geometry",
  "memmap2",
  "parley",
  "ratex-layout",
  "ratex-parser",
  "ratex-types",
+ "rayon",
  "regex",
  "regex-automata",
  "serde",

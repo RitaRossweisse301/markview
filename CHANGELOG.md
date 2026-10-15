@@ -23,6 +23,7 @@ at the same level, without `[brackets]`.
 
 ### Added
 
+- Add a dedicated serial/parallel layout fuzz differential covering retained scenes, progressive cancellation, cache reuse and reflows with verified worker execution.
 - Add native block layout workers with ordered publication and bounded prefetch, enabled automatically in the GUI after its first readable GPU frame; retain serial Web layout and formula budgets.
 - Add a Rust cyclomatic complexity check with a configurable maximum of 15, excluding tests and test support, with reasoned function-level exemptions and mandatory CI enforcement.
 - Add editor-side system and downloaded font indexing, family matching, and cancellable native process transport.

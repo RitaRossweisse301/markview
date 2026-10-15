@@ -87,6 +87,14 @@ test = false
 doc = false
 bench = false
 
+# G3: serial versus native parallel block layout (Tier 3 differential).
+[[bin]]
+name = "layout_parallel"
+path = "fuzz_targets/layout_parallel.rs"
+test = false
+doc = false
+bench = false
+
 # G4: math through ratex (Tier 1 + Tier 2).
 [[bin]]
 name = "math"

@@ -6,6 +6,7 @@ pub mod budget;
 pub mod edit;
 pub mod mutators;
 pub mod oracle;
+pub mod parallel;
 pub mod pdf_oracle;
 pub mod pipeline;
 pub mod probe;

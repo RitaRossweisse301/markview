@@ -77,6 +77,19 @@ a tree against an independent scan of the same bytes.
   passes are an expected change. The document is then laid out progressively,
   with a prefix snapshot checked block by block (id, position, geometry) against
   the direct layout.
+- **`layout_parallel`** — looks for serial and native parallel block layout
+  disagreeing. Two synchronous-highlight engines use pinned fonts and 2–4
+  workers across cold, cached, resized/theme/image, original-source and
+  cancelled/edited passes. A three-paragraph probe prefix guarantees worker
+  execution even for empty inputs; the unprefixed source is also checked to
+  preserve front matter coverage. A cancellation callback verifies that work
+  really ran on another thread. Sampled prefixes, visible and retained local
+  scenes, expanded disclosures, reading text, search bindings and source ranges
+  must agree; font blob identities and cache bookkeeping may legally vary.
+  Inputs are limited to 32 KiB after UTF-8 replacement, with the Markdown
+  structure mutator. The paired-pass wall budget is five times `layout` and
+  fixed allocation headroom twice `layout`; environment overrides still apply.
+  CI runs its smoke alongside the existing targets and tests the shared oracles.
 - **`math`** — looks for an uncaught panic, an overflow, or non-finite box
   geometry on the ratex path. How: `MathEngine::layout` under budgets, with a
   LaTeX-aware mutator keeping the corpus inside macro territory, where the
@@ -163,6 +176,9 @@ a tree against an independent scan of the same bytes.
   snippets, so their ranges are snippet-relative by construction. Layout
   options **pin the committed test fonts** (`crates/markview-layout/tests/fonts`),
   never the host's font set, so snapshots compare equal across machines.
+  Font content fingerprints are memoized by blob identity within a comparison;
+  only the content fingerprint enters the digest, keeping worker identities
+  irrelevant without rehashing a whole font for every glyph.
 - `seam.rs` — the structural differentials the `G1` Tier-3 targets share:
   source ranges against the text they address (`assert_rich_text_covered`
   and the containment walks), reference resolution against an independent
@@ -183,7 +199,7 @@ a tree against an independent scan of the same bytes.
 - `ratex.rs` — the `\char` overflow allowance. `ratex-parser` 0.1.14
   accumulates the argument without a width check, and `libfuzzer-sys` aborts
   on the panic before the `catch_unwind` in `markview-layout` can absorb it, so
-  the four targets that reach ratex call `allow_char_overflow()`, which swaps
+  the targets that reach ratex call `allow_char_overflow()`, which swaps
   that one hook for a non-aborting one. Every other panic still aborts, so the
   oracle stays strict.
 - `probe.rs` — `measure`/`Measured`, so a one-off probe reports the same
@@ -197,6 +213,7 @@ cd fuzz
 cargo +nightly fuzz build                       # ASAN (T2), every target
 cargo +nightly fuzz build parse                 # one target
 cargo +nightly fuzz run parse -- -runs=5000     # brief smoke
+cargo +nightly fuzz run layout_parallel -- -runs=5000 -max_len=32768
 ```
 
 Formatting: `cargo +nightly fmt -p markview-fuzz -p mvfuzz` inside

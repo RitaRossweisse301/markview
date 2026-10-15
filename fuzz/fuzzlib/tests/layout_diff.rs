@@ -1,6 +1,5 @@
 use std::sync::{Arc, Mutex};
 
-use markview_document as document;
 use markview_layout::{
 	background::{Executor, Task},
 	layout::LayoutEngine,

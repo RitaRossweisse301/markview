@@ -15,7 +15,7 @@
 //! puts `catch_unwind` back in service; every other panic still aborts, so
 //! the oracle stays strict.
 //!
-//! The class reaches `math`, `layout`, `layout_diff`, and `pdf`. Delete this
+//! The class reaches `math`, `layout`, `layout_diff`, `layout_parallel`, and `pdf`. Delete this
 //! module and its call sites once the dependency is fixed or bumped.
 
 use std::sync::Once;

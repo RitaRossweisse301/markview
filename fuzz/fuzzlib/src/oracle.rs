@@ -7,33 +7,43 @@
 //! bounded).
 
 use std::{
-	collections::hash_map::DefaultHasher,
+	collections::{HashMap, hash_map::DefaultHasher},
 	hash::{Hash, Hasher},
 };
 
 use markview_document::{Block, BlockKind, Document, Inline};
 use markview_layout::scene::{BlockLayout, Draw, LayoutSnapshot, Rect};
 
-/// A three-way digest: field-by-field equality up to a ~2^-192 collision.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// A three-way field digest used by the differential targets.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Fingerprint(pub u64, pub u64, pub u64);
 
-pub type Hashers = (DefaultHasher, DefaultHasher, DefaultHasher);
+pub struct Hashers {
+	digests: (DefaultHasher, DefaultHasher, DefaultHasher),
+	fonts: HashMap<u64, Fingerprint>,
+}
 
 pub fn hashers() -> Hashers {
-	(
-		DefaultHasher::new(),
-		DefaultHasher::new(),
-		DefaultHasher::new(),
-	)
+	Hashers {
+		digests: (
+			DefaultHasher::new(),
+			DefaultHasher::new(),
+			DefaultHasher::new(),
+		),
+		fonts: HashMap::new(),
+	}
 }
 fn hash3(h: &mut Hashers, v: &impl Hash) {
-	for h in [&mut h.0, &mut h.1, &mut h.2] {
+	for h in [&mut h.digests.0, &mut h.digests.1, &mut h.digests.2] {
 		v.hash(h);
 	}
 }
 pub fn finish(h: Hashers) -> Fingerprint {
-	Fingerprint(h.0.finish(), h.1.finish(), h.2.finish())
+	Fingerprint(
+		h.digests.0.finish(),
+		h.digests.1.finish(),
+		h.digests.2.finish(),
+	)
 }
 
 /// `f32` hashes by bit pattern, so equal floats compare equal and NaN is its
@@ -223,6 +233,19 @@ pub fn layout(snapshot: &LayoutSnapshot) -> Fingerprint {
 	let snapshot = snapshot.flattened();
 	let mut h = hashers();
 	hash3(&mut h, &(F::new(snapshot.width), F::new(snapshot.height)));
+	hash3(
+		&mut h,
+		&(
+			snapshot.presentation_key,
+			snapshot.degraded,
+			snapshot.math_errors,
+			snapshot.blocks.len(),
+			snapshot.document_box.is_some(),
+		),
+	);
+	if let Some(draw) = &snapshot.document_box {
+		hash_draw(draw, &mut h);
+	}
 	for block in &snapshot.blocks {
 		hash3(&mut h, &(block.id, &block.source, F::new(block.y)));
 		block_layout(&block.layout, &mut h);
@@ -255,6 +278,8 @@ pub fn block_layout(block: &BlockLayout, h: &mut Hashers) {
 		);
 	}
 	for node in &block.text {
+		// Include search bindings, source images, selection groups and boundaries.
+		hash3(h, &format!("{node:?}"));
 		hash3(h, &(node.text.as_str(), node.separator));
 		for c in &node.clusters {
 			hash3(h, &(&c.range, hash_rect(c.rect), c.rtl, c.command));
@@ -280,6 +305,9 @@ pub fn block_layout(block: &BlockLayout, h: &mut Hashers) {
 	for a in &block.anchors {
 		hash3(h, &(&a.anchor, F::new(a.y)));
 	}
+	for (command, rows) in &block.inline_decorations {
+		hash3(h, &(*command, F::new(rows.start), F::new(rows.end)));
+	}
 }
 
 fn hash_draw(draw: &Draw, h: &mut Hashers) {
@@ -299,12 +327,18 @@ fn hash_draw(draw: &Draw, h: &mut Hashers) {
 			hash3(h, &(1u8, hash_rect(*rect), &src, *version, &**title));
 		}
 		Draw::Glyph(g) => {
+			// Blob IDs only key the memo; comparisons use font content.
+			let font = *h.fonts.entry(g.font.data.id()).or_insert_with(|| {
+				let mut font = hashers();
+				hash3(&mut font, &g.font.data.data());
+				finish(font)
+			});
 			hash3(
 				h,
 				&(
 					2u8,
 					g.font.index,
-					g.font.data.data(),
+					font,
 					&*g.coords,
 					g.id,
 					F::new(g.size),
@@ -343,6 +377,7 @@ fn hash_draw(draw: &Draw, h: &mut Hashers) {
 			);
 		}
 		Draw::Math { math, paint, x, y } => {
+			hash3(h, &format!("{:?}", math.display.items));
 			hash3(
 				h,
 				&(
@@ -386,8 +421,7 @@ fn hash_draw(draw: &Draw, h: &mut Hashers) {
 					F::new(*x),
 					F::new(*y),
 					F::new(*size),
-					paths.as_ptr(),
-					paths.len(),
+					format!("{paths:?}"),
 				),
 			);
 		}

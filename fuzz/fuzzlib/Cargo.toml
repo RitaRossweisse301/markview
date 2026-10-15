@@ -15,7 +15,7 @@ libfuzzer-sys = "0.4"
 # `tests/fonts` (see `pipeline::pinned_fonts`). It happens to arrive through
 # `markview-pdf` today, but a layout helper that only works because another
 # crate enables a feature is one refactor away from shaping with no faces.
-markview-layout = { path = "../../crates/markview-layout", features = ["fuzz", "font-directories"] }
+markview-layout = { path = "../../crates/markview-layout", features = ["fuzz", "font-directories", "parallel"] }
 markview-pdf = { path = "../../crates/markview-pdf", features = ["fuzz"] }
 # The PDF targets re-parse Markview's own output; the reader dependency carries
 # the same version, so the harness checks what a viewer would see.
