@@ -225,10 +225,17 @@ fn prefix_blocks(source: &str, end: usize) -> Vec<Block> {
 
 /// The definitions of `source` that `bare` does not already hold.
 ///
-/// A definition inside the prefix resolves natively, and appending a second
-/// copy of it changes how the parser reads the prefix: comrak keeps a repeated
-/// footnote definition where a lone unreferenced one disappears, so the copy
-/// would add a block the document does not have.
+/// A note inside the prefix resolves natively, and appending a second copy of
+/// it changes how the parser reads the prefix: comrak keeps a repeated footnote
+/// definition where a lone unreferenced one disappears, so the copy would add a
+/// block the document does not have.
+///
+/// A *reference* definition is never dropped this way, because the prefix's copy
+/// need not be one: `[x]: /a "unterminated` at the cut reads as a paragraph,
+/// while the real `[x]: ...` after it still resolves the whole document.
+/// Dropping the later line left the prefix with a literal `[x]` where the full
+/// parse links it. The duplicate is harmless by comparison — a definition
+/// renders no block, and the parser keeps the first match.
 pub(super) fn missing_definitions(source: &str, bare: &str) -> String {
 	let all = definitions(source);
 	let present = definitions(bare);
@@ -239,7 +246,9 @@ pub(super) fn missing_definitions(source: &str, bare: &str) -> String {
 		present.lines().filter_map(definition_label).collect();
 	all.lines()
 		.filter(|line| {
-			!definition_label(line).is_some_and(|l| present.contains(&l))
+			!definition_label(line).is_some_and(|label| {
+				label.starts_with("[^") && present.contains(&label)
+			})
 		})
 		.map(|line| format!("{line}\n"))
 		.collect()

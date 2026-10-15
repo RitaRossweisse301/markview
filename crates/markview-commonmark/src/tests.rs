@@ -890,6 +890,13 @@ fn prefix_parse_keeps_a_rejected_definition_from_swallowing_the_next() {
 	// second, so the prefix block kept a literal `[foo]`.
 	let source = "[foo]\n\n[foo]: /a \"unterminated\n\n[foo]: /b\n";
 	assert_prefix_matches(source, 3);
+	// A cut whose prefix covers the rejected line: it still holds no
+	// destination, so the later definition must be appended rather than
+	// shadowed by the label the rejected line spells.
+	let source: Arc<str> = Arc::from(source);
+	let full = parse(source.as_ref());
+	let prefix = parse_prefix(&source, 6).expect("a prefix");
+	assert_eq!(prefix.blocks, full.blocks[..prefix.blocks.len()]);
 }
 
 #[test]
