@@ -23,6 +23,7 @@ at the same level, without `[brackets]`.
 
 ### Added
 
+- Resize sidebars from Settings or by dragging desktop edges, with saved independent folder, outline and phone sidebar widths.
 - Browse Markdown folders in a native file tree with refresh, collapse-all, keyboard navigation and session restoration, including Android folder imports.
 - Resolve relative, extensionless and unambiguous note links within an open folder.
 - Parse Obsidian wikilinks with labels and heading targets, preserving literal percent characters in note paths.
@@ -89,7 +90,7 @@ at the same level, without `[brackets]`.
 
 ### Documentation
 
-- Document folder browsing, supported Obsidian links and the shared Android sidebar.
+- Document folder browsing, supported Obsidian links, the shared Android sidebar and persistent sidebar widths.
 - Remove unused English and Chinese README detail images and their composition code.
 
 ## 0.3.0 - 2026-10-09

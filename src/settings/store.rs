@@ -1,7 +1,7 @@
 //! Transactional configuration reads, merging and durable writes.
 use super::{
-	ExportSettings, FontDefOverride, ReaderSettings, Setting, TabStyle,
-	WindowLayout, default_cjk_type,
+	ExportSettings, FontDefOverride, ReaderSettings, Setting, Sidebar,
+	TabStyle, WindowLayout, default_cjk_type,
 };
 use crate::lang::Lang;
 use crate::render::Theme;
@@ -98,6 +98,12 @@ struct Config {
 	accept_language: Option<String>,
 	font_size: f32,
 	width: f32,
+	#[serde(rename = "folder-width")]
+	folder_width: f32,
+	#[serde(rename = "outline-width")]
+	outline_width: f32,
+	#[serde(rename = "tabs-width")]
+	tabs_width: f32,
 	justify: bool,
 	hyphenate: bool,
 	justification: JustificationLimits,
@@ -135,6 +141,9 @@ impl Default for Config {
 			fontdef_overrides: Vec::new(),
 			font_size: settings.font_size,
 			width: settings.width,
+			folder_width: settings.folder_width,
+			outline_width: settings.outline_width,
+			tabs_width: settings.tabs_width,
 			justify: settings.justify,
 			hyphenate: settings.hyphenate,
 			justification: settings.justification,
@@ -182,6 +191,9 @@ impl Config {
 			fontdef_overrides: self.fontdef_overrides.clone(),
 			font_size: self.font_size,
 			width: self.width,
+			folder_width: self.folder_width,
+			outline_width: self.outline_width,
+			tabs_width: self.tabs_width,
 			justify: self.justify,
 			hyphenate: self.hyphenate,
 			justification: self.justification,
@@ -416,6 +428,9 @@ impl SettingsStore {
 					Setting::Theme,
 					Setting::FontSize,
 					Setting::Width,
+					Setting::SidebarWidth(Sidebar::Folder),
+					Setting::SidebarWidth(Sidebar::Outline),
+					Setting::SidebarWidth(Sidebar::Tabs),
 					Setting::Justify,
 					Setting::Hyphenate,
 					Setting::ParagraphIndent,
@@ -471,6 +486,9 @@ impl SettingsStore {
 			fontdef_overrides: self.saved.fontdef_overrides.clone(),
 			font_size: self.saved.font_size,
 			width: self.saved.width,
+			folder_width: self.saved.folder_width,
+			outline_width: self.saved.outline_width,
+			tabs_width: self.saved.tabs_width,
 			justify: self.saved.justify,
 			hyphenate: self.saved.hyphenate,
 			justification: self.saved.justification,

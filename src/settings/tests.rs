@@ -1,6 +1,63 @@
 use super::*;
 use crate::lang::Lang;
 use std::fs;
+
+#[test]
+fn sidebar_widths_default_merge_reload_validate_and_reset_independently() {
+	let dir = tempfile::tempdir().unwrap();
+	let path = dir.path().join("settings.toml");
+	fs::write(&path, "# Reader\nfont_size = 20\n").unwrap();
+	let (mut store, warning) = SettingsStore::load(Some(path.clone()));
+	assert!(warning.is_none());
+	let defaults = store.settings();
+	assert_eq!(
+		(
+			defaults.folder_width,
+			defaults.outline_width,
+			defaults.tabs_width
+		),
+		(260., 300., 320.)
+	);
+	let mut settings = defaults;
+	settings.set_sidebar_width(Sidebar::Folder, 380.);
+	store.changed(&settings, Some(Setting::SidebarWidth(Sidebar::Folder)));
+	fs::write(&path, "# Reader\noutline-width = 420\ntabs-width = 460\n")
+		.unwrap();
+	store.flush().unwrap();
+	let (loaded, warning) = SettingsStore::load(Some(path.clone()));
+	assert!(warning.is_none());
+	let settings = loaded.settings();
+	assert_eq!(
+		(
+			settings.folder_width,
+			settings.outline_width,
+			settings.tabs_width
+		),
+		(380., 420., 460.)
+	);
+	assert!(fs::read_to_string(&path).unwrap().contains("# Reader"));
+	for key in ["folder-width", "outline-width", "tabs-width"] {
+		for invalid in ["199", "601", "nan", "inf"] {
+			fs::write(&path, format!("{key} = {invalid}\n")).unwrap();
+			assert!(store.reload().is_err());
+			assert_eq!(store.settings(), settings);
+		}
+	}
+	fs::write(
+		&path,
+		"folder-width = 600\noutline-width = 200\ntabs-width = 500\n",
+	)
+	.unwrap();
+	assert!(store.reload().unwrap());
+	assert_eq!(store.settings().folder_width, 600.);
+	store.changed(&ReaderSettings::default(), None);
+	store.flush().unwrap();
+	assert_eq!(
+		SettingsStore::load(Some(path)).0.settings(),
+		ReaderSettings::default()
+	);
+}
+
 #[test]
 fn external_edits_merge_pending_ui_fields_and_preserve_comments() {
 	let dir = tempfile::tempdir().unwrap();

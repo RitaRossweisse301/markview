@@ -188,6 +188,15 @@ public class Smoke extends Instrumentation {
                 waitFor(s -> s.optString("tab_style").equals("Connected"));
             }
             screenshot("settings");
+            for (String sidebar : new String[] {phone ? "Tabs" : "Folder", "Outline"}) {
+                String key = sidebar.toLowerCase(java.util.Locale.ROOT);
+                double before = state().getJSONObject("sidebar_widths").getDouble(key);
+                tap("SidebarWidth(" + sidebar + ", 1)");
+                waitFor(s -> s.optJSONObject("sidebar_widths").optDouble(key) == before + 20);
+                tap("SidebarWidth(" + sidebar + ", -1)");
+                waitFor(s -> s.optJSONObject("sidebar_widths").optDouble(key) == before);
+            }
+            pass("Independent sidebar width controls on phone and tablet");
             for (int i = 0; i < 8 && button(state(), "Larger") == null; i++) { swipe(180, 550, 180, 270); swipe(180, 223, 180, 223); }
             double font = state().getDouble("font_size");
             tap("Larger");

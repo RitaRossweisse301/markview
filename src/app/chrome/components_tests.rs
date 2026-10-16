@@ -331,6 +331,8 @@ fn settings_and_export_step_controls_draw_icons_without_font_glyphs() {
 		Command::Wider,
 		Command::ScrollSpeed(-1),
 		Command::ScrollSpeed(1),
+		Command::SidebarWidth(crate::settings::Sidebar::Folder, -1),
+		Command::SidebarWidth(crate::settings::Sidebar::Folder, 1),
 		Command::ExportSize(-1),
 		Command::ExportSize(1),
 	] {

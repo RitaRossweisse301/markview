@@ -523,7 +523,7 @@ impl<P: SendEvent> App<P> {
 					w,
 					h,
 					self.interaction.tabs_reveal(),
-					320_f32,
+					self.preferences.values.tabs_width,
 				),
 			);
 		}
@@ -533,7 +533,7 @@ impl<P: SendEvent> App<P> {
 				h,
 				super::TOP,
 				super::BOTTOM,
-				260_f32,
+				self.preferences.values.folder_width,
 			),
 			self.interaction.folder_reveal(self.folder.open),
 		)

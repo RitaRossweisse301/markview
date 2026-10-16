@@ -97,6 +97,9 @@ list keeps its own scroll position. Folder browsing includes an **Open folder**
 button even before a folder has been selected. Back, the scrim or a left swipe
 closes either page; choosing a document also returns to reading.
 
+**Sidebar width** applies to both pages on phones; tablet folder and outline
+widths remain independent.
+
 The Tabs page:
 
 <img src="../screenshots/android/tab-drawer.png" alt="Markview phone tab drawer with switching, closing and opening controls" width="250">

@@ -54,10 +54,12 @@ pub(super) fn button(
 			Command::Smaller
 			| Command::Narrower
 			| Command::ScrollSpeed(-1)
+			| Command::SidebarWidth(_, -1)
 			| Command::ExportSize(-1) => Some(icons::MINUS),
 			Command::Larger
 			| Command::Wider
 			| Command::ScrollSpeed(1)
+			| Command::SidebarWidth(_, 1)
 			| Command::ExportSize(1) => Some(icons::PLUS),
 			_ => None,
 		},

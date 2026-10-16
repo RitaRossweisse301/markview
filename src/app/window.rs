@@ -287,6 +287,7 @@ impl<P: super::SendEvent> App<P> {
 				self.interaction.pressed_image = None;
 			}
 			self.hover_dropdown();
+			self.drag_sidebar();
 			self.move_tab_drag();
 			self.drag_scrollbar();
 			self.drag_panel();
@@ -311,6 +312,7 @@ impl<P: super::SendEvent> App<P> {
 			&& self.interaction.scrollbar.is_none()
 			&& self.interaction.panel_grab.is_none()
 			&& self.folder.grab.is_none()
+			&& self.interaction.sidebar_drag.is_none()
 		{
 			self.interaction.cursor = (f32::NEG_INFINITY, f32::NEG_INFINITY);
 		}
@@ -363,6 +365,7 @@ impl<P: super::SendEvent> App<P> {
 		self.interaction.scrollbar = None;
 		self.interaction.panel_grab = None;
 		self.folder.grab = None;
+		self.interaction.sidebar_drag = None;
 		// A confirmation owns input: only its buttons answer.
 		if self.interaction.modal.is_some() {
 			self.interaction.reset_clicks();
@@ -385,6 +388,9 @@ impl<P: super::SendEvent> App<P> {
 				self.close_dropdown();
 			}
 			self.redraw();
+			return;
+		}
+		if self.begin_sidebar_resize() {
 			return;
 		}
 		let (x, y) = self.interaction.cursor;
@@ -501,6 +507,11 @@ impl<P: super::SendEvent> App<P> {
 	}
 
 	fn pointer_released(&mut self) {
+		if self.interaction.sidebar_drag.take().is_some() {
+			self.refresh_hover();
+			self.redraw();
+			return;
+		}
 		self.tab_strip.cancel_drag();
 		let pressed_image = self.interaction.pressed_image.take();
 		let was_pressed = self.interaction.widgets.captured.is_some();
@@ -508,6 +519,7 @@ impl<P: super::SendEvent> App<P> {
 		self.interaction.scrollbar = None;
 		self.interaction.panel_grab = None;
 		self.folder.grab = None;
+		self.interaction.sidebar_drag = None;
 		if was_pressed {
 			if let Some(action) = action {
 				self.action(action);
@@ -558,6 +570,7 @@ impl<P: super::SendEvent> App<P> {
 		self.interaction.scrollbar = None;
 		self.interaction.panel_grab = None;
 		self.folder.grab = None;
+		self.interaction.sidebar_drag = None;
 		self.interaction.modifiers = Default::default();
 		self.refresh_hover();
 		self.redraw();
@@ -1084,6 +1097,7 @@ impl<P: super::SendEvent> App<P> {
 		self.interaction.scrollbar = None;
 		self.interaction.panel_grab = None;
 		self.folder.grab = None;
+		self.interaction.sidebar_drag = None;
 		self.interaction.close_outline();
 		if self.folder.open {
 			self.set_folder_open(false);

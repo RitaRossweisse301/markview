@@ -1578,6 +1578,13 @@ fn file_sidebar_owns_the_full_left_column_without_moving_the_outline() {
 		.unwrap();
 	let toolbar_layer = draws.iter().position(|draw| matches!(draw, Draw::Rect(rect, _) if rect.y == 0. && rect.w == 1200. && rect.h == crate::app::TOP)).unwrap();
 	assert!(file_layer > toolbar_layer);
+	h.app.interaction.cursor = (surface.w, 20.);
+	assert!(h.app.begin_sidebar_resize());
+	h.app.interaction.cursor.0 += 60.;
+	h.app.drag_sidebar();
+	h.app.interaction.sidebar_drag = None;
+	assert_eq!(h.app.frame_layout().left_inset, surface.w + 60.);
+	assert_eq!(h.app.outline_drawer(), outline);
 	h.app.toggle_folder();
 	h.app
 		.interaction

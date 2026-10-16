@@ -441,6 +441,7 @@ impl<P: super::SendEvent> App<P> {
 			| Command::SingleInstance
 			| Command::RestoreSession
 			| Command::ScrollSpeed(_)
+			| Command::SidebarWidth(_, _)
 			| Command::Reset
 			| Command::SettingsPreview => unreachable!("page command handled above"),
 			Command::ToggleDropdown(id, highlight) => {

@@ -55,6 +55,7 @@ pub(crate) enum Command {
 	RestoreSession,
 	/// Step the reader's scroll-speed multiplier by whole steps.
 	ScrollSpeed(i8),
+	SidebarWidth(crate::settings::Sidebar, i8),
 	/// First-line paragraph indent in whole em units.
 	Indent(u8),
 	CjkType(markview_layout::style::CjkType),
@@ -652,6 +653,7 @@ pub(crate) struct InteractionState {
 	pub(crate) export_scroll: f32,
 	/// Offset from the centre of the panel scrollbar thumb while dragging.
 	pub(crate) panel_grab: Option<f32>,
+	pub(crate) sidebar_drag: Option<crate::app::sidebar::Drag>,
 	/// The Styles page's list offset. The export's stylesheet chooser shares
 	/// it: no two pages of the panel are ever open at once.
 	pub(crate) styles_scroll: f32,

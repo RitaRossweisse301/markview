@@ -19,6 +19,7 @@ pub(super) enum Message {
 	Style(super::style_edit::Edit),
 	Size(i8),
 	Width(i8),
+	SidebarWidth(crate::settings::Sidebar, i8),
 	Align,
 	Hyphens,
 	CodeWrap,
@@ -58,6 +59,9 @@ impl Message {
 			Command::SingleInstance => Self::SingleInstance,
 			Command::RestoreSession => Self::RestoreSession,
 			Command::ScrollSpeed(delta) => Self::ScrollSpeed(delta),
+			Command::SidebarWidth(sidebar, delta) => {
+				Self::SidebarWidth(sidebar, delta)
+			}
 			_ => return None,
 		})
 	}
@@ -66,6 +70,7 @@ pub(super) enum Effect {
 	Preview(bool),
 	Persist(Option<Setting>),
 	Reflow,
+	SidebarResize(crate::settings::Sidebar),
 	ReloadStyles,
 	CloseDropdown,
 	SyncSession,
@@ -120,6 +125,12 @@ impl Component for Model {
 					width.min(1600.0)
 				};
 				Setting::Width
+			}
+			Message::SidebarWidth(sidebar, delta) => {
+				let width = self.values.sidebar_width(sidebar)
+					+ f32::from(delta) * crate::settings::SIDEBAR_WIDTH_STEP;
+				self.values.set_sidebar_width(sidebar, width);
+				Setting::SidebarWidth(sidebar)
 			}
 			Message::Align => {
 				self.values.justify = !self.values.justify;
@@ -199,6 +210,9 @@ impl Component for Model {
 				update
 					.effects
 					.extend([Effect::CloseDropdown, Effect::Reflow]);
+			}
+			Setting::SidebarWidth(sidebar) => {
+				update.effects.push(Effect::SidebarResize(sidebar));
 			}
 			Setting::ScrollSpeed => {}
 			_ => update.effects.push(Effect::Reflow),

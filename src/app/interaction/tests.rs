@@ -671,6 +671,8 @@ fn phone_sidebar_shares_one_shell_and_keeps_each_list_and_selected_page() {
 	};
 	let (mut app, _) = reader(SOURCE, 320.);
 	app.tab_strip.phone = true;
+	app.preferences.values.tabs_width = 360.;
+	app.preferences.values.folder_width = 240.;
 	let dir = tempfile::tempdir().unwrap();
 	for i in 0..80 {
 		std::fs::write(dir.path().join(format!("note-{i:02}.md")), "# Note")
@@ -689,11 +691,11 @@ fn phone_sidebar_shares_one_shell_and_keeps_each_list_and_selected_page() {
 	assert!(app.interaction.folder_animation.is_none());
 	app.interaction
 		.advance_drawers(Instant::now() + Duration::from_secs(1));
-	assert_eq!(app.folder_rect().w, 320.);
+	assert_eq!(app.folder_rect().w, 360.);
 	assert_eq!(
 		app.folder_rect(),
 		crate::app::chrome::tab_drawer::folder_rect(
-			crate::app::chrome::tab_drawer::rect(1200., 800., 320.)
+			crate::app::chrome::tab_drawer::rect(1200., 800., 360.)
 		)
 	);
 	assert!(app.phone_folder_open());
@@ -799,6 +801,106 @@ fn phone_sidebar_offers_folder_selection_before_a_tree_exists_and_stays_phone_on
 			Command::Tabs | Command::SidebarTab(_)
 		))
 	);
+}
+
+#[test]
+fn desktop_sidebar_drags_resize_independently_and_capture_the_release() {
+	use crate::{app::folder::Tree, settings::Sidebar, state::PanelPage};
+	let (mut app, _) = reader("# Heading\n\nReading text.", 760.);
+	let dir = tempfile::tempdir().unwrap();
+	std::fs::write(dir.path().join("note.md"), "# Note").unwrap();
+	app.folder.tree = Some(Tree::read(dir.path().into()).unwrap());
+	app.folder.open = true;
+	let scroll = app.readers.session.scrolling.offset;
+	physical_drag(&mut app, (262., 200.), (362., 200.));
+	assert_eq!(app.preferences.values.folder_width, 360.);
+	assert_eq!(app.folder_inset(), 360.);
+	assert_eq!(app.chrome().outline_drawer().w, 300.);
+	assert!(app.options().width <= 800.);
+	assert!(app.interaction.pointer_down.is_none());
+	assert!(app.interaction.sidebar_drag.is_none());
+	assert!(app.interaction.selection.is_none());
+	assert_eq!(app.readers.session.scrolling.offset, scroll);
+	assert_eq!(app.preferences.values.outline_width, 300.);
+	app.interaction.outline_open = true;
+	physical_drag(&mut app, (900., 200.), (820., 200.));
+	assert_eq!(app.preferences.values.outline_width, 380.);
+	assert_eq!(app.outline_drawer().w, 380.);
+	assert!(app.interaction.outline_open);
+	assert_eq!(app.preferences.values.folder_width, 360.);
+	physical_drag(&mut app, (820., 200.), (1500., 200.));
+	assert_eq!(app.preferences.values.outline_width, 200.);
+	physical_drag(&mut app, (1000., 200.), (-500., 200.));
+	assert_eq!(app.preferences.values.outline_width, 600.);
+	app.preferences.values.folder_width = 600.;
+	app.interaction.cursor = (598., 200.);
+	assert_eq!(app.sidebar_edge(), Some(Sidebar::Folder));
+	app.interaction.cursor = (602., 200.);
+	assert_eq!(app.sidebar_edge(), Some(Sidebar::Outline));
+	physical_drag(&mut app, (598., 200.), (558., 200.));
+	assert_eq!(app.preferences.values.folder_width, 560.);
+	app.preferences.values.folder_width = 360.;
+	app.tab_strip.phone = true;
+	app.interaction.panel = PanelPage::Tabs;
+	physical_drag(&mut app, (320., 200.), (400., 200.));
+	assert_eq!(app.preferences.values.tabs_width, 400.);
+	assert_eq!(app.interaction.panel, PanelPage::Tabs);
+	assert!(app.buttons().iter().any(|b| b.action == Command::Tabs
+		&& b.label.is_empty()
+		&& b.rect.x == 400.));
+	for sidebar in [Sidebar::Folder, Sidebar::Outline, Sidebar::Tabs] {
+		app.action(Command::SidebarWidth(sidebar, 1));
+	}
+	assert_eq!(app.preferences.values.folder_width, 380.);
+	assert_eq!(app.preferences.values.outline_width, 600.);
+	assert_eq!(app.preferences.values.tabs_width, 420.);
+}
+
+#[test]
+fn sidebar_edges_yield_to_overlays_and_cancel_on_focus_loss() {
+	use crate::state::{PanelPage, PanelTab};
+	let (mut app, _) = reader(SOURCE, 760.);
+	app.interaction.outline_open = true;
+	app.interaction.cursor = (900., 200.);
+	assert!(app.sidebar_edge().is_some());
+	app.interaction.panel = PanelPage::Settings(PanelTab::Generic);
+	assert!(!app.begin_sidebar_resize());
+	app.interaction.panel = PanelPage::Closed;
+	app.interaction.modal = Some(Modal::OpenLocal {
+		path: "unknown".into(),
+		dir: "".into(),
+		document_dir: None,
+	});
+	assert!(!app.begin_sidebar_resize());
+	app.interaction.modal = None;
+	assert!(app.begin_sidebar_resize());
+	app.handle_window_event(
+		&StubLoop,
+		WindowId::dummy(),
+		WindowEvent::CursorLeft {
+			device_id: DeviceId::dummy(),
+		},
+	);
+	assert!(app.interaction.sidebar_drag.is_some());
+	app.handle_window_event(
+		&StubLoop,
+		WindowId::dummy(),
+		WindowEvent::Focused(false),
+	);
+	assert!(app.interaction.sidebar_drag.is_none());
+	app.interaction.cursor = (800., 200.);
+	app.drag_sidebar();
+	assert_eq!(app.preferences.values.outline_width, 300.);
+	app.preferences.values.folder_width = 600.;
+	app.preferences.values.outline_width = 600.;
+	app.preferences.values.tabs_width = 600.;
+	let drawer = crate::app::chrome::tab_drawer::rect(
+		320.,
+		760.,
+		app.preferences.values.tabs_width,
+	);
+	assert_eq!(drawer.w, 272.);
+	assert_eq!(app.preferences.values.tabs_width, 600.);
 }
 
 #[test]

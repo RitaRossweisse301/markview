@@ -295,7 +295,7 @@ fn shell(
 	count: usize,
 ) -> Vec<Draw> {
 	let lang = settings.lang();
-	let preferred_width = 320_f32;
+	let preferred_width = settings.tabs_width;
 	components::appearance(ui);
 	let (width, height) = size;
 	let reveal = interaction.tabs_reveal();
@@ -398,9 +398,15 @@ pub(super) fn draw(
 	settings: &ReaderSettings,
 ) -> Vec<Draw> {
 	let lang = settings.lang();
-	let mut list = list(size.0, size.1, tabs.len(), scroll, 320_f32);
-	let offset =
-		animated_rect(size.0, size.1, interaction.tabs_reveal(), 320_f32).x;
+	let mut list =
+		list(size.0, size.1, tabs.len(), scroll, settings.tabs_width);
+	let offset = animated_rect(
+		size.0,
+		size.1,
+		interaction.tabs_reveal(),
+		settings.tabs_width,
+	)
+	.x;
 	list.panel.x += offset;
 	list.viewport.x += offset;
 	let mut out = shell(ui, interaction, size, settings, tabs.len());
@@ -474,8 +480,12 @@ pub(super) fn draw_folder(
 	settings: &ReaderSettings,
 ) -> Vec<Draw> {
 	let mut out = shell(ui, interaction, size, settings, 0);
-	let panel =
-		animated_rect(size.0, size.1, interaction.tabs_reveal(), 320_f32);
+	let panel = animated_rect(
+		size.0,
+		size.1,
+		interaction.tabs_reveal(),
+		settings.tabs_width,
+	);
 	let body = folder_rect(panel);
 	if let Some(browser) = browser.filter(|b| b.tree.is_some()) {
 		out.push(Draw::Clipped {

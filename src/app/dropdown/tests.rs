@@ -367,14 +367,11 @@ fn a_press_outside_the_list_closes_it_without_reaching_the_page() {
 	// the list and nothing more.
 	let (covered_action, x, y) = exposed_covered_point(&mut app)
 		.expect("the list covers a page control");
-	// The covered control is the scroll speed row, and its buttons are the
-	// ones a click here would otherwise reach.
-	let before = app.preferences.values.scroll_speed;
-	assert_eq!(covered_action, Command::ScrollSpeed(-1));
+	let before = app.preferences.values.clone();
 	click(&mut app, x, y);
 	assert!(app.interaction.dropdown.is_none());
 	assert_eq!(
-		app.preferences.values.scroll_speed, before,
+		app.preferences.values, before,
 		"the press must not reach the control the list covered"
 	);
 	assert_ne!(
@@ -789,7 +786,10 @@ fn tab_after_closing_the_list_advances_from_the_chooser() {
 	assert!(app.interaction.dropdown.is_none());
 	assert_eq!(
 		app.interaction.widgets.focus,
-		Some(Command::ScrollSpeed(-1).widget_id()),
+		Some(
+			Command::SidebarWidth(crate::settings::Sidebar::Folder, -1)
+				.widget_id()
+		),
 		"traversal moved past the chooser, not back to the first control"
 	);
 }

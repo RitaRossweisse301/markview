@@ -71,7 +71,10 @@ impl<P: super::SendEvent> App<P> {
 			height,
 			self.content_top(),
 			self.bottom(),
-			300_f32.min(width - self.folder_inset()),
+			self.preferences
+				.values
+				.outline_width
+				.min(width - self.folder_inset()),
 		);
 		drawer.x += drawer.w * (1.0 - self.interaction.outline_reveal());
 		drawer

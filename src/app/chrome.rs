@@ -357,11 +357,11 @@ impl<'a> Chrome<'a> {
 					self.tab_strip.drawer_scroll,
 					(width, height),
 					self.settings.lang(),
-					320_f32,
+					self.settings.tabs_width,
 				),
 				crate::state::SidebarTab::Folder => tab_drawer::folder_buttons(
 					self.folder,
-					tab_drawer::rect(width, height, 320_f32),
+					tab_drawer::rect(width, height, self.settings.tabs_width),
 					width,
 					self.settings.lang(),
 				),
@@ -371,7 +371,7 @@ impl<'a> Chrome<'a> {
 				width,
 				height,
 				self.interaction.tabs_reveal(),
-				320_f32,
+				self.settings.tabs_width,
 			);
 			buttons
 		} else if self.interaction.panel_open()
@@ -458,7 +458,13 @@ impl<'a> Chrome<'a> {
 			.folder
 			.map_or(0., |b| self.interaction.folder_reveal(b.open));
 		folder::animated_rect(
-			folder::rect(self.width, self.height, TOP, BOTTOM, 260_f32),
+			folder::rect(
+				self.width,
+				self.height,
+				TOP,
+				BOTTOM,
+				self.settings.folder_width,
+			),
 			reveal,
 		)
 	}
@@ -1122,7 +1128,7 @@ impl<'a> Chrome<'a> {
 			self.height,
 			content_top(self.remote_notice.is_some()),
 			super::search::bottom(self.session.search.open),
-			300_f32.min(self.width - inset),
+			self.settings.outline_width.min(self.width - inset),
 		);
 		drawer.x += drawer.w * (1.0 - self.interaction.outline_reveal());
 		drawer

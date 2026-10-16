@@ -20,6 +20,14 @@ Android stores settings in its private app files directory; see
 
 ## Reading and interface preferences
 
+- **Sidebar widths are independent.** Desktop and tablet Settings offer separate
+  folder and outline widths; phones offer one shared sidebar width for Tabs and
+  Folders, plus an independent outline width (200–600 logical pixels). Desktop users
+  can also drag each sidebar’s inner edge. Widths persist as `folder-width`,
+  `outline-width` and `tabs-width` in `settings.toml` (defaults: 260, 300 and 320).
+  `tabs-width` controls the combined phone sidebar. Narrow windows limit the
+  displayed width without changing the saved preference.
+
 - **Tab style.** General settings offer Underline (default) and Connected tab styles, applied
   immediately. `tab-style` in `settings.toml` accepts `"underline"` or `"connected"`.
 

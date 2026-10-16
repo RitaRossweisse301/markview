@@ -85,6 +85,11 @@ impl<P: super::SendEvent> App<P> {
 		});
 		snapshot["sidebar_tab"] =
 			format!("{:?}", self.interaction.sidebar_tab).into();
+		snapshot["sidebar_widths"] = serde_json::json!({
+			"folder":self.preferences.values.folder_width,
+			"outline":self.preferences.values.outline_width,
+			"tabs":self.preferences.values.tabs_width
+		});
 		snapshot.to_string()
 	}
 }

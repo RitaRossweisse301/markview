@@ -111,6 +111,9 @@ impl<P: super::SendEvent> App<P> {
 						self.setting_changed(field)
 					}
 					settings_panel::Effect::Reflow => self.request(false),
+					settings_panel::Effect::SidebarResize(sidebar) => {
+						self.sidebar_resized(sidebar)
+					}
 					settings_panel::Effect::ReloadStyles => {
 						self.reload_styles()
 					}
@@ -251,13 +254,13 @@ impl<P: super::SendEvent> App<P> {
 				height,
 				self.readers.entries().len(),
 				self.tab_strip.drawer_scroll,
-				320_f32,
+				self.preferences.values.tabs_width,
 			);
 			let offset = chrome::tab_drawer::animated_rect(
 				width,
 				height,
 				self.interaction.tabs_reveal(),
-				320_f32,
+				self.preferences.values.tabs_width,
 			)
 			.x;
 			list.panel.x += offset;

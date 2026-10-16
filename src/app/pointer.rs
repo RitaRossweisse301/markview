@@ -77,7 +77,7 @@ impl<P: super::SendEvent> App<P> {
 				width,
 				height,
 				self.interaction.tabs_reveal(),
-				320_f32,
+				self.preferences.values.tabs_width,
 			)
 		} else {
 			chrome::panel_rect(width, height)
@@ -207,6 +207,7 @@ impl<P: super::SendEvent> App<P> {
 		self.interaction.pointer_down.is_some()
 			|| self.interaction.scrollbar.is_some()
 			|| self.tab_strip.drag.is_some()
+			|| self.interaction.sidebar_drag.is_some()
 	}
 
 	/// Hover state follows scrolling and reflow, not only pointer motion.
@@ -233,8 +234,9 @@ impl<P: super::SendEvent> App<P> {
 		let holding = self.holding_pointer();
 		// The drawer covers document content, so it must not inherit the link
 		// or image hover underneath it.
-		let over_outline =
-			self.pointer_in_outline() || self.pointer_in_folder();
+		let over_outline = self.pointer_in_outline()
+			|| self.pointer_in_folder()
+			|| self.sidebar_edge().is_some();
 		let idle = !self.interaction.panel_open()
 			&& self.interaction.modal.is_none()
 			&& !holding
@@ -288,7 +290,11 @@ impl<P: super::SendEvent> App<P> {
 		over_outline: bool,
 		idle: bool,
 	) -> CursorIcon {
-		if self.input_at_cursor().is_some() {
+		if self.interaction.sidebar_drag.is_some()
+			|| self.sidebar_edge().is_some()
+		{
+			CursorIcon::ColResize
+		} else if self.input_at_cursor().is_some() {
 			CursorIcon::Text
 		} else if self.tab_strip.drag.is_some_and(|d| d.moving) {
 			CursorIcon::Grabbing

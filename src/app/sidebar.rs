@@ -1,6 +1,17 @@
-//! Shared phone sidebar navigation.
+//! Sidebar navigation, width preferences and desktop pointer capture.
 use super::{App, chrome};
-use crate::state::{PanelPage, SidebarTab};
+use crate::{
+	layout::Rect,
+	settings::{Setting, Sidebar},
+	state::{PanelPage, Selection, SidebarTab},
+};
+
+#[derive(Clone, Copy)]
+pub(crate) struct Drag {
+	sidebar: Sidebar,
+	start_x: f32,
+	start_width: f32,
+}
 
 impl<P: super::SendEvent> App<P> {
 	pub(super) fn phone_folder_open(&self) -> bool {
@@ -42,7 +53,7 @@ impl<P: super::SendEvent> App<P> {
 					height,
 					self.readers.entries().len(),
 					self.tab_strip.drawer_scroll,
-					320_f32,
+					self.preferences.values.tabs_width,
 				);
 				let row = list.row_rect(self.readers.active());
 				self.tab_strip.drawer_scroll = (list.scroll
@@ -54,5 +65,127 @@ impl<P: super::SendEvent> App<P> {
 		}
 		self.refresh_hover();
 		self.redraw();
+	}
+
+	fn sidebar_rect(&self, sidebar: Sidebar) -> Rect {
+		match sidebar {
+			Sidebar::Folder => self.folder_surface(),
+			Sidebar::Outline => self.outline_drawer(),
+			Sidebar::Tabs => {
+				let (width, height, _) = self.dimensions();
+				chrome::tab_drawer::animated_rect(
+					width,
+					height,
+					self.interaction.tabs_reveal(),
+					self.preferences.values.tabs_width,
+				)
+			}
+		}
+	}
+
+	pub(super) fn sidebar_edge(&self) -> Option<Sidebar> {
+		if markview_platform::touch_layout()
+			|| self.interaction.modal.is_some()
+			|| self.interaction.viewer.is_some()
+			|| self.interaction.dropdown.is_some()
+		{
+			return None;
+		}
+		let sidebar = if self.interaction.panel == PanelPage::Tabs {
+			(self.interaction.tabs_reveal() == 1.0).then_some(Sidebar::Tabs)
+		} else if self.interaction.panel_open() {
+			None
+		} else {
+			self.reading_sidebar_edge()
+		}?;
+		self.on_sidebar_edge(sidebar).then_some(sidebar)
+	}
+
+	fn reading_sidebar_edge(&self) -> Option<Sidebar> {
+		if self.interaction.outline_open
+			&& self.interaction.outline_reveal() == 1.0
+			&& self.on_sidebar_edge(Sidebar::Outline)
+			&& !self.pointer_in_folder()
+		{
+			Some(Sidebar::Outline)
+		} else if self.folder.open
+			&& self.folder.tree.is_some()
+			&& self.interaction.folder_reveal(true) == 1.0
+		{
+			Some(Sidebar::Folder)
+		} else {
+			None
+		}
+	}
+
+	fn on_sidebar_edge(&self, sidebar: Sidebar) -> bool {
+		let rect = self.sidebar_rect(sidebar);
+		let edge = if sidebar == Sidebar::Outline {
+			rect.x
+		} else {
+			rect.x + rect.w
+		};
+		let (x, y) = self.interaction.cursor;
+		(x - edge).abs() <= 4.0 && y >= rect.y && y < rect.y + rect.h
+	}
+
+	pub(super) fn begin_sidebar_resize(&mut self) -> bool {
+		let Some(sidebar) = self.sidebar_edge() else {
+			return false;
+		};
+		self.interaction.reset_clicks();
+		self.interaction.pointer_down = None;
+		self.interaction.widgets.focus = None;
+		self.interaction.sidebar_drag = Some(Drag {
+			sidebar,
+			start_x: self.interaction.cursor.0,
+			start_width: self.sidebar_rect(sidebar).w,
+		});
+		self.refresh_hover();
+		true
+	}
+
+	pub(super) fn drag_sidebar(&mut self) {
+		let Some(drag) = self.interaction.sidebar_drag else {
+			return;
+		};
+		let delta = self.interaction.cursor.0 - drag.start_x;
+		let direction = if drag.sidebar == Sidebar::Outline {
+			-1.0
+		} else {
+			1.0
+		};
+		let window_width = self.dimensions().0;
+		let maximum = match drag.sidebar {
+			Sidebar::Folder => {
+				chrome::folder::rect(
+					window_width,
+					0.,
+					0.,
+					0.,
+					crate::settings::SIDEBAR_WIDTH_MAX,
+				)
+				.w
+			}
+			Sidebar::Outline => window_width - self.folder_inset(),
+			Sidebar::Tabs => window_width - 48.,
+		};
+		let width = (drag.start_width + direction * delta)
+			.min(maximum.max(crate::settings::SIDEBAR_WIDTH_MIN));
+		let old = self.preferences.values.sidebar_width(drag.sidebar);
+		self.preferences
+			.values
+			.set_sidebar_width(drag.sidebar, width.round());
+		if self.preferences.values.sidebar_width(drag.sidebar) != old {
+			self.setting_changed(Some(Setting::SidebarWidth(drag.sidebar)));
+			self.sidebar_resized(drag.sidebar);
+			self.redraw();
+		}
+	}
+
+	pub(super) fn sidebar_resized(&mut self, sidebar: Sidebar) {
+		if sidebar == Sidebar::Folder && self.folder_inset() > 0.0 {
+			self.request(false);
+		}
 	}
 }

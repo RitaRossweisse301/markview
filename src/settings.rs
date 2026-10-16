@@ -14,6 +14,17 @@ pub const SCROLL_SPEED_MIN: f32 = 0.5;
 pub const SCROLL_SPEED_MAX: f32 = 2.0;
 pub const SCROLL_SPEED_STEP: f32 = 0.25;
 
+pub const SIDEBAR_WIDTH_MIN: f32 = 200.0;
+pub const SIDEBAR_WIDTH_MAX: f32 = 600.0;
+pub const SIDEBAR_WIDTH_STEP: f32 = 20.0;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Sidebar {
+	Folder,
+	Outline,
+	Tabs,
+}
+
 /// Window chrome preference, applied when the next window is created.
 #[derive(
 	Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize,
@@ -67,6 +78,9 @@ pub struct ReaderSettings {
 	pub stylesheet: std::sync::Arc<markview_layout::style::Stylesheet>,
 	pub font_size: f32,
 	pub width: f32,
+	pub folder_width: f32,
+	pub outline_width: f32,
+	pub tabs_width: f32,
 	pub justify: bool,
 	pub hyphenate: bool,
 	/// How far word spacing and letter spacing may move while justifying.
@@ -98,6 +112,9 @@ impl Default for ReaderSettings {
 			stylesheet: markview_layout::style::Stylesheet::bundled(false),
 			font_size: 18.0,
 			width: 760.0,
+			folder_width: 260.0,
+			outline_width: 300.0,
+			tabs_width: 320.0,
 			justify: true,
 			hyphenate: true,
 			justification: JustificationLimits::default(),
@@ -164,6 +181,7 @@ pub enum Setting {
 	Theme,
 	FontSize,
 	Width,
+	SidebarWidth(Sidebar),
 	Justify,
 	Hyphenate,
 	ParagraphIndent,
@@ -303,7 +321,11 @@ impl ReaderSettings {
 			|| !(10.0..=40.0).contains(&self.font_size)
 			|| !self.width.is_finite()
 			|| !(240.0..=1600.0).contains(&self.width)
-			|| !self.paragraph_indent.is_finite()
+			|| [self.folder_width, self.outline_width, self.tabs_width]
+				.into_iter()
+				.any(|width| {
+					!(SIDEBAR_WIDTH_MIN..=SIDEBAR_WIDTH_MAX).contains(&width)
+				}) || !self.paragraph_indent.is_finite()
 			|| !(0.0..=4.0).contains(&self.paragraph_indent)
 			|| !(SCROLL_SPEED_MIN..=SCROLL_SPEED_MAX)
 				.contains(&self.scroll_speed)
@@ -314,6 +336,21 @@ impl ReaderSettings {
 			bail!("Justification limits are out of range");
 		}
 		Ok(())
+	}
+	pub fn sidebar_width(&self, sidebar: Sidebar) -> f32 {
+		match sidebar {
+			Sidebar::Folder => self.folder_width,
+			Sidebar::Outline => self.outline_width,
+			Sidebar::Tabs => self.tabs_width,
+		}
+	}
+	pub fn set_sidebar_width(&mut self, sidebar: Sidebar, width: f32) {
+		let value = match sidebar {
+			Sidebar::Folder => &mut self.folder_width,
+			Sidebar::Outline => &mut self.outline_width,
+			Sidebar::Tabs => &mut self.tabs_width,
+		};
+		*value = width.clamp(SIDEBAR_WIDTH_MIN, SIDEBAR_WIDTH_MAX);
 	}
 	/// Steps the scroll-speed multiplier by whole steps, clamped to its range.
 	pub fn step_scroll_speed(&mut self, steps: i8) {
@@ -343,6 +380,12 @@ impl ReaderSettings {
 		}
 	}
 
+	#[cfg_attr(
+		any(),
+		markview::allow_complexity(
+			reason = "Keep exhaustive per-field settings copying together so pending UI edits and launch overrides share one mapping."
+		)
+	)]
 	pub fn copy_field(&mut self, other: &Self, field: Setting) {
 		match field {
 			Setting::WindowLayout => self.window_layout = other.window_layout,
@@ -353,6 +396,9 @@ impl ReaderSettings {
 			}
 			Setting::FontSize => self.font_size = other.font_size,
 			Setting::Width => self.width = other.width,
+			Setting::SidebarWidth(sidebar) => {
+				self.set_sidebar_width(sidebar, other.sidebar_width(sidebar));
+			}
 			Setting::Justify => self.justify = other.justify,
 			Setting::Hyphenate => self.hyphenate = other.hyphenate,
 			Setting::ParagraphIndent => {

@@ -4,6 +4,38 @@ use crate::lang::Lang;
 use crate::state::{PanelPage, PanelTab};
 
 #[test]
+fn settings_expose_independent_sidebar_widths_in_every_layout_and_language() {
+	let mut ui = crate::test_support::shaper();
+	for lang in Lang::ALL {
+		let settings = ReaderSettings {
+			lang: Some(*lang),
+			..Default::default()
+		};
+		for phone in [false, true] {
+			for sidebar in [Sidebar::Folder, Sidebar::Outline, Sidebar::Tabs] {
+				for step in [-1, 1] {
+					let command = Command::SidebarWidth(sidebar, step);
+					let offered = sidebar == Sidebar::Outline
+						|| (sidebar == Sidebar::Tabs) == phone;
+					let initial =
+						reader_form(&mut ui, &settings, 0., 360., 760., phone);
+					let scroll = initial.reveal(command.widget_id());
+					let form = reader_form(
+						&mut ui, &settings, scroll, 360., 760., phone,
+					);
+					assert_eq!(
+						form.visible_buttons()
+							.iter()
+							.any(|b| b.action == command),
+						offered
+					);
+				}
+			}
+		}
+	}
+}
+
+#[test]
 fn platform_toolbars_keep_hover_targets_and_caption_groups_separate() {
 	let mut ui = crate::test_support::shaper();
 	for width in [500.0, 820.0, 1200.0] {

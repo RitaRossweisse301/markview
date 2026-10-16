@@ -7,7 +7,7 @@ use crate::{
 	app::frame::{CONTROL_GAP, Layout},
 	lang::Lang,
 	layout::{Draw, Rect, TextShaper},
-	settings::{ReaderSettings, TabStyle, WindowLayout},
+	settings::{ReaderSettings, Sidebar, TabStyle, WindowLayout},
 	state::{Command, DropdownId, InteractionState, PanelPage, PanelTab},
 };
 pub(super) use components::{draw_button, panel_rect};
@@ -57,6 +57,34 @@ fn rows(settings: &ReaderSettings, phone: bool) -> Vec<Row> {
 			.menu(DropdownId::Language, language_options(t, settings))
 			.section(t.section_interface()),
 	];
+	let left = if phone {
+		(Sidebar::Tabs, t.settings_sidebar_width())
+	} else {
+		(Sidebar::Folder, t.settings_folder_width())
+	};
+	for (sidebar, label) in
+		[left, (Sidebar::Outline, t.settings_outline_width())]
+	{
+		rows.push(
+			Row::new(
+				label,
+				choices(
+					&[
+						(
+							t.settings_decrease(),
+							Command::SidebarWidth(sidebar, -1),
+						),
+						(
+							t.settings_increase(),
+							Command::SidebarWidth(sidebar, 1),
+						),
+					],
+					None,
+				),
+			)
+			.value(format!("{:.0} px", settings.sidebar_width(sidebar))),
+		);
+	}
 	if !markview_platform::touch_layout() {
 		// How far a scroll request moves is a property of the pointing device,
 		// not of the type, so it belongs beside the interface language.
