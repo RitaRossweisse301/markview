@@ -310,6 +310,25 @@ impl Reader<'_> {
 					child_style.strike = true;
 					None
 				}
+				NodeValue::WikiLink(l) => {
+					let url = l.url.split_once('#').map_or_else(
+						|| l.url.replace('%', "%25"),
+						|(path, heading)| {
+							let path = path.replace('%', "%25");
+							format!(
+								"{path}#{}",
+								crate::heading_slug(
+									heading
+										.rsplit('#')
+										.next()
+										.unwrap_or(heading)
+								)
+							)
+						},
+					);
+					child_style.link = Some(Link::new(url));
+					None
+				}
 				NodeValue::Link(l) => {
 					child_style.link = Some(Link::new(l.url.clone()));
 					None
@@ -1586,6 +1605,7 @@ pub fn parse(source: impl Into<Arc<str>>) -> Document {
 fn markdown_options() -> Options<'static> {
 	let mut options = Options::default();
 	options.extension.table = true;
+	options.extension.wikilinks_title_after_pipe = true;
 	// A document may open with `---` fenced YAML metadata. Comrak only splits
 	// it off: it hands the block back verbatim, delimiters included, and the
 	// YAML itself is read in `front_matter`.

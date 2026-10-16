@@ -2105,3 +2105,53 @@ fn a_prefix_keeps_the_line_ending_a_list_marker_needs() {
 	let prefix = parse_prefix(&source, 1).expect("a prefix");
 	assert_eq!(prefix.blocks, full.blocks);
 }
+
+#[test]
+fn obsidian_wikilinks_keep_labels_sources_and_heading_targets() {
+	let source = "[[Notes/First note|First]] [[Second.md#A heading|Section]] [[#本节]] `[[code]]`\n";
+	let doc = parse(source);
+	let BlockKind::Paragraph(text) = &doc.blocks[0].kind else {
+		panic!()
+	};
+	assert_eq!(plain_text(text), "First Section #本节 [[code]]");
+	let links: Vec<_> = text
+		.iter()
+		.filter_map(|span| span.style.link_url())
+		.collect();
+	assert_eq!(links, ["Notes/First note", "Second.md#a-heading", "#本节"]);
+	for span in text {
+		assert!(source.is_char_boundary(span.source.start));
+		assert!(span.source.end <= source.len());
+	}
+	assert!(text.last().unwrap().style.link_url().is_none());
+	let changed =
+		reparse(&doc, source.replace("First note", "Other note").into());
+	let BlockKind::Paragraph(text) = &changed.blocks[0].kind else {
+		panic!()
+	};
+	assert_eq!(text[0].style.link_url(), Some("Notes/Other note"));
+}
+
+#[test]
+fn wikilinks_escape_literal_percents_without_changing_markdown_urls() {
+	let doc = parse(
+		"[[Note %41]] [[Note %41.md#A heading|Section]] [[Note %2541]] [Markdown](Note%20%41.md)",
+	);
+	let BlockKind::Paragraph(text) = &doc.blocks[0].kind else {
+		panic!()
+	};
+	assert_eq!(plain_text(text), "Note %41 Section Note %2541 Markdown");
+	let links: Vec<_> = text
+		.iter()
+		.filter_map(|span| span.style.link_url())
+		.collect();
+	assert_eq!(
+		links,
+		[
+			"Note %2541",
+			"Note %2541.md#a-heading",
+			"Note %252541",
+			"Note%20%41.md"
+		]
+	);
+}
