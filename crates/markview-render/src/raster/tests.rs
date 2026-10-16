@@ -442,3 +442,75 @@ fn prewarming_leaves_the_visible_image_demand_alone() {
 	while renderer.prewarm(&snapshot, &view, Duration::from_millis(50)) {}
 	assert_eq!(demanded(&pixels), ["on-screen.png"]);
 }
+
+#[test]
+fn scrolling_icons_reuse_rasters_at_every_device_pixel_phase() {
+	use crate::{Renderer, Theme, View};
+	use markview_layout::scene::Rect;
+	use ratex_types::PathCommand;
+	let mut renderer = pollster::block_on(Renderer::new(None)).unwrap();
+	let commands = [
+		PathCommand::MoveTo { x: 0.2, y: 0.3 },
+		PathCommand::LineTo { x: 0.8, y: 0.5 },
+		PathCommand::LineTo { x: 0.2, y: 0.7 },
+		PathCommand::Close,
+	];
+	let horizontal = Default::default();
+	for scale in [1., 1.25, 1.6, 2.] {
+		for fill in [false, true] {
+			renderer.clear_raster_cache();
+			let view = View {
+				width: 800,
+				height: 600,
+				scale,
+				left: 0.,
+				top: 0.,
+				bottom: 0.,
+				scroll: 0.,
+				theme: Theme::Light,
+				horizontal: &horizontal,
+				selection: None,
+				revision: 0,
+				hovered_link: None,
+				hovered_overflow: None,
+				held_overflow: None,
+			};
+			let clip = Rect {
+				x: 0.,
+				y: 0.,
+				w: 800. / scale,
+				h: 600. / scale,
+			};
+			let mut draw = |shift: i32| {
+				for px in 0..4 {
+					for py in 0..4 {
+						renderer.geometry.clear();
+						renderer.raster.icon(
+							&renderer.gpu.queue,
+							&mut renderer.geometry,
+							&commands,
+							fill,
+							0.08,
+							(30. + shift as f32 + px as f32 / 4.) / scale,
+							(40. + shift as f32 * 2. + py as f32 / 4.) / scale,
+							18.,
+							[1.; 4],
+							clip,
+							&view,
+						);
+					}
+				}
+				renderer.raster.stats()
+			};
+			let warm = draw(0);
+			for shift in -40..40 {
+				let moved = draw(shift);
+				assert_eq!(
+					moved.rasterized, warm.rasterized,
+					"integer translation must reuse icon coverage: scale={scale}, fill={fill}, shift={shift}"
+				);
+				assert_eq!(moved.entries, warm.entries);
+			}
+		}
+	}
+}

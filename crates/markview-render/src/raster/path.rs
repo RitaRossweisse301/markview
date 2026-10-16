@@ -269,13 +269,14 @@ impl RasterCache {
 			(x * dpi * ICON_PHASES).round() / ICON_PHASES,
 			(y * dpi * ICON_PHASES).round() / ICON_PHASES,
 		];
-		bits.push(u64::from(origin[0].to_bits()));
-		bits.push(u64::from(origin[1].to_bits()));
-		let left = (origin[0] + (bounds.x() - margin) * scale).floor() - 1.0;
-		let top = (origin[1] + (bounds.y() - margin) * scale).floor() - 1.0;
-		let right = origin[0] + (bounds.x() + bounds.width() + margin) * scale;
-		let bottom =
-			origin[1] + (bounds.y() + bounds.height() + margin) * scale;
+		let pixel = origin.map(f32::floor);
+		let phase = [origin[0] - pixel[0], origin[1] - pixel[1]];
+		bits.push(u64::from(phase[0].to_bits()));
+		bits.push(u64::from(phase[1].to_bits()));
+		let left = (phase[0] + (bounds.x() - margin) * scale).floor() - 1.0;
+		let top = (phase[1] + (bounds.y() - margin) * scale).floor() - 1.0;
+		let right = phase[0] + (bounds.x() + bounds.width() + margin) * scale;
+		let bottom = phase[1] + (bounds.y() + bounds.height() + margin) * scale;
 		let w = (right.ceil() - left) as u32 + 1;
 		let h = (bottom.ceil() - top) as u32 + 1;
 		let Some(e) = self.raster(
@@ -286,7 +287,7 @@ impl RasterCache {
 			stroke_width,
 			true,
 			scale,
-			[origin[0] - left, origin[1] - top],
+			[phase[0] - left, phase[1] - top],
 			left as i32,
 			top as i32,
 			w,
@@ -296,8 +297,8 @@ impl RasterCache {
 		};
 		geometry.quad(
 			Rect {
-				x: left / dpi,
-				y: top / dpi,
+				x: (pixel[0] + left) / dpi,
+				y: (pixel[1] + top) / dpi,
 				w: w as f32 / dpi,
 				h: h as f32 / dpi,
 			},
