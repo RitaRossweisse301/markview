@@ -311,7 +311,46 @@ public class Smoke extends Instrumentation {
             JSONObject folder = waitFor(s -> s.optBoolean("ready") && s.optString("path").endsWith("README.md") && loadedImages(s) == 1);
             File directory = new File(folder.getString("path")).getParentFile();
             require(new File(directory, "images/logo.svg").isFile() && new File(directory, "chapter.md").isFile(), "Relative resources preserved");
+            require(folder.optBoolean("folder_open") && folder.optString("folder_root").equals(directory.toString()), "Folder import retains its root and opens the file tree");
+            require(folder.optString("folder_name").equals("Research notes"), "Folder tree displays the imported folder's name");
             screenshot("folder");
+            if (phone) {
+                require(folder.optString("panel").equals("Tabs") && folder.optString("sidebar_tab").equals("Folder"), "Folder imports open the combined sidebar's folder page");
+                require(button(folder, "SidebarTab(Tabs)") != null && button(folder, "SidebarTab(Folder)") != null, "Both sidebar pages share their switcher");
+                require(button(folder, "OpenFolder") != null && button(folder, "SelectTab(") == null, "Folder controls replace tab rows");
+                tap("SidebarTab(Tabs)");
+                require(button(state(), "SelectTab(") != null && button(state(), "FolderEntry(") == null, "Tab page hides folder rows");
+                tap("SidebarTab(Folder)");
+                sendKeyDownUpSync(KeyEvent.KEYCODE_BACK);
+                waitFor(s -> s.optString("panel").equals("Closed"));
+                tap("Tabs");
+                waitFor(s -> s.optString("sidebar_tab").equals("Folder") && s.optBoolean("folder_open"));
+                pass("Phone sidebar switches between folders and tabs and remembers its page after dismissal");
+            }
+            tap("FolderEntry(" + folderEntry(folder, "chapter.md") + ")");
+            JSONObject chapter = waitFor(s -> s.optBoolean("ready") && s.optString("path").endsWith("chapter.md"));
+            int chapterTab = chapter.getInt("active");
+            if (phone) {
+                tap("Tabs");
+                tap("SidebarTab(Tabs)");
+                tap("CloseTab(" + chapterTab + ")");
+                waitFor(s -> s.optBoolean("ready") && s.optString("path").endsWith("README.md"));
+                tap("Tabs");
+            } else {
+                JSONObject tab = button(chapter, "SelectTab(" + chapterTab + ")");
+                float x = (float)(tab.getDouble("x") + tab.getDouble("w") + 12);
+                float y = (float)(tab.getDouble("y") + tab.getDouble("h") / 2);
+                swipe(x, y, x, y);
+            }
+            waitFor(s -> s.optBoolean("ready") && s.optString("path").endsWith("README.md"));
+            if (!state().optBoolean("folder_open")) {
+                if (phone) {
+                    if (!state().optString("panel").equals("Tabs")) tap("Tabs");
+                    tap("SidebarTab(Folder)");
+                } else tap("Folder");
+            }
+            tap("FolderEntry(" + folderEntry(state(), "README.md") + ")");
+            waitFor(s -> s.optBoolean("ready") && s.optString("path").endsWith("README.md") && loadedImages(s) == 1);
             Uri grant = ReaderProvider.uri(activity, new File(directory, "README.md"));
             try (java.io.InputStream input = activity.getContentResolver().openInputStream(grant)) { require(input.read() == '#', "Read-only document grant"); }
             boolean refused = false;
@@ -332,10 +371,12 @@ public class Smoke extends Instrumentation {
             getContext().getContentResolver().call(tree, "folder", null, deletedImage);
             reimportFolder(tree);
             require(!new File(directory, "images/logo.svg").exists(), "Folder reimport removes deleted source images");
+            require(new File(directory, "images").isDirectory(), "Folder import preserves empty subdirectories");
             configureFolder(tree, false, false);
             reimportFolder(tree);
             waitFor(s -> s.optBoolean("ready") && loadedImages(s) == 1);
             pass("Folder reimport removes deleted documents and images and preserves the old copy on failure");
+            if (phone && state().optString("panel").equals("Tabs")) sendKeyDownUpSync(KeyEvent.KEYCODE_BACK);
 
             // Intercept export previews so third-party viewers cannot steal test input.
             android.content.IntentFilter previews = new android.content.IntentFilter(Intent.ACTION_VIEW);
@@ -401,6 +442,7 @@ public class Smoke extends Instrumentation {
                 getTargetContext().startActivity(new Intent(getTargetContext(), MarkviewActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
                 waitFor(s -> s.optString("backend").length() > 0 && s.optBoolean("ready") && s.optJSONArray("dimensions") != null);
                 tap("Tabs");
+                tap("SidebarTab(Tabs)");
                 int tabs = state().getJSONArray("tabs").length();
                 int active = state().getInt("active");
                 tap("CloseTab(0)");
@@ -693,6 +735,13 @@ public class Smoke extends Instrumentation {
         options.putBoolean("chapter", chapter);
         options.putBoolean("failCopy", failCopy);
         getContext().getContentResolver().call(tree, "folder", null, options);
+    }
+    private int folderEntry(JSONObject current, String name) throws Exception {
+        JSONArray entries = current.getJSONArray("folder_entries");
+        for (int i = 0; i < entries.length(); i++) {
+            if (entries.getJSONObject(i).getString("path").endsWith("/" + name)) return i;
+        }
+        throw new AssertionError("Missing folder entry: " + name);
     }
     private void reimportFolder(Uri tree) throws Exception {
         runOnMainSync(() -> ((MarkviewActivity)activity).onActivityResult(12, Activity.RESULT_OK, new Intent().setData(tree)));

@@ -73,11 +73,14 @@ pub(super) fn trailing(
 
 pub(super) fn draw_footer(
 	shaper: &mut TextShaper,
-	counts: Option<markview_layout::text::TextCounts>,
-	selected: Option<markview_layout::text::TextCounts>,
+	counts: (
+		Option<markview_layout::text::TextCounts>,
+		Option<markview_layout::text::TextCounts>,
+	),
 	warning: Option<&str>,
 	secondary: &str,
 	size: (f32, f32),
+	leading: f32,
 	lang: Lang,
 ) -> Vec<Draw> {
 	let (width, height) = size;
@@ -102,15 +105,18 @@ pub(super) fn draw_footer(
 			Paint::Styled(Condition::Statusbar, C::BorderColor),
 		),
 	];
-	let (text, used) = counts_label(shaper, counts, selected, width, lang);
+	let (text, used) =
+		counts_label(shaper, counts.0, counts.1, width - leading, lang);
 	out.extend(shaper.label(
 		&text,
 		11.0,
-		16.0,
+		16.0 + leading,
 		height - 9.0,
 		Paint::Styled(Condition::Statusbar, C::Muted),
 	));
-	if let Some((secondary, rect)) = trailing(shaper, secondary, used, size) {
+	if let Some((secondary, rect)) =
+		trailing(shaper, secondary, used + leading, size)
+	{
 		out.extend(shaper.label(
 			&secondary,
 			11.0,
@@ -129,11 +135,11 @@ pub(super) fn draw_footer(
 			},
 			Paint::Styled(Condition::Statusbar, C::Background),
 		));
-		let warning = shaper.fit(warning, 11.0, width - 32.0);
+		let warning = shaper.fit(warning, 11.0, width - leading - 32.0);
 		out.extend(shaper.label(
 			&warning,
 			11.0,
-			16.0,
+			16.0 + leading,
 			height - BOTTOM - 8.0,
 			Paint::Styled(Condition::Statusbar, C::Error),
 		));

@@ -107,7 +107,7 @@ fn canonical(path: PathBuf) -> PathBuf {
 	std::fs::canonicalize(&path).unwrap_or(path)
 }
 
-fn classify(path: &Path) -> Target {
+pub(super) fn classify(path: &Path) -> Target {
 	// A directory opens in the file manager, which cannot run what it shows.
 	if path.is_dir() {
 		return Target::OsDirect(path.to_path_buf());

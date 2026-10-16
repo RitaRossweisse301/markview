@@ -1,5 +1,22 @@
 //! Native file access and permissions; callers validate contents and own transactions.
 use std::{fs, io, path::Path};
+
+/// The native display name of a folder, including Android's imported tree name.
+pub fn folder_name(root: &Path) -> String {
+	#[cfg(not(target_os = "android"))]
+	{
+		root.file_name()
+			.unwrap_or(root.as_os_str())
+			.to_string_lossy()
+			.into_owned()
+	}
+	#[cfg(target_os = "android")]
+	{
+		fs::read_to_string(root.join(".markview-folder-name"))
+			.unwrap_or_default()
+	}
+}
+
 #[cfg(unix)]
 pub fn open_nonblocking(path: &Path) -> io::Result<fs::File> {
 	use std::os::unix::fs::OpenOptionsExt;
@@ -76,4 +93,30 @@ pub fn config_base() -> Option<std::path::PathBuf> {
 }
 pub fn system_locale() -> Option<String> {
 	sys_locale::get_locale()
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn folder_display_name_follows_native_conventions() {
+		let dir = tempfile::tempdir().unwrap();
+		let root = dir.path().join("local-folder");
+		fs::create_dir(&root).unwrap();
+		fs::write(root.join(".markview-folder-name"), "Imported folder")
+			.unwrap();
+		#[cfg(not(target_os = "android"))]
+		{
+			assert_eq!(folder_name(&root), "local-folder");
+			let root = root.ancestors().last().unwrap();
+			assert_eq!(folder_name(root), root.as_os_str().to_string_lossy());
+		}
+		#[cfg(target_os = "android")]
+		{
+			assert_eq!(folder_name(&root), "Imported folder");
+			fs::remove_file(root.join(".markview-folder-name")).unwrap();
+			assert_eq!(folder_name(&root), "");
+		}
+	}
 }

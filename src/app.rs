@@ -7,6 +7,7 @@ mod document;
 mod dropdown;
 mod export;
 mod export_panel;
+mod folder;
 pub(crate) mod font_panel;
 mod font_service;
 mod fonts_command;
@@ -25,6 +26,7 @@ mod security;
 pub(crate) mod session;
 mod settings_load;
 mod settings_panel;
+pub(crate) mod sidebar;
 mod single_instance;
 mod style_edit;
 mod surface;
@@ -107,6 +109,11 @@ enum Event {
 	SettingsChanged,
 	StylesChanged,
 	Open(Option<PathBuf>),
+	FolderLoaded {
+		generation: u64,
+		select: bool,
+		result: anyhow::Result<folder::Tree>,
+	},
 	Activate(Option<PathBuf>),
 	DeviceLost,
 	AndroidBack,
@@ -227,11 +234,12 @@ struct App<P = EventLoopProxy<Event>> {
 	surface_insets: [f32; 4],
 	frame: frame::State,
 	native_frame: Option<markview_platform::NativeFrame>,
-	native_tab_end: std::rc::Rc<std::cell::Cell<Option<f32>>>,
+	native_tab_end: std::rc::Rc<std::cell::Cell<Option<(f32, f32)>>>,
 	touch_frame: Option<markview_platform::TouchFrame>,
 	interaction: InteractionState,
 	gestures: gestures::GestureState,
 	readers: tabs::Tabs,
+	folder: folder::Browser,
 	tab_strip: tab_strip::TabStrip,
 	tab_metrics: tab_metrics::TabMetrics,
 	args: LaunchOptions,
@@ -384,6 +392,7 @@ impl<P: SendEvent> App<P> {
 			interaction: InteractionState::default(),
 			gestures: gestures::GestureState::default(),
 			readers: tabs::Tabs::default(),
+			folder: Default::default(),
 			tab_strip: Default::default(),
 			tab_metrics: Default::default(),
 			args,
@@ -532,11 +541,17 @@ impl<P: SendEvent> App<P> {
 	}
 	pub(super) fn view_geometry(&self) -> markview_layout::scene::Viewport {
 		let (width, height, _) = self.dimensions();
+		let inset = if chrome::folder::docked(width, self.tab_strip.phone) {
+			self.folder_chrome_inset()
+		} else {
+			0.
+		};
 		markview_layout::scene::Viewport {
 			width,
 			height,
-			left: ((width - self.readers.session.snapshot.width) / 2.0)
-				.max(20.0),
+			left: inset
+				+ ((width - inset - self.readers.session.snapshot.width) / 2.0)
+					.max(20.0),
 			top: self.content_top(),
 			bottom: self.bottom(),
 			scroll: self.readers.session.scrolling.offset,
@@ -557,7 +572,7 @@ impl<P: SendEvent> App<P> {
 	}
 	pub(super) fn options(&self) -> LayoutOptions {
 		let mut options = self.preferences.values.layout_options(
-			self.dimensions().0,
+			self.dimensions().0 - self.folder_inset(),
 			self.args.options.greedy,
 			&self.fonts_config,
 		);

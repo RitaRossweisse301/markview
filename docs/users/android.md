@@ -10,6 +10,10 @@ same native typography, settings, fonts, themes and image cache as the desktop r
 
 Tap **Open** to choose a file or a folder. Folder imports preserve relative
 images and Markdown links; `README.md` is preferred as the first document.
+The left file tree shows every Markdown document and its subfolders. Tap a
+file to switch documents, and use the folder icon to reopen the tree on a
+phone. The same [folder and Obsidian link support](reading.md#folders-and-obsidian-vaults)
+is available on Android.
 Android's **Open with** and **Share** offer **Read in Markview** (localized to
 **在 Markview 中阅读** in Simplified Chinese), opening the supplied file directly
 without first saving it or finding it in the picker. Markdown MIME types, plain
@@ -55,7 +59,7 @@ controls. The device's smallest width selects phone or tablet mode:
 
 | Device configuration | Tab management | Orientation | Tab-style setting |
 |---|---|---|---|
-| Smallest width below 600 dp | Left drawer: switch, close and open documents | Portrait | Hidden and ignored |
+| Smallest width below 600 dp | One sidebar with Tabs and Folders pages | Portrait | Hidden and ignored |
 | Smallest width at least 600 dp | Shared desktop tab strip | Portrait or landscape | Available |
 
 Phone mode fills the available reading width with 20 logical pixels of margin
@@ -87,7 +91,13 @@ Android layout diagnostics:
 
 <img src="../screenshots/android/diagnostics.png" alt="Markview Android About page showing Mobile Mode and smallest width in one line" width="250">
 
-Phones manage tabs in the left drawer:
+Phones share one left sidebar for **Tabs** and **Folders**. Use the top-left
+sidebar button or swipe right to open it, then switch pages at the top. Each
+list keeps its own scroll position. Folder browsing includes an **Open folder**
+button even before a folder has been selected. Back, the scrim or a left swipe
+closes either page; choosing a document also returns to reading.
+
+The Tabs page:
 
 <img src="../screenshots/android/tab-drawer.png" alt="Markview phone tab drawer with switching, closing and opening controls" width="250">
 

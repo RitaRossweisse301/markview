@@ -348,6 +348,11 @@ impl TextShaper {
 		}
 	}
 
+	/// The font sources used to shape text, including their content revision.
+	pub fn font_config(&self) -> &FontConfig {
+		&self.font_config
+	}
+
 	/// Builds the configured font collection now.
 	///
 	/// The first shaper that needs fonts builds it. Starting that work early,

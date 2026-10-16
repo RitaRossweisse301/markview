@@ -200,11 +200,11 @@ fn controls_fit_minimum_window_and_panel_focus_has_no_document_actions() {
 			height,
 		);
 		let mut expected = vec![Command::NewPage];
-		if markview_platform::folder_reveal() {
-			expected.push(Command::RevealFolder);
+		expected.push(if markview_platform::folder_reveal() {
+			Command::RevealFolder
 		} else {
-			expected.push(Command::SearchOpen);
-		}
+			Command::SearchOpen
+		});
 		expected.extend([
 			Command::Open,
 			Command::Export,
@@ -362,6 +362,10 @@ fn compiled_icons_stay_inside_the_unit_box() {
 	for icon in [
 		icons::OPEN,
 		icons::REVEAL,
+		icons::SIDEBAR,
+		icons::TREE_FOLDER,
+		icons::TREE_FOLDER_OPEN,
+		icons::TREE_MARKDOWN,
 		icons::EXPORT,
 		icons::DOWNLOAD,
 		icons::REDOWNLOAD,

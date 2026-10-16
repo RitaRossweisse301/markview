@@ -717,3 +717,1038 @@ fn clipboard_images_use_selected_files_and_web_relative_images_use_the_url() {
 		Origin::Local(Trust::Trusted)
 	);
 }
+
+#[test]
+fn folder_open_navigation_links_and_refresh_use_the_native_reader() {
+	use crate::app::folder::Tree;
+	use crate::state::Command;
+	let mut h = Harness::new();
+	h.app.tab_strip.phone = true;
+	let root = h.dir.path().canonicalize().unwrap();
+	fs::create_dir(root.join("notes")).unwrap();
+	fs::create_dir(root.join(".obsidian")).unwrap();
+	fs::write(root.join(".obsidian/private.md"), "hidden").unwrap();
+	fs::write(
+		root.join("notes/Other note.md"),
+		"# A heading\n\nOther note.",
+	)
+	.unwrap();
+	h.app.open(root.clone());
+	let event = h.events.recv_timeout(Duration::from_secs(10)).unwrap();
+	h.app.handle_user_event(&StubLoop, event);
+	h.wait_images(2);
+	assert!(h.app.phone_folder_open());
+	assert_eq!(
+		h.app.readers.session.path.as_ref(),
+		Some(&root.join("README.md"))
+	);
+	let tree = h.app.folder.tree.as_ref().unwrap();
+	assert!(
+		tree.entries
+			.iter()
+			.all(|e| !e.path.starts_with(root.join(".obsidian")))
+	);
+	let note = tree
+		.entries
+		.iter()
+		.position(|e| e.path.ends_with("Other note.md"))
+		.unwrap();
+	assert_eq!(tree.entries[note].depth, 1);
+	h.app.action(Command::FolderEntry(note));
+	h.wait_images(0);
+	assert!(!h.app.phone_folder_open());
+	assert_eq!(
+		h.app.readers.session.path.as_ref(),
+		Some(&root.join("notes/Other note.md"))
+	);
+	h.app.open_link("README.md", false);
+	h.wait_images(2);
+	let note_link =
+		markview_commonmark::parse("[[Other note#A heading|Section]]");
+	let crate::document::BlockKind::Paragraph(text) = &note_link.blocks[0].kind
+	else {
+		panic!()
+	};
+	h.app.open_link(text[0].style.link_url().unwrap(), false);
+	h.wait_images(0);
+	h.app.apply_anchor();
+	assert!(h.app.readers.session.pending_anchor.is_none());
+	assert!(!h.app.error);
+	assert_eq!(h.app.readers.entries().len(), 2);
+	assert_eq!(
+		h.app.readers.session.path.as_ref(),
+		Some(&root.join("notes/Other note.md"))
+	);
+	// Folder lookup never supplies local paths to web or clipboard documents.
+	h.app.readers.session.security = crate::security::Security::default();
+	h.app.readers.session.security.origin = crate::security::Origin::Clipboard;
+	assert!(h.app.folder_link("README.md", Some(&root)).is_none());
+	let notes = h
+		.app
+		.folder
+		.tree
+		.as_ref()
+		.unwrap()
+		.entries
+		.iter()
+		.position(|e| e.path == root.join("notes"))
+		.unwrap();
+	assert!(h.app.folder.tree.as_ref().unwrap().collapsed(notes));
+	h.app.action(Command::FolderEntry(notes));
+	h.app.action(Command::FolderRoot);
+	fs::remove_file(root.join("notes/Other note.md")).unwrap();
+	fs::write(root.join("notes/New.md"), "# A new note").unwrap();
+	fs::create_dir(root.join("notes/new folder")).unwrap();
+	fs::write(root.join("notes/new folder/Nested.md"), "# Nested").unwrap();
+	h.app.folder_loaded(1, false, Tree::read(root.clone()));
+	assert!(h.app.folder.tree.as_ref().unwrap().rows().is_empty());
+	h.app.action(Command::FolderRoot);
+	let tree = h.app.folder.tree.as_ref().unwrap();
+	assert!(!tree.collapsed(notes));
+	assert!(
+		tree.rows()
+			.iter()
+			.any(|i| tree.entries[*i].path.ends_with("New.md"))
+	);
+	assert!(
+		!tree
+			.rows()
+			.iter()
+			.any(|i| tree.entries[*i].path.ends_with("Nested.md"))
+	);
+	assert!(
+		h.app
+			.folder
+			.tree
+			.as_ref()
+			.unwrap()
+			.entries
+			.iter()
+			.all(|e| !e.path.ends_with("Other note.md"))
+	);
+	// An older folder result cannot replace the latest requested tree.
+	h.app.folder_loaded(0, true, Err(anyhow::anyhow!("stale")));
+	assert_eq!(h.app.folder.tree.as_ref().unwrap().root, root);
+}
+
+#[test]
+fn folder_scan_completion_preserves_newer_navigation() {
+	for phone in [false, true] {
+		for navigation in
+			["open", "select", "current", "return", "new", "close"]
+		{
+			let mut h = Harness::new();
+			h.app.tab_strip.phone = phone;
+			h.open("README.md", 2);
+			h.open("README.zh-cn.md", 1);
+			let root = h.dir.path().canonicalize().unwrap();
+			fs::write(root.join("new.md"), "# New").unwrap();
+			h.app.open(root.clone());
+			let completion = loop {
+				let event =
+					h.events.recv_timeout(Duration::from_secs(10)).unwrap();
+				if matches!(event, Event::FolderLoaded { .. }) {
+					break event;
+				}
+			};
+			match navigation {
+				"open" => h.app.open(root.join("new.md")),
+				"select" => h.app.select_tab(0),
+				"current" => h.app.select_tab(1),
+				"return" => {
+					h.app.select_tab(0);
+					h.app.select_tab(1);
+				}
+				"new" => h.app.new_page(),
+				"close" => h.app.close_tab(1),
+				_ => unreachable!(),
+			}
+			h.app.set_folder_open(false);
+			let path = h.app.readers.session.path.clone();
+			let active = h.app.readers.active();
+			let count = h.app.readers.entries().len();
+			h.app.handle_user_event(&StubLoop, completion);
+			assert_eq!(h.app.folder.tree.as_ref().unwrap().root, root);
+			assert_eq!(h.app.readers.session.path, path, "{navigation}");
+			assert_eq!(h.app.readers.active(), active, "{navigation}");
+			assert_eq!(h.app.readers.entries().len(), count, "{navigation}");
+			assert!(!h.app.folder.open, "{navigation}");
+			assert!(!h.app.phone_folder_open(), "{navigation}");
+		}
+	}
+}
+
+#[test]
+fn folder_scan_completion_preserves_newer_input_and_capture() {
+	use crate::state::{Command, TextField};
+	use winit::event::{Ime, WindowEvent};
+	for field in [TextField::Search, TextField::ExportTitle] {
+		let mut h = Harness::new();
+		let root = h.dir.path().to_path_buf();
+		h.app.folder_loaded(
+			0,
+			true,
+			crate::app::folder::Tree::read(root.clone()),
+		);
+		h.wait_images(2);
+		let completion = crate::app::folder::Tree::read(root.clone());
+		let capture = if field == TextField::Search {
+			h.app.open_search();
+			Command::SearchCase
+		} else {
+			h.app.action(Command::Export);
+			h.app.action(Command::FocusInput(field));
+			Command::ExportRun
+		};
+		let captured = h
+			.app
+			.buttons()
+			.iter()
+			.find(|b| b.action == capture)
+			.unwrap()
+			.id;
+		h.app.interaction.widgets.captured = Some(captured);
+		h.app.folder_loaded(0, false, completion);
+		assert_eq!(h.app.focused_input(), Some(field));
+		assert_eq!(h.app.interaction.widgets.captured, Some(captured));
+		h.app
+			.input_event(&WindowEvent::Ime(Ime::Commit("typed".into())));
+		let text = match field {
+			TextField::Search => h.app.readers.session.search.input.text(),
+			TextField::ExportTitle => h.app.readers.session.export_title.text(),
+			_ => unreachable!(),
+		};
+		assert_eq!(text, "typed");
+		for command in [Command::FolderRoot, Command::FolderEntry(0)] {
+			h.app.interaction.widgets.focus = Some(command.widget_id());
+			h.app.interaction.widgets.captured = Some(command.widget_id());
+			h.app.folder_loaded(
+				0,
+				false,
+				crate::app::folder::Tree::read(root.clone()),
+			);
+			assert!(h.app.interaction.widgets.focus.is_none());
+			assert!(h.app.interaction.widgets.captured.is_none());
+		}
+		h.app.tab_strip.phone = true;
+		h.app.set_folder_open(true);
+		let focus = h.app.interaction.widgets.focus;
+		h.app.interaction.widgets.captured = focus;
+		h.app
+			.folder_loaded(0, false, crate::app::folder::Tree::read(root));
+		assert!(focus.is_some());
+		assert_eq!(h.app.interaction.widgets.focus, focus);
+		assert_eq!(h.app.interaction.widgets.captured, focus);
+	}
+}
+
+#[test]
+fn folder_scan_completion_keeps_the_outline_when_the_folder_was_hidden() {
+	let mut h = Harness::new();
+	let root = h.dir.path().to_path_buf();
+	h.app
+		.folder_loaded(0, true, crate::app::folder::Tree::read(root.clone()));
+	h.wait_images(2);
+	h.app.toggle_outline();
+	assert!(h.app.folder.open && h.app.interaction.outline_open);
+	let completion = crate::app::folder::Tree::read(root);
+	h.app.set_folder_open(false);
+	h.app.folder_loaded(0, false, completion);
+	assert!(!h.app.folder.open);
+	assert!(h.app.interaction.outline_open);
+}
+
+#[test]
+fn folder_links_prefer_existing_document_relative_paths() {
+	let mut h = Harness::new();
+	let root = h.dir.path().canonicalize().unwrap();
+	for directory in ["docs/guide", "guide"] {
+		fs::create_dir_all(root.join(directory)).unwrap();
+	}
+	for name in ["docs/index.md", "docs/guide/setup.md", "guide/setup.md"] {
+		fs::write(root.join(name), "# Setup").unwrap();
+	}
+	for folder_loaded in [false, true] {
+		if folder_loaded {
+			h.app.folder_loaded(
+				0,
+				false,
+				crate::app::folder::Tree::read(root.clone()),
+			);
+		}
+		h.open("docs/index.md", 0);
+		h.app.open_link("guide/setup.md#setup", false);
+		h.wait_images(0);
+		h.app.apply_anchor();
+		assert_eq!(
+			h.app.readers.session.path,
+			Some(root.join("docs/guide/setup.md")),
+			"folder loaded: {folder_loaded}"
+		);
+		assert!(h.app.readers.session.pending_anchor.is_none());
+	}
+	fs::remove_file(root.join("docs/guide/setup.md")).unwrap();
+	h.open("docs/index.md", 0);
+	h.app.open_link("guide/setup.md", false);
+	h.wait_images(0);
+	assert_eq!(
+		h.app.readers.session.path,
+		Some(root.join("guide/setup.md"))
+	);
+}
+
+#[test]
+fn desktop_folder_picker_is_clickable_before_loading_a_tree() {
+	use crate::{settings::WindowLayout, state::Command};
+	let mut h = Harness::new();
+	h.app.tab_strip.phone = false;
+	for reading in [false, true] {
+		if reading {
+			h.open("README.md", 2);
+		}
+		for style in [
+			WindowLayout::Linux,
+			WindowLayout::Windows,
+			WindowLayout::Macos,
+		] {
+			h.app.frame.layout = style;
+			let buttons = h.app.buttons();
+			let toggle = buttons
+				.iter()
+				.find(|b| b.action == Command::Folder)
+				.unwrap();
+			assert!(toggle.enabled);
+			h.app.interaction.cursor =
+				(toggle.rect.x + 14., toggle.rect.y + 14.);
+			h.app.press_widget(&buttons);
+			assert_eq!(h.app.release_widget(), Some(Command::Folder));
+			assert!(h.app.folder.tree.is_none());
+			assert_eq!(h.app.frame_layout().left_inset, 0.);
+		}
+	}
+}
+
+#[test]
+fn folder_links_preserve_native_paths_with_url_delimiters() {
+	let mut h = Harness::new();
+	let root = h.dir.path().join("vault #100%25");
+	fs::create_dir(&root).unwrap();
+	fs::write(root.join("README.md"), "# Vault").unwrap();
+	let mut names = vec!["Note #1.md", "Note %41.md"];
+	if markview_platform::test_support::special_files() {
+		names.push("Note ?1.md");
+	}
+	for name in &names {
+		fs::write(root.join(name), "# A note").unwrap();
+	}
+	h.app
+		.folder_loaded(0, true, crate::app::folder::Tree::read(root.clone()));
+	h.wait_images(0);
+	for name in names {
+		let url = percent_encoding::utf8_percent_encode(
+			name,
+			percent_encoding::NON_ALPHANUMERIC,
+		)
+		.to_string();
+		h.app.open_link(&url, false);
+		assert!(h.app.interaction.modal.is_none(), "{name}");
+		assert_eq!(
+			h.app.readers.session.path,
+			Some(root.join(name).canonicalize().unwrap())
+		);
+		h.wait_images(0);
+	}
+	fs::write(root.join("Attachment.bin"), "data").unwrap();
+	h.app.open_link("Attachment.bin", false);
+	assert!(matches!(&h.app.interaction.modal,
+		Some(crate::state::Modal::OpenLocal { path, .. })
+		if *path == root.join("Attachment.bin").canonicalize().unwrap()));
+}
+
+#[test]
+fn folder_wikilinks_open_literal_percent_names_even_with_a_decoded_match() {
+	let mut h = Harness::new();
+	let root = h.dir.path().canonicalize().unwrap();
+	for name in ["Note %41.md", "Note A.md", "Note %2541.md"] {
+		fs::write(root.join(name), "# A heading\n\nA note.").unwrap();
+	}
+	h.app
+		.folder_loaded(0, true, crate::app::folder::Tree::read(root.clone()));
+	h.wait_images(2);
+	for (source, name) in [
+		("[[Note %41]]", "Note %41.md"),
+		("[[Note %41.md#A heading|Section]]", "Note %41.md"),
+		("[[Note %2541]]", "Note %2541.md"),
+		("[Markdown](Note%20%41.md)", "Note A.md"),
+	] {
+		let doc = markview_commonmark::parse(source);
+		let crate::document::BlockKind::Paragraph(text) = &doc.blocks[0].kind
+		else {
+			panic!()
+		};
+		h.app.open_link(text[0].style.link_url().unwrap(), false);
+		h.wait_images(0);
+		h.app.apply_anchor();
+		assert_eq!(
+			h.app.readers.session.path,
+			Some(root.join(name)),
+			"{source}"
+		);
+		assert!(!h.app.error, "{source}");
+		assert!(h.app.readers.session.pending_anchor.is_none(), "{source}");
+	}
+}
+
+#[test]
+fn reveal_folder_opens_the_active_document_directory_externally() {
+	use crate::state::Command;
+	if !markview_platform::test_support::shell_launch() {
+		return;
+	}
+	let capture = "MARKVIEW_TEST_REVEAL_FOLDER";
+	let Ok(output) = std::env::var(capture) else {
+		let dir = tempfile::tempdir().unwrap();
+		let opener = dir.path().join("xdg-open");
+		fs::write(
+			&opener,
+			"#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$MARKVIEW_TEST_REVEAL_FOLDER\"\n",
+		)
+		.unwrap();
+		markview_platform::test_support::set_mode(&opener, 0o755).unwrap();
+		let result = std::process::Command::new(std::env::current_exe().unwrap())
+			.args([
+				"--exact",
+				"app::document::tests::reveal_folder_opens_the_active_document_directory_externally",
+			])
+			.env("PATH", dir.path())
+			.env(capture, dir.path().join("opened"))
+			.output()
+			.unwrap();
+		assert!(result.status.success(), "{result:?}");
+		return;
+	};
+	let mut h = Harness::new();
+	h.app.action(Command::RevealFolder);
+	assert!(h.app.error);
+	assert!(!std::path::Path::new(&output).exists());
+	let nested = h.dir.path().join("nested notes #1");
+	fs::create_dir(&nested).unwrap();
+	fs::write(nested.join("note.md"), "A note").unwrap();
+	h.app.folder_loaded(
+		0,
+		true,
+		crate::app::folder::Tree::read(h.dir.path().into()),
+	);
+	h.wait_images(2);
+	for sidebar_open in [true, false] {
+		if !sidebar_open {
+			h.app.toggle_folder();
+			h.open("nested notes #1/note.md", 0);
+		}
+		let action = h
+			.app
+			.buttons()
+			.into_iter()
+			.find(|b| b.action == Command::RevealFolder)
+			.unwrap()
+			.action;
+		h.app.action(action);
+		let expected = format!(
+			"{}\n",
+			h.app
+				.readers
+				.session
+				.path
+				.as_ref()
+				.unwrap()
+				.parent()
+				.unwrap()
+				.display()
+		);
+		let deadline = Instant::now() + Duration::from_secs(5);
+		while fs::read_to_string(&output).unwrap_or_default() != expected {
+			assert!(
+				Instant::now() < deadline,
+				"external folder was not opened"
+			);
+			std::thread::sleep(Duration::from_millis(10));
+		}
+		assert_eq!(h.app.folder.open, sidebar_open);
+		assert_eq!(h.app.folder.tree.as_ref().unwrap().root, h.dir.path());
+		fs::remove_file(&output).unwrap();
+	}
+}
+
+#[test]
+fn folder_overlay_clips_empty_page_mouse_touch_and_focus_targets() {
+	use crate::state::{Command, TextField};
+	let mut h = Harness::new();
+	let empty = h.dir.path().join("empty");
+	fs::create_dir(&empty).unwrap();
+	h.app
+		.folder_loaded(0, true, crate::app::folder::Tree::read(empty));
+	h.app
+		.interaction
+		.advance_drawers(Instant::now() + Duration::from_secs(1));
+	assert!(h.app.readers.session.path.is_none());
+	for width in [360., 640., 1200.] {
+		let mut chrome = h.app.chrome();
+		chrome.width = width;
+		chrome.height = 800.;
+		let drawer = crate::app::chrome::folder::rect(
+			width,
+			800.,
+			crate::app::TOP,
+			crate::app::BOTTOM,
+			260.,
+		);
+		let left = drawer.x + drawer.w;
+		let buttons = chrome.buttons();
+		let layout = crate::app::widgets::layout(&buttons);
+		let empty_control = |action| {
+			matches!(
+				action,
+				Command::Open
+					| Command::OpenUrl
+					| Command::FocusInput(TextField::Url)
+			)
+		};
+		for x in (0..drawer.w as usize).step_by(4) {
+			for y in
+				(drawer.y as usize..(drawer.y + drawer.h) as usize).step_by(4)
+			{
+				let point = (x as f32, y as f32);
+				// The toolbar's own `Open` button lives outside the drawer.
+				assert!(
+					!layout
+						.hit(point)
+						.is_some_and(|w| empty_control(w.message))
+				);
+				assert!(
+					!layout
+						.hit_touch(point, 44.)
+						.is_some_and(|w| empty_control(w.message))
+				);
+			}
+		}
+		for button in buttons
+			.iter()
+			.filter(|b| empty_control(b.action) && b.rect.y > crate::app::TOP)
+		{
+			let hit = button.widget().hit_rect().unwrap();
+			assert!(hit.x >= left);
+			assert!(hit.w > 0.);
+			assert!(
+				layout
+					.hit((hit.x + hit.w / 2., hit.y + hit.h / 2.))
+					.is_some()
+			);
+		}
+		let toggle = buttons
+			.iter()
+			.find(|b| b.action == Command::Folder)
+			.unwrap();
+		assert_eq!(toggle.rect.y, 6.);
+	}
+	// Closing the sidebar restores the empty page's original controls.
+	h.app.toggle_folder();
+	assert!(
+		h.app
+			.buttons()
+			.iter()
+			.any(|b| b.action == Command::FocusInput(TextField::Url))
+	);
+}
+
+#[test]
+fn folder_sidebar_geometry_keyboard_and_pointer_ownership() {
+	use crate::app::folder::Tree;
+	use crate::state::Command;
+	use winit::keyboard::{Key, NamedKey};
+	let mut h = Harness::new();
+	h.app.args.width = 1000;
+	h.app.args.height = 400;
+	for i in 0..60 {
+		fs::write(h.dir.path().join(format!("note-{i:02}.md")), "A note")
+			.unwrap();
+	}
+	// Use the same completion path without starting a second scan.
+	h.app
+		.folder_loaded(0, true, Tree::read(h.dir.path().into()));
+	h.wait_images(2);
+	h.app
+		.interaction
+		.advance_drawers(Instant::now() + Duration::from_secs(1));
+	assert_eq!(h.app.folder_inset(), 260.);
+	assert!(h.app.view_geometry().left >= 280.);
+	assert!(
+		h.app.options().width
+			<= h.app.dimensions().0 - h.app.folder_inset() - 40.
+	);
+	h.app.interaction.cursor = (20., 150.);
+	assert!(h.app.pointer_in_folder());
+	h.app.scroll_folder(10000.);
+	assert!(h.app.folder.scroll > 0.);
+	let document_scroll = h.app.readers.session.scrolling.offset;
+	let (track, _) = h.app.folder_bar().unwrap().bars(false);
+	h.app.interaction.cursor = (track.x + track.w / 2., track.y + 5.);
+	assert!(h.app.begin_folder_drag());
+	assert_eq!(h.app.readers.session.scrolling.offset, document_scroll);
+	h.app.folder.grab = None;
+	let buttons = h.app.buttons();
+	let ids: std::collections::HashSet<_> =
+		buttons.iter().map(|b| b.id).collect();
+	assert_eq!(
+		ids.len(),
+		buttons.len(),
+		"Sidebar and toolbar controls have distinct identities"
+	);
+	let entry = buttons
+		.iter()
+		.find(|b| matches!(b.action, Command::FolderEntry(_)))
+		.unwrap();
+	assert!(
+		entry.widget().hit_rect().unwrap().y >= h.app.folder_rect().y + 66.
+	);
+	h.app.interaction.widgets.focus = Some(Command::FolderEntry(0).widget_id());
+	assert!(h.app.key_pressed(&Key::Named(NamedKey::ArrowDown)));
+	assert_eq!(
+		h.app.interaction.widgets.focus,
+		Some(Command::FolderEntry(1).widget_id())
+	);
+	assert!(h.app.folder.scroll <= 28.);
+	h.app.interaction.widgets.focus = Some(Command::FolderRoot.widget_id());
+	assert!(h.app.key_pressed(&Key::Named(NamedKey::ArrowLeft)));
+	assert!(h.app.folder.tree.as_ref().unwrap().rows().is_empty());
+	assert!(
+		!h.app
+			.buttons()
+			.iter()
+			.any(|b| matches!(b.action, Command::FolderEntry(_)))
+	);
+	assert!(h.app.key_pressed(&Key::Named(NamedKey::ArrowRight)));
+	assert!(h.app.key_pressed(&Key::Named(NamedKey::ArrowDown)));
+	assert_eq!(
+		h.app.interaction.widgets.focus,
+		Some(Command::FolderEntry(0).widget_id())
+	);
+	// The top-left control owns a complete press and toggles both ways.
+	for open in [false, true] {
+		h.app
+			.interaction
+			.advance_drawers(Instant::now() + Duration::from_secs(1));
+		let buttons = h.app.buttons();
+		let toggle = buttons
+			.iter()
+			.find(|b| b.action == Command::Folder)
+			.unwrap();
+		h.app.interaction.cursor = (toggle.rect.x + 14., toggle.rect.y + 14.);
+		h.app.press_widget(&buttons);
+		let action = h.app.release_widget().unwrap();
+		h.app.action(action);
+		assert_eq!(h.app.folder.open, open);
+	}
+	h.app.interaction.modal = Some(crate::state::Modal::OpenLocal {
+		path: "unknown".into(),
+		dir: "".into(),
+		document_dir: None,
+	});
+	assert!(!h.app.pointer_in_folder());
+	assert!(!h.app.folder_key(&Key::Named(NamedKey::ArrowDown)));
+	h.app.interaction.modal = None;
+	h.app.toggle_folder();
+	assert_eq!(h.app.folder_inset(), 0.);
+	h.app
+		.interaction
+		.advance_drawers(Instant::now() + Duration::from_secs(1));
+	assert!(h.app.view_geometry().left < 280.);
+}
+
+#[test]
+fn folder_overlay_resize_keeps_search_and_its_focus() {
+	use crate::state::{Command, TextField};
+	use winit::{dpi::PhysicalSize, event::WindowEvent, window::WindowId};
+	let mut h = Harness::new();
+	h.app.folder_loaded(
+		0,
+		true,
+		crate::app::folder::Tree::read(h.dir.path().into()),
+	);
+	h.wait_images(2);
+	h.app.open_search();
+	assert!(h.app.folder.open && h.app.readers.session.search.open);
+	for (width, folder_open) in [(760, true), (536, false), (900, false)] {
+		h.app.handle_window_event(
+			&StubLoop,
+			WindowId::dummy(),
+			WindowEvent::Resized(PhysicalSize::new(width, 800)),
+		);
+		assert_eq!(h.app.folder.open, folder_open);
+		assert!(h.app.readers.session.search.open);
+		assert_eq!(h.app.focused_input(), Some(TextField::Search));
+		if !folder_open {
+			assert_eq!(h.app.interaction.folder_reveal(false), 0.);
+			assert!(!h.app.buttons().iter().any(|b| matches!(
+				b.action,
+				Command::FolderRoot | Command::FolderEntry(_)
+			)));
+		}
+	}
+}
+
+#[test]
+fn folder_drawers_reconcile_on_resize_to_an_overlay() {
+	use crate::state::Command;
+	use winit::{dpi::PhysicalSize, event::WindowEvent, window::WindowId};
+	let mut h = Harness::new();
+	h.app.folder_loaded(
+		0,
+		true,
+		crate::app::folder::Tree::read(h.dir.path().into()),
+	);
+	h.wait_images(2);
+	h.app.toggle_outline();
+	h.app
+		.interaction
+		.advance_drawers(Instant::now() + Duration::from_secs(1));
+	assert!(h.app.folder.open);
+	assert!(h.app.interaction.outline_open);
+	h.app.folder.grab = Some(0.);
+	h.app.interaction.widgets.focus = Some(Command::FolderRoot.widget_id());
+	h.app.interaction.widgets.captured = Some(Command::FolderRoot.widget_id());
+	for (width, folder_open) in [(760, true), (536, false), (900, false)] {
+		h.app.handle_window_event(
+			&StubLoop,
+			WindowId::dummy(),
+			WindowEvent::Resized(PhysicalSize::new(width, 800)),
+		);
+		assert_eq!(h.app.folder.open, folder_open);
+		assert!(h.app.interaction.outline_open);
+		if width == 536 {
+			assert_eq!(h.app.interaction.folder_reveal(false), 0.);
+			assert!(h.app.folder.grab.is_none());
+			assert!(h.app.interaction.widgets.focus.is_none());
+			assert!(h.app.interaction.widgets.captured.is_none());
+			assert!(!h.app.pointer_in_folder());
+			assert!(!h.app.buttons().iter().any(|button| matches!(
+				button.action,
+				Command::FolderEntry(_) | Command::FolderRoot
+			)));
+		}
+	}
+}
+
+#[test]
+fn folder_sidebar_reuses_drawer_motion_and_keeps_outgoing_coverage() {
+	use crate::layout::Draw;
+	use crate::state::Command;
+	let mut h = Harness::new();
+	let empty = h.dir.path().join("empty");
+	fs::create_dir(&empty).unwrap();
+	h.app
+		.folder_loaded(0, true, crate::app::folder::Tree::read(empty));
+	assert!(h.app.interaction.drawer_deadline(Instant::now()).is_some());
+	assert!(
+		h.app
+			.interaction
+			.advance_drawers(Instant::now() + Duration::from_secs(1))
+	);
+	let open = h.app.folder_rect();
+	assert_eq!(open.x, 0.);
+	let toggle = |app: &mut App<Proxy>| {
+		app.buttons()
+			.into_iter()
+			.find(|b| b.action == Command::Folder)
+			.unwrap()
+	};
+	let open_toggle = toggle(&mut h.app);
+	assert_eq!(open_toggle.rect.x, open.w - 36.);
+	assert_eq!(open_toggle.rect.y, 6.);
+	assert!(!open_toggle.active);
+	let document_left = h.app.view_geometry().left;
+	let has_sidebar = |draws: Vec<Draw>| {
+		draws.iter().any(|draw| {
+		matches!(draw, Draw::Rect(rect, _) if rect.w == open.w && rect.h == 800.)
+	})
+	};
+	assert!(has_sidebar(h.app.overlay()));
+	h.app.toggle_folder();
+	h.app
+		.interaction
+		.folder_animation
+		.as_mut()
+		.unwrap()
+		.freeze(Duration::from_millis(110));
+	assert!(!h.app.folder.open);
+	assert_eq!(h.app.interaction.folder_reveal(false), 0.125);
+	let closing_toggle = toggle(&mut h.app);
+	assert_eq!(closing_toggle.id, open_toggle.id);
+	assert!(!closing_toggle.active);
+	assert!(h.app.interaction.drawer_deadline(Instant::now()).is_some());
+	assert!(has_sidebar(h.app.overlay()));
+	let drawer = h.app.folder_rect();
+	assert_eq!(drawer.x, -drawer.w * 0.875);
+	let buttons = h.app.buttons();
+	assert!(!buttons.iter().any(|b| matches!(
+		b.action,
+		Command::FolderRoot | Command::FolderEntry(_)
+	)));
+	// The outgoing surface still covers empty-page widgets while sliding away.
+	for button in buttons.iter().filter(|b| {
+		matches!(b.action, Command::Open | Command::OpenUrl)
+			&& b.rect.y > crate::app::TOP
+	}) {
+		assert!(button.widget().hit_rect().unwrap().x >= drawer.x + drawer.w);
+	}
+	// Reversing a running close keeps using the shared animation and scheduler.
+	h.app.toggle_folder();
+	assert!(h.app.folder.open);
+	assert!(h.app.interaction.folder_animation.is_some());
+	h.app
+		.interaction
+		.advance_drawers(Instant::now() + Duration::from_secs(1));
+	assert_eq!(h.app.folder_rect(), open);
+	h.app.toggle_folder();
+	h.app
+		.interaction
+		.advance_drawers(Instant::now() + Duration::from_secs(1));
+	assert!(h.app.interaction.drawer_deadline(Instant::now()).is_none());
+	assert!(!has_sidebar(h.app.overlay()));
+	assert_eq!(h.app.folder_rect().x + open.w, 0.);
+	assert!(!h.app.pointer_in_folder());
+	let closed_toggle = toggle(&mut h.app);
+	assert_eq!(closed_toggle.id, open_toggle.id);
+	assert_eq!(closed_toggle.rect.y, 6.);
+	assert!(
+		closed_toggle.rect.x + closed_toggle.rect.w
+			< h.app.frame_layout().tabs.x
+	);
+	assert!(!closed_toggle.active);
+	assert!(h.app.view_geometry().left < document_left);
+	h.app.toggle_folder();
+	let opening_toggle = toggle(&mut h.app);
+	assert_eq!(opening_toggle.id, closed_toggle.id);
+	assert_eq!(opening_toggle.rect.y, closed_toggle.rect.y);
+}
+
+#[test]
+fn file_sidebar_owns_the_full_left_column_without_moving_the_outline() {
+	use crate::{app::folder::Tree, layout::Draw, state::Command};
+	let mut h = Harness::new();
+	h.app
+		.folder_loaded(0, true, Tree::read(h.dir.path().into()));
+	h.wait_images(2);
+	h.app
+		.interaction
+		.advance_drawers(Instant::now() + Duration::from_secs(1));
+	let surface = h.app.folder_surface();
+	assert_eq!((surface.y, surface.h), (0., 800.));
+	assert!(h.app.frame_layout().tabs.x >= surface.w + 10.);
+	assert!(h.app.frame_layout().new_page.unwrap().x >= surface.w);
+	h.app.interaction.outline_open = true;
+	let body = h.app.folder_rect();
+	h.app.readers.session.search.open = true;
+	let outline = h.app.outline_drawer();
+	assert_eq!(h.app.folder_rect(), body);
+	assert!(h.app.search_input_rect().x >= surface.w + 12.);
+	assert!(
+		h.app
+			.search_buttons()
+			.iter()
+			.all(|b| b.rect.intersect(surface).is_none())
+	);
+	assert!(
+		h.app
+			.buttons()
+			.iter()
+			.filter(|b| matches!(
+				b.action,
+				Command::NewPage
+					| Command::Open | Command::Settings
+					| Command::Outline
+			))
+			.all(|b| b.widget().hit_rect().is_none_or(|r| r.x >= surface.w))
+	);
+	let draws = h.app.overlay();
+	let file_layer = draws
+		.iter()
+		.position(
+			|draw| matches!(draw, Draw::Rect(rect, _) if *rect == surface),
+		)
+		.unwrap();
+	let toolbar_layer = draws.iter().position(|draw| matches!(draw, Draw::Rect(rect, _) if rect.y == 0. && rect.w == 1200. && rect.h == crate::app::TOP)).unwrap();
+	assert!(file_layer > toolbar_layer);
+	h.app.toggle_folder();
+	h.app
+		.interaction
+		.advance_drawers(Instant::now() + Duration::from_secs(1));
+	assert_eq!(h.app.frame_layout().left_inset, 0.);
+	assert_eq!(h.app.outline_drawer(), outline);
+}
+
+#[test]
+fn folder_sidebar_renders_beside_the_document() -> anyhow::Result<()> {
+	use crate::render::{Renderer, Theme, View};
+	let mut h = Harness::new();
+	let root = h.dir.path().join("Research notes");
+	fs::create_dir_all(root.join("Projects/Markview")).unwrap();
+	fs::create_dir_all(root.join("Reading list")).unwrap();
+	for (name, text) in [
+		(
+			"README.md",
+			"# Research notes\n\nA folder of connected Markdown documents.\n\n## Start here\n\nRead [[Projects/Markview/Design|the design notes]] or browse the file tree.\n\n> Keep the page in focus while navigating a collection.\n",
+		),
+		(
+			"Projects/Markview/Design.md",
+			"# Design\n\nNative typography.",
+		),
+		("Reading list/Typography.md", "# Typography"),
+		("Meeting notes.md", "# Meetings"),
+	] {
+		fs::write(root.join(name), text)?;
+	}
+	h.app
+		.folder_loaded(0, true, crate::app::folder::Tree::read(root));
+	h.wait_images(0);
+	h.app
+		.interaction
+		.advance_drawers(Instant::now() + Duration::from_secs(1));
+	h.app.toggle_outline();
+	h.app
+		.interaction
+		.advance_drawers(Instant::now() + Duration::from_secs(1));
+	let mut renderer = pollster::block_on(Renderer::new(None))?;
+	let directory =
+		Path::new(env!("CARGO_MANIFEST_DIR")).join("artifacts/folder-sidebar");
+	fs::create_dir_all(&directory)?;
+	for (dark, expanded) in
+		[(false, true), (true, true), (false, false), (true, false)]
+	{
+		if h.app.folder.open != expanded {
+			h.app.toggle_folder();
+			h.app
+				.interaction
+				.advance_drawers(Instant::now() + Duration::from_secs(1));
+			h.wait_images(0);
+		}
+		let sheet = markview_layout::style::Stylesheet::bundled(dark);
+		h.app.preferences.values.stylesheet = sheet.clone();
+		h.app.preferences.values.theme =
+			if dark { Theme::Dark } else { Theme::Light };
+		h.app.ui.set_stylesheet(sheet.clone());
+		renderer.set_stylesheet(sheet);
+		let geometry = h.app.view_geometry();
+		let overlay = h.app.overlay();
+		let horizontal = Default::default();
+		let view = View {
+			width: 1200,
+			height: 800,
+			scale: 1.,
+			left: geometry.left,
+			top: geometry.top,
+			bottom: geometry.bottom,
+			scroll: 0.,
+			theme: h.app.preferences.values.theme,
+			horizontal: &horizontal,
+			selection: None,
+			revision: h.app.readers.session.accepted_revision,
+			hovered_link: None,
+			hovered_overflow: None,
+			held_overflow: None,
+		};
+		let target = renderer.offscreen(view.width, view.height);
+		let submission = renderer.render(
+			&h.app.readers.session.snapshot,
+			&view,
+			&overlay,
+			&target.create_view(&Default::default()),
+		)?;
+		renderer.wait(Some(submission))?;
+		renderer.save_png(
+			&target,
+			&directory.join(match (dark, expanded) {
+				(false, true) => "light.png",
+				(true, true) => "dark.png",
+				(false, false) => "light-collapsed.png",
+				(true, false) => "dark-collapsed.png",
+			}),
+		)?;
+	}
+	Ok(())
+}
+
+#[test]
+fn folder_session_restores_the_root_visibility_and_selected_document() {
+	let mut h = Harness::new();
+	let root = h.dir.path().canonicalize().unwrap();
+	fs::write(root.join("Last read.md"), "# Last read\n\nSaved reading.")
+		.unwrap();
+	h.app.instance_path = Some(root.join("instance.lock"));
+	h.app.persistence.path = Some(root.join("session.json"));
+	h.app.persistence.initialized = true;
+	h.app.preferences.values.restore_session = true;
+	h.app.preferences.values.single_instance = true;
+	h.app.register_instance();
+	h.app
+		.folder_loaded(0, true, crate::app::folder::Tree::read(root.clone()));
+	h.wait_images(2);
+	h.app.open(root.join("Last read.md"));
+	h.wait_images(0);
+	h.app.folder.open = false;
+	h.app.flush_session();
+	h.app.instance = None;
+
+	let mut restored = Harness::new();
+	restored.app.instance_path = Some(root.join("instance.lock"));
+	restored.app.persistence.path = Some(root.join("session.json"));
+	restored.app.preferences.values.restore_session = true;
+	restored.app.preferences.values.single_instance = true;
+	restored.app.register_instance();
+	restored.app.restore_session();
+	while restored.app.folder.tree.is_none() {
+		let event = restored
+			.events
+			.recv_timeout(Duration::from_secs(10))
+			.unwrap();
+		restored.app.handle_user_event(&StubLoop, event);
+	}
+	assert_eq!(restored.app.folder.tree.as_ref().unwrap().root, root);
+	assert!(!restored.app.folder.open);
+	assert_eq!(
+		restored.app.readers.session.path.as_ref(),
+		Some(&root.join("Last read.md"))
+	);
+}
+
+#[test]
+#[ignore = "profiles the local repository, including build directories"]
+fn folder_sidebar_repository_scroll_profile() {
+	let mut h = Harness::new();
+	fs::write(h.dir.path().join("profile.md"), "# A note\n\nOne tab.").unwrap();
+	h.open("profile.md", 0);
+	let scan = Instant::now();
+	let tree = crate::app::folder::Tree::read(PathBuf::from(env!(
+		"CARGO_MANIFEST_DIR"
+	)))
+	.unwrap();
+	let entries = tree.entries.len();
+	let scan_ms = scan.elapsed().as_secs_f64() * 1000.;
+	h.app.folder_loaded(0, false, Ok(tree));
+	h.app.set_folder_open(true);
+	h.app
+		.interaction
+		.advance_drawers(Instant::now() + Duration::from_secs(1));
+	h.app.interaction.cursor = (120., 250.);
+	let mut samples = Vec::new();
+	for step in 0..100 {
+		let started = Instant::now();
+		h.app.scroll_folder(if step < 50 { 17.25 } else { -17.25 });
+		std::hint::black_box(h.app.overlay());
+		samples.push(started.elapsed().as_secs_f64() * 1000.);
+	}
+	samples.sort_by(f64::total_cmp);
+	eprintln!(
+		"folder scroll: {entries} entries, scan={scan_ms:.1} ms, overlay p50={:.2} ms, p95={:.2} ms",
+		samples[49], samples[94]
+	);
+}

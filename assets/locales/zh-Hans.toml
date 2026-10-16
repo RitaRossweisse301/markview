@@ -292,3 +292,16 @@ permission_scope = "授权将在文档更改或关闭时失效。"
 permission_allow = "允许"
 permission_cancel = "取消"
 permission_select_image = "请选择要读取的图片文件。\n粘贴文本没有本地目录。"
+
+# The folder browser.
+folder_open = "打开文件夹 (Ctrl+Shift+O)"
+folder_files = "文件夹"
+folder_toggle = "展开／折叠侧边栏"
+folder_empty = "此文件夹中没有 Markdown 文档"
+folder_refresh = "刷新文件夹"
+folder_collapse_all = "全部折叠"
+folder_error = "无法打开文件夹：{error}"
+
+sidebar_title = "侧边栏"
+sidebar_open_folder = "打开文件夹"
+sidebar_folder_prompt = "打开文件夹以浏览其中的 Markdown 文档。"

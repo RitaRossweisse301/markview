@@ -74,11 +74,11 @@ fn ui_styles_match_rendering_baselines() -> Result<()> {
 			);
 			draws.extend(draw_footer(
 				&mut ui,
-				None,
-				None,
+				(None, None),
 				None,
 				"reading.md",
 				(800., 1000.),
+				0.,
 				lang,
 			));
 			for (i, state) in [
@@ -187,6 +187,114 @@ fn ui_styles_match_rendering_baselines() -> Result<()> {
 			let actual =
 				capture(&mut renderer, &Default::default(), &view, &draws)?;
 			baselines.record(&name, &actual)?;
+		}
+	}
+	baselines.finish()
+}
+
+#[test]
+fn phone_sidebar_match_rendering_baselines() -> Result<()> {
+	use crate::{
+		app::folder::{Browser, Tree},
+		state::{ReaderTab, SidebarTab},
+	};
+	if !markview_platform::test_support::desktop_goldens() {
+		return Ok(());
+	}
+	let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+	let mut baselines = Baselines::new(
+		root.join("tests/goldens/phone-sidebar"),
+		root.join("artifacts/phone-sidebar-goldens"),
+	)?;
+	let mut renderer = pollster::block_on(Renderer::new(None))?;
+	ensure!(
+		renderer.adapter_name.starts_with("llvmpipe")
+			&& renderer.adapter_name.ends_with("(Vulkan, Cpu)"),
+		"Phone sidebar baselines require Lavapipe"
+	);
+	let dir = tempfile::tempdir()?;
+	let folder = dir.path().join("Research notes");
+	fs::create_dir_all(folder.join("Projects"))?;
+	for i in 0..24 {
+		fs::write(folder.join(format!("chapter-{i:02}.md")), "# Note")?;
+	}
+	let mut browser = Browser::default();
+	browser.tree = Some(Tree::read(folder.clone())?);
+	let tabs: Vec<_> = (0..20)
+		.map(|i| ReaderTab::new(format!("notes/chapter-{i:02}.md").into()))
+		.collect();
+	let horizontal = HashMap::new();
+	for dark in [false, true] {
+		let mut sheet = (*Stylesheet::bundled(dark)).clone();
+		sheet.set_cjk_type(CjkType::Sc);
+		let sheet = Arc::new(sheet);
+		for lang in [Lang::En, Lang::ZhHans] {
+			let settings = ReaderSettings {
+				lang: Some(lang),
+				stylesheet: sheet.clone(),
+				..Default::default()
+			};
+			renderer.set_stylesheet(settings.stylesheet.clone());
+			let mut ui = crate::test_support::shaper();
+			ui.set_stylesheet(settings.stylesheet.clone());
+			for (page, tab) in [
+				("tabs", SidebarTab::Tabs),
+				("folders", SidebarTab::Folder),
+				("empty", SidebarTab::Folder),
+			] {
+				let interaction = InteractionState {
+					panel: PanelPage::Tabs,
+					sidebar_tab: tab,
+					cursor: (-1., -1.),
+					..Default::default()
+				};
+				let draws = if tab == SidebarTab::Tabs {
+					tab_drawer::draw(
+						&mut ui,
+						&tabs,
+						8,
+						20.,
+						&interaction,
+						(360., 760.),
+						&settings,
+					)
+				} else {
+					tab_drawer::draw_folder(
+						&mut ui,
+						(page != "empty").then_some(&browser),
+						Some(&folder.join("chapter-02.md")),
+						&interaction,
+						(360., 760.),
+						&settings,
+					)
+				};
+				let view = View {
+					width: 360,
+					height: 760,
+					scale: 1.,
+					left: 0.,
+					top: 0.,
+					bottom: 0.,
+					scroll: 0.,
+					theme: if dark { Theme::Dark } else { Theme::Light },
+					horizontal: &horizontal,
+					selection: None,
+					revision: 1,
+					hovered_link: None,
+					hovered_overflow: None,
+					held_overflow: None,
+				};
+				let actual =
+					capture(&mut renderer, &Default::default(), &view, &draws)?;
+				baselines.record(
+					&format!(
+						"{page}-{}-{}",
+						if dark { "dark" } else { "light" },
+						if lang == Lang::En { "en" } else { "zh" }
+					),
+					&actual,
+				)?;
+			}
 		}
 	}
 	baselines.finish()

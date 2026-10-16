@@ -402,6 +402,12 @@ pub(super) fn toolbar_controls_at(
 			b.rect = frame.new_page?;
 		}
 		b.icon = Some(icon);
+		b.clip = Some(Rect {
+			x: frame.left_inset,
+			y: 0.,
+			w: (frame.width - frame.left_inset).max(0.),
+			h: super::TOP,
+		});
 		b.kind = ButtonKind::Quiet;
 		b.active = action == Command::Outline && outline_open;
 		Some(b)

@@ -189,6 +189,7 @@ impl<P: super::SendEvent> App<P> {
 		}
 
 		Chrome {
+			folder: Some(&self.folder),
 			input_draws: Vec::new(),
 			backend: self.renderer.as_ref().map(|renderer| renderer.backend),
 			frame,
@@ -238,17 +239,25 @@ impl<P: super::SendEvent> App<P> {
 	/// no two pages of the panel are ever open at once.
 	fn panel_list(&self) -> Option<chrome::list::List> {
 		let (width, height, _) = self.dimensions();
-		if self.interaction.panel == crate::state::PanelPage::Tabs {
+		if self.phone_folder_open() {
+			Some(chrome::folder::list(
+				self.folder_rect(),
+				self.folder.tree.as_ref().map_or(0, |t| t.rows().len()),
+				self.folder.scroll,
+			))
+		} else if self.interaction.panel == crate::state::PanelPage::Tabs {
 			let mut list = chrome::tab_drawer::list(
 				width,
 				height,
 				self.readers.entries().len(),
 				self.tab_strip.drawer_scroll,
+				320_f32,
 			);
 			let offset = chrome::tab_drawer::animated_rect(
 				width,
 				height,
 				self.interaction.tabs_reveal(),
+				320_f32,
 			)
 			.x;
 			list.panel.x += offset;
@@ -293,7 +302,9 @@ impl<P: super::SendEvent> App<P> {
 		self.panel_list()?.scrollbar(&self.ui)
 	}
 	pub(super) fn set_panel_scroll(&mut self, scroll: f32) {
-		if self.interaction.panel == crate::state::PanelPage::Tabs {
+		if self.phone_folder_open() {
+			self.folder.scroll = scroll;
+		} else if self.interaction.panel == crate::state::PanelPage::Tabs {
 			self.tab_strip.drawer_scroll = scroll;
 		} else if self.interaction.export_open()
 			&& !self.interaction.export_styles_open()

@@ -294,3 +294,16 @@ permission_scope = "文書が変更または閉じられると\n許可は失効�
 permission_allow = "許可"
 permission_cancel = "キャンセル"
 permission_select_image = "画像ファイルを選択してください。\n貼り付けた文書には保存先がありません。"
+
+# The folder browser.
+folder_open = "フォルダーを開く (Ctrl+Shift+O)"
+folder_files = "フォルダー"
+folder_toggle = "サイドバーの表示を切り替え"
+folder_empty = "このフォルダーには Markdown 文書がありません"
+folder_refresh = "フォルダーを更新"
+folder_collapse_all = "すべてのフォルダーを折りたたむ"
+folder_error = "フォルダーを開けません：{error}"
+
+sidebar_title = "サイドバー"
+sidebar_open_folder = "フォルダーを開く"
+sidebar_folder_prompt = "フォルダーを開いて Markdown 文書を参照します。"

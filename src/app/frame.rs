@@ -54,6 +54,8 @@ pub(crate) struct Layout {
 	pub hover: Option<Caption>,
 	pub pressed: Option<Caption>,
 	pub tabs: Rect,
+	pub sidebar_toggle: Option<Rect>,
+	pub left_inset: f32,
 	pub new_page: Option<Rect>,
 	pub toolbar_x: f32,
 	pub toolbar_button_size: f32,
@@ -114,6 +116,8 @@ impl Layout {
 			focused: true,
 			hover: None,
 			pressed: None,
+			left_inset: 0.,
+			sidebar_toggle: None,
 			tabs: Rect {
 				x: left,
 				y: 4.0,
@@ -132,6 +136,31 @@ impl Layout {
 			width,
 			height,
 		}
+	}
+	pub fn with_left_inset(mut self, inset: f32) -> Self {
+		self.left_inset = inset;
+		let right = self.tabs.x + self.tabs.w;
+		self.tabs.x = self.tabs.x.max(inset + 10.);
+		self.tabs.w = (right - self.tabs.x).max(0.);
+		self
+	}
+	pub fn with_sidebar(mut self, width: f32, reveal: f32) -> Self {
+		let left = self.tabs.x;
+		let right = left + self.tabs.w;
+		self.left_inset = width * reveal;
+		let mut x = left + (width - 36. - left) * reveal;
+		if self.style != WindowLayout::Macos && !self.fullscreen {
+			x = x.min(self.captions()[0].1.x - CONTROL_GAP - 28.);
+		}
+		self.sidebar_toggle = Some(Rect {
+			x,
+			y: 6.,
+			w: 28.,
+			h: 28.,
+		});
+		self.tabs.x = left + 36. + (width + 10. - left - 36.) * reveal;
+		self.tabs.w = (right - self.tabs.x).max(0.);
+		self
 	}
 	pub fn captions(self) -> [(Caption, Rect); 3] {
 		let (order, start, width, gap, height) =
@@ -179,6 +208,9 @@ impl Layout {
 	/// The unused tab-strip space belongs to the window caption.
 	pub fn with_tab_end(mut self, end: f32) -> Self {
 		let mut start = end.clamp(self.tabs.x, self.tabs.x + self.tabs.w);
+		self.new_page = self
+			.new_page
+			.filter(|button| start + 8. + button.w < self.toolbar_x);
 		if let Some(button) = &mut self.new_page {
 			button.x = start + 8.0;
 			start = button.x + button.w + 4.0;
@@ -258,6 +290,15 @@ impl<P: super::SendEvent> App<P> {
 			fullscreen,
 			maximized,
 		);
+		if !self.tab_strip.phone {
+			let drawer = self.folder_rect();
+			let reveal = if self.folder.tree.is_some() {
+				self.interaction.folder_reveal(self.folder.open)
+			} else {
+				0.
+			};
+			layout = layout.with_sidebar(drawer.w, reveal);
+		}
 		let tab_end = self.tab_metrics.end(layout.tabs, self.tab_strip.scroll);
 		layout = layout.with_tab_end(tab_end);
 		if self.tab_strip.phone {
@@ -281,9 +322,10 @@ impl<P: super::SendEvent> App<P> {
 		if let Some(native) = &self.native_frame {
 			let layout = self.frame_layout();
 			native.set_fullscreen(layout.fullscreen);
-			self.native_tab_end.set(Some(
+			self.native_tab_end.set(Some((
+				layout.left_inset,
 				self.tab_metrics.end(layout.tabs, self.tab_strip.scroll),
-			));
+			)));
 		}
 	}
 	/// Window input precedes viewer, text-field and document input.
@@ -424,7 +466,7 @@ impl<P: super::SendEvent> App<P> {
 /// Translate the reader's actual chrome geometry at the native callback boundary.
 pub(super) fn native_hit_test(
 	style: WindowLayout,
-	end: Option<f32>,
+	tabs: Option<(f32, f32)>,
 	metrics: markview_platform::FrameMetrics,
 	x: f32,
 	y: f32,
@@ -438,7 +480,9 @@ pub(super) fn native_hit_test(
 		metrics.fullscreen,
 		metrics.maximized,
 	);
-	let layout = end.map_or(layout, |end| layout.with_tab_end(end));
+	let layout = tabs.map_or(layout, |(inset, end)| {
+		layout.with_left_inset(inset).with_tab_end(end)
+	});
 	if let Some(edge) = layout.resize_at(x, y) {
 		HitTest::Resize(edge)
 	} else if layout.caption_at(x, y) == Some(Caption::Expand) {
@@ -453,6 +497,126 @@ pub(super) fn native_hit_test(
 #[cfg(test)]
 mod tests {
 	use super::*;
+	#[test]
+	fn wide_sidebar_toggle_reserves_caption_space_throughout_its_animation() {
+		for style in [WindowLayout::Windows, WindowLayout::Linux] {
+			for window_width in [536., 600., 759.] {
+				let width = super::super::chrome::folder::rect(
+					window_width,
+					800.,
+					TOP,
+					28.,
+					600.,
+				)
+				.w;
+				for step in 0..=20 {
+					let layout = Layout::new(
+						style,
+						false,
+						window_width,
+						800.,
+						false,
+						false,
+					)
+					.with_sidebar(width, step as f32 / 20.);
+					let button = layout.sidebar_toggle.unwrap();
+					assert!(
+						button.x + button.w + CONTROL_GAP
+							<= layout.captions()[0].1.x
+					);
+					assert_eq!(layout.caption_at(button.x + 14., 20.), None);
+				}
+			}
+		}
+	}
+
+	#[test]
+	fn sidebar_toggle_and_tabs_share_continuous_motion_on_every_frame_style() {
+		for style in [
+			WindowLayout::Macos,
+			WindowLayout::Windows,
+			WindowLayout::Linux,
+		] {
+			for fullscreen in [false, true] {
+				let base =
+					Layout::new(style, false, 1200., 800., fullscreen, false);
+				for width in [200., 260., 600.] {
+					let closed = base.with_sidebar(width, 0.);
+					let open = base.with_sidebar(width, 1.);
+					assert_eq!(closed.sidebar_toggle.unwrap().x, base.tabs.x);
+					assert_eq!(open.sidebar_toggle.unwrap().x, width - 36.);
+					assert_eq!(open.tabs.x, width + 10.);
+					for step in 0..=20 {
+						let reveal = step as f32 / 20.;
+						let layout = base.with_sidebar(width, reveal);
+						let button = layout.sidebar_toggle.unwrap();
+						assert_eq!(button.y, 6.);
+						assert!(button.x >= base.tabs.x);
+						assert!(button.x + button.w + 7.9 <= layout.tabs.x);
+						assert!(
+							(layout.tabs.x
+								- (closed.tabs.x
+									+ (open.tabs.x - closed.tabs.x) * reveal))
+								.abs() < 0.001
+						);
+						assert!(
+							!layout
+								.with_tab_end(layout.tabs.x + 100.)
+								.draggable(button.x + 14., 20.)
+						);
+					}
+				}
+			}
+		}
+	}
+
+	#[test]
+	fn file_column_keeps_tabs_controls_and_native_caption_hits_on_the_right() {
+		use markview_platform::{FrameMetrics, HitTest};
+		for style in [
+			WindowLayout::Macos,
+			WindowLayout::Windows,
+			WindowLayout::Linux,
+		] {
+			for inset in [260., 400., 600.] {
+				let layout =
+					Layout::new(style, false, 1200., 800., false, false)
+						.with_left_inset(inset)
+						.with_tab_end(inset + 100.);
+				assert!(layout.tabs.x >= inset + 10.);
+				assert!(layout.new_page.unwrap().x >= inset);
+				assert!(!layout.draggable(inset - 10., 20.));
+				let metrics = FrameMetrics {
+					width: 1200.,
+					height: 800.,
+					scale: 1.5,
+					fullscreen: false,
+					maximized: false,
+				};
+				assert_eq!(
+					native_hit_test(
+						style,
+						Some((inset, inset + 100.)),
+						metrics,
+						inset - 10.,
+						20.
+					),
+					HitTest::Client
+				);
+				assert_eq!(
+					native_hit_test(
+						style,
+						Some((inset, inset + 100.)),
+						metrics,
+						layout.drag.x + 10.,
+						20.
+					),
+					HitTest::Caption
+				);
+			}
+		}
+	}
+
 	#[test]
 	fn native_callback_matches_caption_drag_and_resize_geometry() {
 		use markview_platform::{FrameMetrics, HitTest};
@@ -478,8 +642,9 @@ mod tests {
 					false,
 				)
 				.with_tab_end(180.0);
-				let hit =
-					|x, y| native_hit_test(style, Some(180.0), metrics, x, y);
+				let hit = |x, y| {
+					native_hit_test(style, Some((0., 180.0)), metrics, x, y)
+				};
 				assert_eq!(
 					hit(1.0, 1.0),
 					HitTest::Resize(ResizeDirection::NorthWest)
@@ -502,7 +667,7 @@ mod tests {
 				assert_eq!(
 					native_hit_test(
 						style,
-						Some(180.0),
+						Some((0., 180.0)),
 						FrameMetrics {
 							fullscreen: true,
 							..metrics

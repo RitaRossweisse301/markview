@@ -36,6 +36,12 @@ pub(crate) enum Command {
 	OpenUrl,
 	NewPage,
 	Open,
+	OpenFolder,
+	Folder,
+	FolderRoot,
+	FolderEntry(usize),
+	FolderRefresh,
+	FolderCollapseAll,
 	/// Reveal the active document's folder in the file manager.
 	RevealFolder,
 	Smaller,
@@ -105,6 +111,7 @@ pub(crate) enum Command {
 	SettingsTab(PanelTab),
 	Fonts(crate::app::font_panel::Command),
 	Tabs,
+	SidebarTab(SidebarTab),
 	SelectTab(usize),
 	CloseTab(usize),
 	/// Dismiss the local-file confirmation without opening anything.
@@ -148,6 +155,13 @@ pub(crate) enum PanelPage {
 	Settings(PanelTab),
 	Export,
 	ExportStyles,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) enum SidebarTab {
+	#[default]
+	Tabs,
+	Folder,
 }
 
 impl InteractionState {
@@ -629,8 +643,10 @@ pub(crate) struct InteractionState {
 	pub(crate) controls: Option<markview_ui_core::Layout<Command>>,
 	pub(crate) tabs_animation: Option<DrawerAnimation>,
 	pub(crate) outline_animation: Option<DrawerAnimation>,
+	pub(crate) folder_animation: Option<DrawerAnimation>,
 	pub(crate) selection_counts: Option<(TextSelection, TextCounts)>,
 	pub(crate) panel: PanelPage,
+	pub(crate) sidebar_tab: SidebarTab,
 	pub(crate) settings_scroll: f32,
 	pub(crate) settings_preview: bool,
 	pub(crate) export_scroll: f32,

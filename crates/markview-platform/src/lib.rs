@@ -268,6 +268,15 @@ pub fn pick_image(
 	android::pick_document(done);
 }
 
+pub fn pick_folder(
+	done: impl FnOnce(Option<std::path::PathBuf>) + Send + 'static,
+) {
+	#[cfg(not(target_os = "android"))]
+	std::thread::spawn(move || done(rfd::FileDialog::new().pick_folder()));
+	#[cfg(target_os = "android")]
+	android::pick_document(done);
+}
+
 pub fn pick_document(
 	done: impl FnOnce(Option<std::path::PathBuf>) + Send + 'static,
 ) {

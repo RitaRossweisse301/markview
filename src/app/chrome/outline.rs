@@ -14,6 +14,7 @@ use markview_document::OutlineEntry;
 use markview_layout::style::{ColorField as C, Condition};
 
 /// The drawer's width, flush with the right window edge.
+#[cfg(test)]
 pub(in crate::app) const WIDTH: f32 = 300.0;
 /// The title band above the entry list.
 const HEADER: f32 = 40.0;
@@ -66,7 +67,7 @@ pub(super) fn header_buttons(drawer: Rect, lang: Lang) -> [Button; 2] {
 /// The drawer's rectangle, from `top` down to just above the footer.
 #[cfg(test)]
 pub(in crate::app) fn rect(width: f32, height: f32, top: f32) -> Rect {
-	rect_above(width, height, top, super::super::BOTTOM)
+	rect_above(width, height, top, super::super::BOTTOM, WIDTH)
 }
 
 pub(in crate::app) fn rect_above(
@@ -74,8 +75,9 @@ pub(in crate::app) fn rect_above(
 	height: f32,
 	top: f32,
 	bottom: f32,
+	preferred_width: f32,
 ) -> Rect {
-	let w = WIDTH.min(width);
+	let w = preferred_width.min(width);
 	Rect {
 		x: width - w,
 		y: top,

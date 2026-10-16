@@ -245,21 +245,20 @@ impl<P: SendEvent> App<P> {
 			{
 				return None;
 			}
-			let rect = self
+			let button = self
 				.chrome()
 				.buttons()
 				.into_iter()
-				.find(|b| b.action == Command::FocusInput(id))?
-				.rect;
+				.find(|b| b.action == Command::FocusInput(id))?;
 			let (w, h, _) = self.dimensions();
 			return Some((
-				rect,
-				Rect {
+				button.rect,
+				button.clip.unwrap_or(Rect {
 					x: 0.0,
 					y: super::TOP,
 					w,
 					h: (h - super::TOP - self.bottom()).max(0.0),
-				},
+				}),
 			));
 		}
 		if id == TextField::Search {
@@ -297,8 +296,9 @@ impl<P: SendEvent> App<P> {
 		{
 			return Some(TextField::Search);
 		}
-		if let Some((rect, _)) = self.input_geometry(TextField::Url)
+		if let Some((rect, clip)) = self.input_geometry(TextField::Url)
 			&& rect.contains(x, y)
+			&& clip.contains(x, y)
 		{
 			return Some(TextField::Url);
 		}

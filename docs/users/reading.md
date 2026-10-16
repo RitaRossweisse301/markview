@@ -5,6 +5,7 @@
 | Keys | Action |
 |:--|:--|
 | `Ctrl+O` | Open a file |
+| `Ctrl+Shift+O` | Open a folder |
 | `Ctrl+Alt+R` | Show the active document's folder in the file manager |
 | `/` | Start an empty document search |
 | `Ctrl+F` | Find the selection or reopen the previous query |
@@ -64,6 +65,47 @@ search to navigate within a document. Printing uses the export panel or
 (or legacy `<a name="…">`). Empty anchors take no space; jumps into collapsed
 `<details>` expand the enclosing sections. Duplicate targets resolve to the
 first occurrence.
+
+## Folders and Obsidian vaults
+
+Use **Ctrl+Shift+O** or click the top-left sidebar button before loading a folder
+to choose one; you can also pass a directory to `markview`. The toolbar's **Reveal**
+button opens the current document's folder in the system file manager.
+Markview lists `.md`, `.markdown` and
+`.mdown` files in a left sidebar, preserving subfolders. Click a directory to
+expand or collapse it and a file to read it in a tab. Subfolders start collapsed;
+refreshing preserves the folders you expanded. Existing tabs are reused. The
+sidebar scrolls independently; Tab focuses its controls, arrow keys move
+between file rows, and Enter opens the selected row. Its header can collapse
+all folders or refresh the tree after files are added, moved or deleted.
+**Collapse all** also clears nested expansion and returns the tree to the top;
+use **Ctrl+Shift+O** to choose another folder.
+Hidden entries such as `.obsidian` and `.git`, and symbolic links, are omitted.
+Inaccessible subfolders are skipped; an unreadable root reports an error.
+
+The file sidebar spans the full left edge on desktop and tablets; tabs and
+the main toolbar start to its right, while the outline keeps its right-side
+position. Wide windows reserve space for the sidebar. In narrow windows it overlays the
+page and closes after choosing a document. Phones put the file tree and tab
+list in one sidebar with a Tabs/Folders switch. On desktop and tablets, the
+top-left sidebar button expands or collapses the file tree and stays to the
+left of all tabs when collapsed; clicking the root folder collapses its
+contents. Session restoration retains the folder as well as open documents
+and reading positions.
+An empty folder stays open so it can be refreshed after documents are added.
+When both drawers are open, narrowing the window keeps the outline and closes
+the file sidebar.
+
+Select an Obsidian vault's root folder to browse its notes. Basic internal
+links support `[[Note]]`, `[[Note|Label]]`, `[[Note#Heading]]` and
+`[[#Heading]]`, along with Markdown links with or without `.md`. Folder paths
+are resolved from the current document's directory before falling back to the
+vault root. A bare note name is looked up in the current directory, at the root,
+then throughout the tree when its suffix identifies a single note. Use a folder
+path for duplicate names.
+Markview remains read-only: it does not change notes or Obsidian configuration.
+Obsidian block references, note transclusion (`![[Note]]`), wikilink image
+embeds, plugins and graph views are not supported.
 
 ## Resource permissions
 

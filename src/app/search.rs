@@ -206,6 +206,13 @@ impl<P: SendEvent> App<P> {
 		{
 			return;
 		}
+		if !super::chrome::folder::docked(
+			self.dimensions().0,
+			self.tab_strip.phone,
+		) {
+			self.set_folder_open(false);
+			self.interaction.folder_animation = None;
+		}
 		self.clear_input_focus();
 		self.interaction.show_panel(PanelPage::Closed);
 		self.readers.session.search.open = true;
@@ -493,9 +500,9 @@ impl<P: SendEvent> App<P> {
 	pub(super) fn search_input_rect(&self) -> Rect {
 		let (width, height, _) = self.dimensions();
 		Rect {
-			x: 12.0,
+			x: 12.0 + self.folder_chrome_inset(),
 			y: height - HEIGHT + 6.0,
-			w: (width - 344.0).max(100.0),
+			w: (width - self.folder_chrome_inset() - 344.0).max(100.0),
 			h: 32.0,
 		}
 	}
@@ -576,18 +583,18 @@ impl<P: SendEvent> App<P> {
 		let mut out = vec![
 			Draw::Rect(
 				Rect {
-					x: 0.0,
+					x: self.folder_chrome_inset(),
 					y: height - HEIGHT,
-					w: width,
+					w: width - self.folder_chrome_inset(),
 					h: HEIGHT,
 				},
 				Paint::Styled(Condition::Statusbar, C::Background),
 			),
 			Draw::Rect(
 				Rect {
-					x: 0.0,
+					x: self.folder_chrome_inset(),
 					y: height - HEIGHT,
-					w: width,
+					w: width - self.folder_chrome_inset(),
 					h: 1.0,
 				},
 				Paint::Styled(Condition::Statusbar, C::BorderColor),

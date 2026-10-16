@@ -23,6 +23,8 @@ at the same level, without `[brackets]`.
 
 ### Added
 
+- Browse Markdown folders in a native file tree with refresh, collapse-all, keyboard navigation and session restoration, including Android folder imports.
+- Resolve relative, extensionless and unambiguous note links within an open folder.
 - Parse Obsidian wikilinks with labels and heading targets, preserving literal percent characters in note paths.
 - Add a dedicated serial/parallel layout fuzz differential covering retained scenes, progressive cancellation, cache reuse and reflows with verified worker execution.
 - Add native block layout workers with ordered publication and bounded prefetch, enabled automatically in the GUI after its first readable GPU frame; retain serial Web layout and formula budgets.
@@ -37,6 +39,8 @@ at the same level, without `[brackets]`.
 ### Changed
 
 - Reduce reference-definition scan complexity with an equivalent empty-field check.
+- Share one animated phone sidebar between Tabs and Folders, preserving each list's scroll position; dock the desktop file tree in wide windows and overlay it in narrow ones.
+- Cache visible folder labels with font revision tracking, reducing shaping work during sidebar scrolling.
 - Reuse icon rasters across integer pixel translations while preserving subpixel coverage, reducing work during scrolling and animation.
 - Simplify complexity-triaged functions through focused extraction, preserving parsing, rendering and native reader behavior; keep justified exceptions explicit.
 - Separate block measurement from placement and require `Sync` cancellation callbacks so native layout workers can observe superseded passes.
@@ -85,6 +89,7 @@ at the same level, without `[brackets]`.
 
 ### Documentation
 
+- Document folder browsing, supported Obsidian links and the shared Android sidebar.
 - Remove unused English and Chinese README detail images and their composition code.
 
 ## 0.3.0 - 2026-10-09

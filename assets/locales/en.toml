@@ -294,3 +294,16 @@ permission_scope = "Permission ends when this document\nchanges or closes."
 permission_allow = "Allow"
 permission_cancel = "Cancel"
 permission_select_image = "Choose the image file to read.\nPasted text has no local directory."
+
+# The folder browser.
+folder_open = "Open folder (Ctrl+Shift+O)"
+folder_files = "Folders"
+folder_toggle = "Toggle sidebar"
+folder_empty = "No Markdown documents in this folder"
+folder_refresh = "Refresh folder"
+folder_collapse_all = "Collapse all folders"
+folder_error = "Could not open folder: {error}"
+
+sidebar_title = "Sidebar"
+sidebar_open_folder = "Open folder"
+sidebar_folder_prompt = "Open a folder to browse its Markdown documents."

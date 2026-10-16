@@ -229,16 +229,11 @@ public class MarkviewActivity extends NativeActivity {
                 Files.createDirectories(directory.getParent());
                 Path temporary = Files.createTempDirectory(directory.getParent(), ".import-");
                 try {
-                    List<File> documents = new ArrayList<>();
-                    copyTree(tree, DocumentsContract.getTreeDocumentId(tree), temporary.toFile(), documents, 0);
-                    documents.sort((a, b) -> {
-                        boolean ar = a.getName().equalsIgnoreCase("README.md"), br = b.getName().equalsIgnoreCase("README.md");
-                        return ar != br ? (ar ? -1 : 1) : a.getPath().compareToIgnoreCase(b.getPath());
-                    });
-                    if (documents.isEmpty()) throw new java.io.IOException("No Markdown documents in this folder");
-                    Path document = temporary.relativize(documents.get(0).toPath());
+                    copyTree(tree, DocumentsContract.getTreeDocumentId(tree), temporary.toFile(), 0);
+                    Uri root = DocumentsContract.buildDocumentUriUsingTree(tree, DocumentsContract.getTreeDocumentId(tree));
+                    Files.write(temporary.resolve(".markview-folder-name"), displayName(root).getBytes(StandardCharsets.UTF_8));
                     replaceDirectory(temporary, directory);
-                    deliver(0, directory.resolve(document).toString());
+                    deliver(0, directory.toString());
                 } finally {
                     if (Files.exists(temporary)) deleteTree(temporary);
                 }
@@ -265,20 +260,17 @@ public class MarkviewActivity extends NativeActivity {
             while (entries.hasNext()) Files.delete(entries.next());
         }
     }
-    private void copyTree(Uri tree, String id, File directory, List<File> documents, int depth) throws Exception {
+    private void copyTree(Uri tree, String id, File directory, int depth) throws Exception {
         if (depth > 32) throw new java.io.IOException("Folder nesting is too deep");
+        Files.createDirectories(directory.toPath());
         Uri children = DocumentsContract.buildChildDocumentsUriUsingTree(tree, id);
         try (Cursor cursor = getContentResolver().query(children, new String[]{DocumentsContract.Document.COLUMN_DOCUMENT_ID, DocumentsContract.Document.COLUMN_MIME_TYPE}, null, null, null)) {
             if (cursor == null) throw new java.io.IOException("Cannot read folder contents");
             while (cursor.moveToNext()) {
                 Uri child = DocumentsContract.buildDocumentUriUsingTree(tree, cursor.getString(0));
                 File file = new File(directory, displayName(child));
-                if (DocumentsContract.Document.MIME_TYPE_DIR.equals(cursor.getString(1))) copyTree(tree, cursor.getString(0), file, documents, depth + 1);
-                else {
-                    copyDocument(child, file);
-                    String name = file.getName().toLowerCase(java.util.Locale.ROOT);
-                    if (name.endsWith(".md") || name.endsWith(".markdown") || name.endsWith(".mdown") || name.endsWith(".txt")) documents.add(file);
-                }
+                if (DocumentsContract.Document.MIME_TYPE_DIR.equals(cursor.getString(1))) copyTree(tree, cursor.getString(0), file, depth + 1);
+                else copyDocument(child, file);
             }
         }
     }

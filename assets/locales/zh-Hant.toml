@@ -294,3 +294,16 @@ permission_scope = "授權將在文件變更或關閉時失效。"
 permission_allow = "允許"
 permission_cancel = "取消"
 permission_select_image = "請選擇要讀取的圖片檔案。\n貼上文字沒有本機目錄。"
+
+# The folder browser.
+folder_open = "開啟資料夾 (Ctrl+Shift+O)"
+folder_files = "資料夾"
+folder_toggle = "展開／收合側邊欄"
+folder_empty = "此資料夾中沒有 Markdown 文件"
+folder_refresh = "重新整理資料夾"
+folder_collapse_all = "全部收合"
+folder_error = "無法開啟資料夾：{error}"
+
+sidebar_title = "側邊欄"
+sidebar_open_folder = "開啟資料夾"
+sidebar_folder_prompt = "開啟資料夾以瀏覽其中的 Markdown 文件。"

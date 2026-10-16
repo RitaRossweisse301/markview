@@ -47,7 +47,7 @@ impl<P: super::SendEvent> App<P> {
 		let session = &self.readers.session;
 		let (width, height, _) = self.dimensions();
 		let panel = super::chrome::panel_rect(width, height);
-		serde_json::json!({
+		let mut snapshot = serde_json::json!({
 			"tabs": self.readers.entries().iter().map(|tab| tab.path.display().to_string()).collect::<Vec<_>>(),
 			"active": self.readers.active(), "path": session.path,
 			"trust": format!("{:?}", session.security.origin.trust()),
@@ -61,9 +61,14 @@ impl<P: super::SendEvent> App<P> {
 			"single_instance":self.preferences.values.single_instance,
 			"restore_session":self.preferences.values.restore_session,
 			"phone_layout":self.tab_strip.phone,
+
 			"column_width":self.preferences.values.width, "layout_width":session.snapshot.width,
 			"drawer_scroll":self.tab_strip.drawer_scroll,
 			"outline_open":self.interaction.outline_open,
+			"folder_root":self.folder.tree.as_ref().map(|t| &t.root),
+			"folder_name":self.folder.tree.as_ref().map(|t| &t.name),
+			"folder_open":self.folder.open || self.phone_folder_open(),
+			"folder_entries":self.folder.tree.as_ref().map(|t| t.entries.iter().map(|e| serde_json::json!({"path":e.path,"directory":e.directory,"depth":e.depth})).collect::<Vec<_>>()),
 			"tab_style":format!("{:?}", self.preferences.values.tab_style),
 			"instance_listener":self.instance.is_some(),
 			"theme": self.preferences.values.theme, "font_size":self.preferences.values.font_size,
@@ -77,6 +82,9 @@ impl<P: super::SendEvent> App<P> {
 			"search_open":session.search.open, "matches":session.search.matches.len(),
 			"backend":self.renderer.as_ref().map(|r|format!("{:?}",r.backend)),
 			"status":self.status
-		}).to_string()
+		});
+		snapshot["sidebar_tab"] =
+			format!("{:?}", self.interaction.sidebar_tab).into();
+		snapshot.to_string()
 	}
 }

@@ -333,6 +333,8 @@ fn disclosures_apply_before_layout_and_changed_content_discards_overrides() {
 	fs::write(&path, source).unwrap();
 	let mut tabs = Tabs::default();
 	tabs.restore_session(Session {
+		folder: None,
+		folder_open: false,
 		version: 1,
 		active: 0,
 		tabs: vec![SavedTab {
@@ -411,6 +413,8 @@ fn external_open_before_window_creation_restores_then_selects_the_requested_tab(
 	let a = document(dir.path(), "a.md");
 	let b = document(dir.path(), "b.md");
 	Session {
+		folder: None,
+		folder_open: false,
 		version: 1,
 		active: 0,
 		tabs: vec![
@@ -519,5 +523,94 @@ fn restoration_keeps_modes_for_the_same_path_and_discards_resource_grants() {
 	assert_eq!(
 		restored.session.security.origin,
 		Origin::Local(Trust::Trusted)
+	);
+}
+
+#[test]
+fn pending_folder_restoration_survives_autosave_and_exit() {
+	let dir = tempfile::tempdir().unwrap();
+	let root = dir.path().canonicalize().unwrap();
+	let path = root.join("session.json");
+	for open in [false, true] {
+		Session {
+			folder: Some(root.clone()),
+			folder_open: open,
+			version: 1,
+			active: 0,
+			tabs: vec![],
+		}
+		.write(&path)
+		.unwrap();
+		{
+			let mut restored = app(&root);
+			primary(&mut restored);
+			assert!(restored.folder.tree.is_none());
+			let now = Instant::now();
+			restored.session_tick(now);
+			restored.session_tick(now + Duration::from_secs(2));
+			assert!(restored.persistence.deadline.is_none());
+			let saved = Session::read(&path).unwrap();
+			assert_eq!(saved.folder, Some(root.clone()));
+			assert_eq!(saved.folder_open, open);
+			restored.flush_session();
+		}
+		let mut restored = app(&root);
+		primary(&mut restored);
+		assert!(restored.folder.tree.is_none());
+		restored.flush_session();
+		let saved = Session::read(&path).unwrap();
+		assert_eq!(saved.folder, Some(root.clone()));
+		assert_eq!(saved.folder_open, open);
+		restored.folder_loaded(
+			1,
+			false,
+			super::super::folder::Tree::read(root.clone()),
+		);
+		restored.flush_session();
+		assert_eq!(Session::read(&path).unwrap(), saved);
+	}
+}
+
+#[test]
+fn pending_folder_root_ignores_stale_results_and_clears_on_failure() {
+	let dir = tempfile::tempdir().unwrap();
+	let mut app = app(dir.path());
+	primary(&mut app);
+	let root = dir.path().join("missing");
+	app.open_folder(dir.path().join("superseded"), false);
+	app.open_folder(root.clone(), false);
+	app.folder_loaded(1, false, Err(anyhow::anyhow!("stale")));
+	app.flush_session();
+	let path = dir.path().join("session.json");
+	assert_eq!(Session::read(&path).unwrap().folder, Some(root));
+	let now = Instant::now();
+	app.session_tick(now);
+	app.session_tick(now + Duration::from_secs(2));
+	app.folder_loaded(2, false, Err(anyhow::anyhow!("missing")));
+	app.session_tick(now + Duration::from_secs(3));
+	app.session_tick(now + Duration::from_secs(5));
+	assert_eq!(Session::read(&path).unwrap().folder, None);
+}
+
+#[test]
+fn folder_root_is_saved_with_the_browsing_session() {
+	let dir = tempfile::tempdir().unwrap();
+	let root = dir.path().canonicalize().unwrap();
+	let path = document(&root, "note.md");
+	let mut app = app(&root);
+	primary(&mut app);
+	app.folder_loaded(0, false, super::super::folder::Tree::read(root.clone()));
+	app.open(path);
+	app.flush_session();
+	let saved = Session::read(&root.join("session.json")).unwrap();
+	assert_eq!(saved.folder, Some(root.clone()));
+	assert!(!saved.folder_open);
+	assert_eq!(saved.tabs.len(), 1);
+	app.toggle_folder();
+	app.flush_session();
+	assert!(
+		Session::read(&root.join("session.json"))
+			.unwrap()
+			.folder_open
 	);
 }

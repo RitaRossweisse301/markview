@@ -275,6 +275,11 @@ impl<P: super::SendEvent> App<P> {
 					window.focus_window();
 				}
 			}
+			Event::FolderLoaded {
+				generation,
+				select,
+				result,
+			} => self.folder_loaded(generation, select, result),
 			Event::Open(path) => {
 				self.dialog_open = false;
 				if let Some(path) = path {

@@ -69,6 +69,7 @@ impl<P: super::SendEvent> App<P> {
 		} else if self.interaction.panel_open()
 			|| self.interaction.viewer.is_some()
 			|| self.interaction.outline_open
+			|| self.folder.open
 			|| self.interaction.modal.is_some()
 		{
 			self.key_pressed(&Key::Named(NamedKey::Escape));
@@ -231,6 +232,10 @@ impl<P: super::SendEvent> App<P> {
 			r.resize(width, height);
 		}
 		if width > 0 && height > 0 {
+			let insets = self.insets();
+			self.reconcile_drawers(
+				width as f32 / scale - insets[0] - insets[2],
+			);
 			self.update_media();
 			self.reveal_panel_focus();
 			self.worker
@@ -254,6 +259,7 @@ impl<P: super::SendEvent> App<P> {
 		if let Some(r) = &mut self.renderer {
 			r.clear_raster_cache();
 		}
+		self.reconcile_drawers(self.dimensions().0);
 		self.reflow_at = Some(Instant::now());
 		self.redraw();
 	}
@@ -284,6 +290,7 @@ impl<P: super::SendEvent> App<P> {
 			self.move_tab_drag();
 			self.drag_scrollbar();
 			self.drag_panel();
+			self.drag_folder();
 			self.update_drag();
 			self.refresh_hover();
 			if self.interaction.panel_open()
@@ -303,6 +310,7 @@ impl<P: super::SendEvent> App<P> {
 		if self.tab_strip.drag.is_none()
 			&& self.interaction.scrollbar.is_none()
 			&& self.interaction.panel_grab.is_none()
+			&& self.folder.grab.is_none()
 		{
 			self.interaction.cursor = (f32::NEG_INFINITY, f32::NEG_INFINITY);
 		}
@@ -325,6 +333,7 @@ impl<P: super::SendEvent> App<P> {
 		if !self.interaction.panel_open()
 			&& self.interaction.modal.is_none()
 			&& !self.pointer_in_outline()
+			&& !self.pointer_in_folder()
 		{
 			if let Some(index) = self.tab_at_cursor() {
 				self.action(Command::CloseTab(index));
@@ -353,6 +362,7 @@ impl<P: super::SendEvent> App<P> {
 		// platform swallowed outside the window.
 		self.interaction.scrollbar = None;
 		self.interaction.panel_grab = None;
+		self.folder.grab = None;
 		// A confirmation owns input: only its buttons answer.
 		if self.interaction.modal.is_some() {
 			self.interaction.reset_clicks();
@@ -387,6 +397,9 @@ impl<P: super::SendEvent> App<P> {
 		) {
 			self.redraw();
 		}
+		if self.pointer_in_folder() && self.begin_folder_drag() {
+			return;
+		}
 		if let Some(index) = (!self.interaction.panel_open())
 			.then(|| self.tab_close_at_cursor())
 			.flatten()
@@ -418,7 +431,7 @@ impl<P: super::SendEvent> App<P> {
 			if !self.pointer_in_panel() {
 				self.action(Command::Settings);
 			}
-		} else if self.pointer_in_outline() {
+		} else if self.pointer_in_folder() || self.pointer_in_outline() {
 			// The drawer owns presses inside it; one between its rows
 			// must not start a document selection underneath.
 			self.interaction.reset_clicks();
@@ -494,6 +507,7 @@ impl<P: super::SendEvent> App<P> {
 		let action = self.release_widget();
 		self.interaction.scrollbar = None;
 		self.interaction.panel_grab = None;
+		self.folder.grab = None;
 		if was_pressed {
 			if let Some(action) = action {
 				self.action(action);
@@ -543,6 +557,7 @@ impl<P: super::SendEvent> App<P> {
 		self.interaction.drag_at = None;
 		self.interaction.scrollbar = None;
 		self.interaction.panel_grab = None;
+		self.folder.grab = None;
 		self.interaction.modifiers = Default::default();
 		self.refresh_hover();
 		self.redraw();
@@ -635,6 +650,10 @@ impl<P: super::SendEvent> App<P> {
 			if self.pointer_in_panel() {
 				self.scroll_panel(-dy);
 			}
+			return;
+		}
+		if self.pointer_in_folder() {
+			self.scroll_folder(-dy);
 			return;
 		}
 		if self.pointer_in_outline() {
@@ -745,6 +764,11 @@ impl<P: super::SendEvent> App<P> {
 					"," => self.action(Command::Settings),
 					"b" if !self.panel_has_focus() => {
 						self.action(Command::Outline)
+					}
+					"o" if self.interaction.modifiers.shift_key()
+						&& !self.panel_has_focus() =>
+					{
+						self.action(Command::OpenFolder)
 					}
 					"o" if !self.panel_has_focus() => {
 						self.action(Command::Open)
@@ -980,6 +1004,9 @@ impl<P: super::SendEvent> App<P> {
 			self.redraw();
 			return true;
 		}
+		if self.phone_folder_open() && self.folder_key(key) {
+			return true;
+		}
 		if self.panel_has_focus()
 			&& !matches!(
 				key,
@@ -987,7 +1014,7 @@ impl<P: super::SendEvent> App<P> {
 			) {
 			return true;
 		}
-		false
+		self.folder_key(key)
 	}
 
 	fn document_key(&mut self, key: &Key) -> bool {
@@ -1025,6 +1052,9 @@ impl<P: super::SendEvent> App<P> {
 			{
 				self.reveal_outline(index);
 			}
+			if let Command::FolderEntry(index) = action {
+				self.reveal_folder(index);
+			}
 			self.reveal_panel_focus();
 		}
 		self.redraw();
@@ -1053,7 +1083,12 @@ impl<P: super::SendEvent> App<P> {
 		self.interaction.drag_at = None;
 		self.interaction.scrollbar = None;
 		self.interaction.panel_grab = None;
+		self.folder.grab = None;
 		self.interaction.close_outline();
+		if self.folder.open {
+			self.set_folder_open(false);
+			self.request(false);
+		}
 		self.refresh_hover();
 		self.redraw();
 	}

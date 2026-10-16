@@ -1,22 +1,30 @@
-//! Phone tab presentation over the shared reader sessions and scrolling list.
+//! A single phone sidebar with independent tab and folder lists.
 use super::{
 	components::{self, ButtonKind, button},
 	icons,
 	list::List,
 };
 use crate::{
-	app::Button,
+	app::{Button, folder::Browser},
 	lang::Lang,
 	layout::{Draw, Paint, Rect, TextShaper},
-	state::{Command, InteractionState, ReaderTab},
+	settings::ReaderSettings,
+	state::{Command, InteractionState, ReaderTab, SidebarTab},
 };
 use markview_layout::style::{Color, ColorField as C, Condition};
+use std::path::Path;
 
-pub(in crate::app) fn rect(width: f32, height: f32) -> Rect {
+const HEADER: f32 = 104.;
+
+pub(in crate::app) fn rect(
+	width: f32,
+	height: f32,
+	preferred_width: f32,
+) -> Rect {
 	Rect {
 		x: 0.,
 		y: 0.,
-		w: 320_f32.min((width - 48.).max(0.)),
+		w: preferred_width.min((width - 48.).max(0.)),
 		h: height,
 	}
 }
@@ -25,8 +33,9 @@ pub(in crate::app) fn animated_rect(
 	width: f32,
 	height: f32,
 	reveal: f32,
+	preferred_width: f32,
 ) -> Rect {
-	let mut panel = rect(width, height);
+	let mut panel = rect(width, height, preferred_width);
 	panel.x = -panel.w * (1.0 - reveal);
 	panel
 }
@@ -36,8 +45,9 @@ pub(super) fn slide_buttons(
 	width: f32,
 	height: f32,
 	reveal: f32,
+	preferred_width: f32,
 ) {
-	let panel = animated_rect(width, height, reveal);
+	let panel = animated_rect(width, height, reveal, preferred_width);
 	for button in buttons {
 		if button.rect.x >= panel.w {
 			button.rect.x = panel.x + panel.w;
@@ -56,15 +66,16 @@ pub(in crate::app) fn list(
 	height: f32,
 	count: usize,
 	scroll: f32,
+	preferred_width: f32,
 ) -> List {
-	let panel = rect(width, height);
+	let panel = rect(width, height, preferred_width);
 	List::new(
 		panel,
 		Rect {
 			x: 16.,
-			y: 64.,
+			y: HEADER + 4.,
 			w: (panel.w - 32.).max(0.),
-			h: (height - 128.).max(0.),
+			h: (height - HEADER - 68.).max(0.),
 		},
 		0.,
 		56.,
@@ -74,7 +85,7 @@ pub(in crate::app) fn list(
 }
 pub(super) fn toggle(lang: Lang) -> Button {
 	let mut toggle = button(
-		lang.toolbar_tabs(),
+		lang.sidebar_title(),
 		Command::Tabs,
 		Rect {
 			x: 4.,
@@ -83,7 +94,7 @@ pub(super) fn toggle(lang: Lang) -> Button {
 			h: 40.,
 		},
 	);
-	toggle.icon = Some(icons::TABS);
+	toggle.icon = Some(icons::SIDEBAR);
 	toggle.kind = ButtonKind::Quiet;
 	toggle
 }
@@ -132,7 +143,12 @@ fn row_buttons(
 	}
 	rows
 }
-fn controls(panel: Rect, width: f32, lang: Lang) -> Vec<Button> {
+fn controls(
+	panel: Rect,
+	width: f32,
+	lang: Lang,
+	page: SidebarTab,
+) -> Vec<Button> {
 	let mut close = button(
 		lang.panel_close(),
 		Command::Tabs,
@@ -161,8 +177,16 @@ fn controls(panel: Rect, width: f32, lang: Lang) -> Vec<Button> {
 	new_page.icon = Some(icons::PLUS);
 	new_page.kind = ButtonKind::Quiet;
 	let mut open = button(
-		lang.toolbar_open(),
-		Command::Open,
+		if page == SidebarTab::Tabs {
+			lang.toolbar_open()
+		} else {
+			lang.sidebar_open_folder()
+		},
+		if page == SidebarTab::Tabs {
+			Command::Open
+		} else {
+			Command::OpenFolder
+		},
 		Rect {
 			x: panel.x + 16.,
 			y: panel.h - 54.,
@@ -184,7 +208,31 @@ fn controls(panel: Rect, width: f32, lang: Lang) -> Vec<Button> {
 		},
 	);
 	scrim.id = markview_ui_core::WidgetId::new(12, 0);
-	vec![close, new_page, open, scrim]
+	let mut buttons = vec![close, new_page, open];
+	for (index, (tab, label)) in [
+		(SidebarTab::Tabs, lang.toolbar_tabs()),
+		(SidebarTab::Folder, lang.folder_files()),
+	]
+	.into_iter()
+	.enumerate()
+	{
+		let mut b = button(
+			label,
+			Command::SidebarTab(tab),
+			Rect {
+				x: panel.x + 16. + index as f32 * (panel.w - 32.) / 2.,
+				y: 56.,
+				w: (panel.w - 32.) / 2.,
+				h: 44.,
+			},
+		);
+		b.active = tab == page;
+		b.kind = ButtonKind::Quiet;
+		b.clip = Some(panel);
+		buttons.push(b);
+	}
+	buttons.push(scrim);
+	buttons
 }
 pub(super) fn buttons(
 	ui: &mut TextShaper,
@@ -193,11 +241,12 @@ pub(super) fn buttons(
 	scroll: f32,
 	size: (f32, f32),
 	lang: Lang,
+	preferred_width: f32,
 ) -> Vec<Button> {
 	components::appearance(ui);
-	let list = list(size.0, size.1, tabs.len(), scroll);
+	let list = list(size.0, size.1, tabs.len(), scroll, preferred_width);
 	let mut buttons = list.hit(row_buttons(ui, tabs, active, list, lang));
-	buttons.extend(controls(list.panel, size.0, lang));
+	buttons.extend(controls(list.panel, size.0, lang, SidebarTab::Tabs));
 	buttons
 }
 
@@ -210,10 +259,14 @@ fn draw_entry(
 	surface.label = "".into();
 	surface.active = false;
 	let mut out = components::draw_button(ui, interaction, &surface, true);
-	let open = b.action == Command::Open;
+	let open = matches!(b.action, Command::Open | Command::OpenFolder);
 	if open {
 		out.push(Draw::Icon {
-			paths: icons::OPEN,
+			paths: if b.action == Command::OpenFolder {
+				icons::REVEAL
+			} else {
+				icons::OPEN
+			},
 			paint: Paint::Styled(Condition::Panel, C::Color),
 			x: b.rect.x + 8.,
 			y: b.rect.y + (b.rect.h - 20.) / 2.,
@@ -234,20 +287,20 @@ fn draw_entry(
 	));
 	out
 }
-pub(super) fn draw(
+fn shell(
 	ui: &mut TextShaper,
-	tabs: &[ReaderTab],
-	active: usize,
-	scroll: f32,
 	interaction: &InteractionState,
 	size: (f32, f32),
-	lang: Lang,
+	settings: &ReaderSettings,
+	count: usize,
 ) -> Vec<Draw> {
+	let lang = settings.lang();
+	let preferred_width = 320_f32;
 	components::appearance(ui);
 	let (width, height) = size;
 	let reveal = interaction.tabs_reveal();
-	let mut list = list(width, height, tabs.len(), scroll);
-	let offset = animated_rect(width, height, reveal).x;
+	let mut list = list(width, height, count, 0., preferred_width);
+	let offset = animated_rect(width, height, reveal, preferred_width).x;
 	list.panel.x += offset;
 	list.viewport.x += offset;
 	let mut scrim = ui.stylesheet.color(Condition::Ui, C::Scrim);
@@ -282,7 +335,7 @@ pub(super) fn draw(
 		},
 		Rect {
 			x: offset + 16.,
-			y: 55.,
+			y: HEADER - 1.,
 			w: list.panel.w - 32.,
 			h: 1.,
 		},
@@ -294,7 +347,8 @@ pub(super) fn draw(
 	] {
 		out.push(components::line(r, Condition::Panel, C::BorderColor));
 	}
-	let title = ui.fit(lang.toolbar_tabs(), 16., (list.panel.w - 180.).max(0.));
+	let title =
+		ui.fit(lang.sidebar_title(), 16., (list.panel.w - 180.).max(0.));
 	let title_width = ui.text_width(&title, 16.);
 	out.extend(ui.label(
 		&title,
@@ -303,13 +357,53 @@ pub(super) fn draw(
 		34.,
 		Paint::Styled(Condition::Panel, C::Color),
 	));
-	out.extend(ui.label(
-		&format!("· {}", tabs.len()),
-		13.,
-		offset + 48. + title_width + 8.,
-		34.,
-		Paint::Styled(Condition::Panel, C::Muted),
-	));
+	if interaction.sidebar_tab == SidebarTab::Tabs {
+		out.extend(ui.label(
+			&format!("· {count}"),
+			13.,
+			offset + 48. + title_width + 8.,
+			34.,
+			Paint::Styled(Condition::Panel, C::Muted),
+		));
+	}
+
+	for b in controls(list.panel, width, lang, interaction.sidebar_tab) {
+		if matches!(b.action, Command::Open | Command::OpenFolder) {
+			out.extend(draw_entry(ui, interaction, &b));
+		} else if b.rect.x < list.panel.x + list.panel.w {
+			out.extend(components::draw_button(ui, interaction, &b, true));
+			if b.active {
+				out.push(components::line(
+					Rect {
+						y: b.rect.y + b.rect.h - 2.,
+						h: 2.,
+						..b.rect
+					},
+					Condition::Panel,
+					C::Accent,
+				));
+			}
+		}
+	}
+	out
+}
+
+pub(super) fn draw(
+	ui: &mut TextShaper,
+	tabs: &[ReaderTab],
+	active: usize,
+	scroll: f32,
+	interaction: &InteractionState,
+	size: (f32, f32),
+	settings: &ReaderSettings,
+) -> Vec<Draw> {
+	let lang = settings.lang();
+	let mut list = list(size.0, size.1, tabs.len(), scroll, 320_f32);
+	let offset =
+		animated_rect(size.0, size.1, interaction.tabs_reveal(), 320_f32).x;
+	list.panel.x += offset;
+	list.viewport.x += offset;
+	let mut out = shell(ui, interaction, size, settings, tabs.len());
 	let background = ui.stylesheet.color(Condition::Panel, C::Background);
 	let accent = ui.stylesheet.color(Condition::Panel, C::Accent);
 	let selected =
@@ -347,12 +441,80 @@ pub(super) fn draw(
 	}
 	out.push(list.clip(rows));
 	list.draw_bar(&mut out, ui, interaction);
-	for b in controls(list.panel, width, lang) {
-		if b.action == Command::Open {
-			out.extend(draw_entry(ui, interaction, &b));
-		} else if b.rect.x < list.panel.x + list.panel.w {
-			out.extend(components::draw_button(ui, interaction, &b, true));
+	out
+}
+
+pub(in crate::app) fn folder_rect(panel: Rect) -> Rect {
+	Rect {
+		y: HEADER,
+		h: (panel.h - HEADER - 64.).max(0.),
+		..panel
+	}
+}
+
+pub(super) fn folder_buttons(
+	browser: Option<&Browser>,
+	panel: Rect,
+	width: f32,
+	lang: Lang,
+) -> Vec<Button> {
+	let mut buttons = browser.map_or_else(Vec::new, |browser| {
+		super::folder::buttons(browser, folder_rect(panel), lang)
+	});
+	buttons.extend(controls(panel, width, lang, SidebarTab::Folder));
+	buttons
+}
+
+pub(super) fn draw_folder(
+	ui: &mut TextShaper,
+	browser: Option<&Browser>,
+	active: Option<&Path>,
+	interaction: &InteractionState,
+	size: (f32, f32),
+	settings: &ReaderSettings,
+) -> Vec<Draw> {
+	let mut out = shell(ui, interaction, size, settings, 0);
+	let panel =
+		animated_rect(size.0, size.1, interaction.tabs_reveal(), 320_f32);
+	let body = folder_rect(panel);
+	if let Some(browser) = browser.filter(|b| b.tree.is_some()) {
+		out.push(Draw::Clipped {
+			rect: body,
+			draws: super::folder::draw(
+				ui,
+				browser,
+				active,
+				interaction,
+				super::folder::Pane {
+					body,
+					surface: body,
+				},
+				settings.lang(),
+			),
+		});
+	} else {
+		let mut prompt = Vec::new();
+		for (index, line) in super::controls::wrap(
+			ui,
+			settings.lang().sidebar_folder_prompt(),
+			13.,
+			(body.w - 32.).max(0.),
+		)
+		.into_iter()
+		.enumerate()
+		{
+			prompt.extend(ui.label(
+				&line,
+				13.,
+				body.x + 16.,
+				body.y + 32. + index as f32 * 20.,
+				Paint::Styled(Condition::Panel, C::Muted),
+			));
 		}
+		out.push(Draw::Clipped {
+			rect: body,
+			draws: prompt,
+		});
 	}
 	out
 }
@@ -379,9 +541,17 @@ mod tests {
 		};
 		// Freeze outgoing geometry at several points after input returns to the toolbar.
 		for reveal in [1.0, 0.75, 0.5, 0.25] {
-			let mut outgoing = controls(rect(width, height), width, Lang::En);
-			slide_buttons(&mut outgoing, width, height, reveal);
-			for button in outgoing.iter().filter(|b| !b.label.is_empty()) {
+			let mut outgoing = controls(
+				rect(width, height, 320.),
+				width,
+				Lang::En,
+				SidebarTab::Tabs,
+			);
+			slide_buttons(&mut outgoing, width, height, reveal, 320.);
+			for button in outgoing.iter().filter(|b| {
+				!b.label.is_empty()
+					&& !matches!(b.action, Command::SidebarTab(_))
+			}) {
 				let draws = if button.action == Command::Open {
 					draw_entry(&mut ui, &interaction, button)
 				} else {
@@ -408,14 +578,14 @@ mod tests {
 		let (width, height) = (320., 760.);
 		for reveal in [0.25, 0.5, 0.75, 1.0] {
 			let mut buttons =
-				buttons(&mut ui, &tabs, 0, 0., (width, height), Lang::En);
-			slide_buttons(&mut buttons, width, height, reveal);
+				buttons(&mut ui, &tabs, 0, 0., (width, height), Lang::En, 320.);
+			slide_buttons(&mut buttons, width, height, reveal, 320.);
 			let target = buttons
 				.iter()
 				.find(|b| b.action == Command::SelectTab(0))
 				.unwrap();
-			let mut clip = list(width, height, tabs.len(), 0.).viewport;
-			clip.x += animated_rect(width, height, reveal).x;
+			let mut clip = list(width, height, tabs.len(), 0., 320.).viewport;
+			clip.x += animated_rect(width, height, reveal, 320.).x;
 			assert_eq!(target.clip, Some(clip));
 			let visible = target
 				.widget()
@@ -448,9 +618,9 @@ mod tests {
 		let mut ui = crate::test_support::shaper();
 		for reveal in [0.0, 0.25, 0.875, 1.0] {
 			let mut buttons =
-				buttons(&mut ui, &[], 0, 0., (400., 760.), Lang::En);
-			slide_buttons(&mut buttons, 400., 760., reveal);
-			let panel = animated_rect(400., 760., reveal);
+				buttons(&mut ui, &[], 0, 0., (400., 760.), Lang::En, 320.);
+			slide_buttons(&mut buttons, 400., 760., reveal, 320.);
+			let panel = animated_rect(400., 760., reveal, 320.);
 			let scrim = buttons.last().unwrap();
 			assert_eq!(scrim.rect.x, panel.x + panel.w);
 			assert_eq!(scrim.rect.x + scrim.rect.w, 400.);
@@ -499,7 +669,10 @@ mod tests {
 					..Default::default()
 				},
 				(320., 760.),
-				Lang::En,
+				&ReaderSettings {
+					lang: Some(Lang::En),
+					..Default::default()
+				},
 			));
 			let scrolled = first_label(draw(
 				&mut ui,
@@ -511,20 +684,23 @@ mod tests {
 					..Default::default()
 				},
 				(320., 760.),
-				Lang::En,
+				&ReaderSettings {
+					lang: Some(Lang::En),
+					..Default::default()
+				},
 			));
 			assert_eq!(resting.0, 32.);
 			assert_eq!(scrolled.0, resting.0);
 			assert_eq!(resting.1 - scrolled.1, 17.);
 			let buttons =
-				buttons(&mut ui, &tabs, 0, 17., (320., 760.), Lang::En);
+				buttons(&mut ui, &tabs, 0, 17., (320., 760.), Lang::En, 320.);
 			let select = buttons
 				.iter()
 				.find(|b| b.action == Command::SelectTab(0))
 				.unwrap();
 			assert!(select.rect.contains(scrolled.0, scrolled.1));
-			assert_eq!(select.rect.y, 47.);
-			assert_eq!(select.widget().hit_rect().unwrap().y, 64.);
+			assert_eq!(select.rect.y, HEADER + 4. - 17.);
+			assert_eq!(select.widget().hit_rect().unwrap().y, HEADER + 4.);
 		}
 	}
 
@@ -537,7 +713,7 @@ mod tests {
 			})
 			.collect();
 		for width in [320., 411., 599.] {
-			let list = list(width, 760., tabs.len(), f32::INFINITY);
+			let list = list(width, 760., tabs.len(), f32::INFINITY, 320.);
 			assert_eq!(list.scroll, list.max_scroll());
 			assert!(list.viewport.w < width - 48.);
 			let buttons = buttons(
@@ -547,6 +723,7 @@ mod tests {
 				list.scroll,
 				(width, 760.),
 				Lang::En,
+				320.,
 			);
 			assert!(!buttons.iter().any(|b| b.action == Command::SelectTab(0)));
 			assert!(
@@ -586,7 +763,10 @@ mod tests {
 						..Default::default()
 					},
 					(width, 760.),
-					Lang::En
+					&ReaderSettings {
+						lang: Some(Lang::En),
+						..Default::default()
+					},
 				)
 				.iter()
 				.any(|d| matches!(d, Draw::Clipped { .. }))

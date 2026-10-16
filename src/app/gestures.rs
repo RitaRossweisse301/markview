@@ -36,6 +36,7 @@ enum Surface {
 	Overflow(usize, usize),
 	Panel,
 	Outline,
+	Folder,
 	Tabs,
 }
 
@@ -135,7 +136,7 @@ impl<P: super::SendEvent> App<P> {
 				},
 			));
 		}
-		if self.pointer_in_outline() {
+		if self.pointer_in_outline() || self.pointer_in_folder() {
 			return None;
 		}
 		if let Some(index) = self.tab_close_at_cursor() {
@@ -166,6 +167,9 @@ impl<P: super::SendEvent> App<P> {
 			} else {
 				Surface::None
 			};
+		}
+		if self.pointer_in_folder() {
+			return Surface::Folder;
 		}
 		if self.pointer_in_outline() {
 			return Surface::Outline;
@@ -513,6 +517,7 @@ impl<P: super::SendEvent> App<P> {
 			),
 			Surface::Tabs => (self.tab_strip.scroll, 0.0),
 			Surface::Outline => (0.0, self.interaction.outline_scroll),
+			Surface::Folder => (0.0, self.folder.scroll),
 			Surface::Panel => (
 				0.0,
 				self.panel_scroll_range().map_or(0.0, |(scroll, _)| scroll),
@@ -525,6 +530,7 @@ impl<P: super::SendEvent> App<P> {
 			Surface::None => {}
 			Surface::Panel => self.scroll_panel(-dy),
 			Surface::Outline => self.scroll_outline(-dy),
+			Surface::Folder => self.scroll_folder(-dy),
 			Surface::Tabs => {
 				let layout = self.tab_layout();
 				self.tab_strip.scroll =

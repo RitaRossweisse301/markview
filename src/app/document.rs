@@ -99,6 +99,11 @@ impl<P: super::SendEvent> App<P> {
 		}
 	}
 	pub(super) fn open(&mut self, path: PathBuf) {
+		if path.is_dir() {
+			self.restore_session();
+			self.open_folder(path, true);
+			return;
+		}
 		self.open_document(
 			path,
 			crate::security::Security::local(crate::security::Trust::Trusted),
@@ -125,6 +130,7 @@ impl<P: super::SendEvent> App<P> {
 		security: crate::security::Security,
 	) {
 		self.restore_session();
+		self.folder.navigation_revision += 1;
 		self.interaction.modal = None;
 		self.clear_input_focus();
 		self.cancel_gestures();
@@ -163,6 +169,7 @@ impl<P: super::SendEvent> App<P> {
 	}
 	pub(super) fn new_page(&mut self) {
 		self.restore_session();
+		self.folder.navigation_revision += 1;
 		self.interaction.modal = None;
 		self.clear_input_focus();
 		self.cancel_gestures();
@@ -188,6 +195,10 @@ impl<P: super::SendEvent> App<P> {
 		self.redraw();
 	}
 	pub(super) fn select_tab(&mut self, index: usize) {
+		self.folder.navigation_revision += 1;
+		if self.folder_inset() == 0. {
+			self.set_folder_open(false);
+		}
 		self.interaction.modal = None;
 		self.clear_input_focus();
 		self.cancel_gestures();
@@ -242,6 +253,7 @@ impl<P: super::SendEvent> App<P> {
 			}
 			tabs::Closed::Active | tabs::Closed::Inactive => {}
 		}
+		self.folder.navigation_revision += 1;
 		self.watch = None;
 		if self.readers.entries().is_empty() {
 			// No tab is left, so the worker can drop the document it kept for

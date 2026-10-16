@@ -77,6 +77,7 @@ impl<P: super::SendEvent> App<P> {
 				width,
 				height,
 				self.interaction.tabs_reveal(),
+				320_f32,
 			)
 		} else {
 			chrome::panel_rect(width, height)
@@ -202,6 +203,12 @@ impl<P: super::SendEvent> App<P> {
 			.is_some()
 	}
 
+	fn holding_pointer(&self) -> bool {
+		self.interaction.pointer_down.is_some()
+			|| self.interaction.scrollbar.is_some()
+			|| self.tab_strip.drag.is_some()
+	}
+
 	/// Hover state follows scrolling and reflow, not only pointer motion.
 	pub(super) fn refresh_hover(&mut self) {
 		if let Some(viewer) = &self.interaction.viewer {
@@ -223,12 +230,11 @@ impl<P: super::SendEvent> App<P> {
 			markview_ui_core::Input::Move(self.interaction.cursor),
 		);
 		let over_control = controls.hit.hit(self.interaction.cursor).is_some();
-		let holding = self.interaction.pointer_down.is_some()
-			|| self.interaction.scrollbar.is_some()
-			|| self.tab_strip.drag.is_some();
+		let holding = self.holding_pointer();
 		// The drawer covers document content, so it must not inherit the link
 		// or image hover underneath it.
-		let over_outline = self.pointer_in_outline();
+		let over_outline =
+			self.pointer_in_outline() || self.pointer_in_folder();
 		let idle = !self.interaction.panel_open()
 			&& self.interaction.modal.is_none()
 			&& !holding
@@ -434,11 +440,17 @@ impl<P: super::SendEvent> App<P> {
 			.path
 			.as_deref()
 			.and_then(std::path::Path::parent);
-		match crate::link::resolve_for(
-			url,
-			directory,
-			&self.readers.session.security,
-		) {
+		let folder_target =
+			self.folder_link(anchor::link_target(url), directory);
+		let resolved =
+			folder_target.map(|path| link::classify(&path)).or_else(|| {
+				crate::link::resolve_for(
+					url,
+					directory,
+					&self.readers.session.security,
+				)
+			});
+		match resolved {
 			Some(link::Target::Markdown(path)) => {
 				let placement = if background {
 					state::TabPlacement::Background

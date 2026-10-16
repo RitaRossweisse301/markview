@@ -141,6 +141,10 @@ pub(super) struct SavedTab {
 }
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub(super) struct Session {
+	#[serde(default)]
+	folder: Option<PathBuf>,
+	#[serde(default)]
+	folder_open: bool,
 	version: u32,
 	active: usize,
 	tabs: Vec<SavedTab>,
@@ -213,6 +217,8 @@ impl Tabs {
 			})
 			.collect();
 		Session {
+			folder: None,
+			folder_open: false,
 			version: 1,
 			active: active.saturating_sub(1),
 			tabs,
@@ -278,7 +284,9 @@ impl<P> App<P> {
 		let Some(path) = &self.persistence.path else {
 			return;
 		};
-		let session = self.readers.capture_session(self.paste_dir.path());
+		let mut session = self.readers.capture_session(self.paste_dir.path());
+		session.folder = self.folder.root().cloned();
+		session.folder_open = self.folder.open;
 		if let Err(error) = session.write(path) {
 			log::warn!("Cannot save browsing session: {error:#}");
 		}
@@ -296,7 +304,14 @@ impl<P: super::SendEvent> App<P> {
 		}
 		if let Some(path) = &self.persistence.path {
 			match Session::read(path) {
-				Ok(session) => self.readers.restore_session(session),
+				Ok(session) => {
+					let folder = session.folder.clone();
+					self.folder.open = session.folder_open;
+					self.readers.restore_session(session);
+					if let Some(root) = folder {
+						self.open_folder(root, false);
+					}
+				}
 				Err(error) if !path.exists() => {
 					log::debug!("No saved browsing session: {error:#}")
 				}
@@ -333,7 +348,14 @@ impl<P: super::SendEvent> App<P> {
 		{
 			return;
 		}
-		let signature = self.readers.signature();
+		let signature = {
+			use std::hash::{Hash, Hasher};
+			let mut hash = std::hash::DefaultHasher::new();
+			self.readers.signature().hash(&mut hash);
+			self.folder.root().hash(&mut hash);
+			self.folder.open.hash(&mut hash);
+			hash.finish()
+		};
 		if self.persistence.signature != Some(signature) {
 			self.persistence.signature = Some(signature);
 			self.persistence

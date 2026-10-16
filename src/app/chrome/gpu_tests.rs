@@ -128,11 +128,11 @@ fn settings_and_selection_frame() -> Result<()> {
 		];
 		overlay.extend(draw_footer(
 			&mut crate::test_support::shaper(),
-			Some(counts),
-			Some(counts),
+			(Some(counts), Some(counts)),
 			None,
 			"",
 			(width, height),
+			0.,
 			Lang::En,
 		));
 		let mut ui = crate::test_support::shaper();
@@ -317,11 +317,11 @@ fn notice_strip_and_confirmation_frames() -> Result<()> {
 			.into_iter()
 			.chain(draw_footer(
 				ui,
-				None,
-				None,
+				(None, None),
 				None,
 				"",
 				(width, height),
+				0.,
 				Lang::En,
 			))
 			.collect()
@@ -352,6 +352,7 @@ fn notice_strip_and_confirmation_frames() -> Result<()> {
 			&mut ui,
 			width,
 			37,
+			0.,
 			&InteractionState::default(),
 			Lang::En,
 		));
@@ -726,6 +727,58 @@ fn tab_strip_frames_clip_overflow_at_fractional_dpi() -> Result<()> {
 	Ok(())
 }
 
+#[test]
+fn sidebar_icon_has_a_solid_left_pane() -> Result<()> {
+	let mut renderer = pollster::block_on(Renderer::new(None))?;
+	let horizontal = HashMap::new();
+	for scale in [1.0_f32, 1.25, 2.0, 10.0] {
+		let view = View {
+			width: (24.0 * scale) as u32,
+			height: (24.0 * scale) as u32,
+			scale,
+			left: 0.,
+			top: 0.,
+			bottom: 0.,
+			scroll: 0.,
+			theme: Theme::Light,
+			horizontal: &horizontal,
+			selection: None,
+			revision: 0,
+			hovered_link: None,
+			hovered_overflow: None,
+			held_overflow: None,
+		};
+		let image = crate::test_support::render_goldens::capture(
+			&mut renderer,
+			&Default::default(),
+			&view,
+			&[Draw::Icon {
+				paths: icons::SIDEBAR,
+				paint: Paint::Text,
+				x: 0.,
+				y: 0.,
+				size: 24.,
+			}],
+		)?;
+		let pixel = |x: f32, y: f32| {
+			*image.get_pixel((x * scale) as u32, (y * scale) as u32)
+		};
+		let solid = pixel(6., 12.);
+		assert_ne!(solid, pixel(0., 0.));
+		assert_eq!(pixel(12., 12.), pixel(0., 0.));
+		for y in (5.5 * scale).ceil() as u32..(18.5 * scale) as u32 {
+			for x in (3.2 * scale).ceil() as u32..(9.5 * scale) as u32 {
+				assert_eq!(
+					*image.get_pixel(x, y),
+					solid,
+					"seam in the sidebar pane at ({x}, {y}), scale {scale}"
+				);
+			}
+		}
+	}
+	Ok(())
+}
+
 /// A vector icon keeps its optical centre inside its button at any device
 /// phase. The icon bakes its subpixel position into the raster, so it must
 /// stay centred on a button that sits on a half device pixel instead of
@@ -1061,6 +1114,7 @@ fn previewing_recedes_the_styles_and_fonts_pages() {
 					..Default::default()
 				};
 				let mut chrome = Chrome {
+					folder: None,
 					frame: crate::app::frame::Layout::new(
 						crate::settings::WindowLayout::Macos,
 						true,
@@ -1218,6 +1272,7 @@ fn the_fonts_page_draws_its_open_option_list() {
 	));
 	let chrome_tabs: Vec<ReaderTab> = Vec::new();
 	let mut chrome = Chrome {
+		folder: None,
 		frame: crate::app::frame::Layout::new(
 			crate::settings::WindowLayout::Macos,
 			true,
@@ -1319,6 +1374,7 @@ fn dismissed_pages_stop_drawing_and_answering_pointers() {
 		});
 		interaction.show_panel(PanelPage::Closed);
 		let mut chrome = Chrome {
+			folder: None,
 			frame: crate::app::frame::Layout::new(
 				crate::settings::WindowLayout::Macos,
 				true,
@@ -1759,6 +1815,7 @@ fn redesigned_chrome_frames() -> Result<()> {
 						Vec::new()
 					};
 					let mut chrome = Chrome {
+						folder: None,
 						frame,
 						input_draws,
 						backend: None,

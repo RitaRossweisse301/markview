@@ -4,6 +4,7 @@ mod controls;
 mod empty;
 mod export;
 use super::font_panel::view as fonts;
+pub(in crate::app) mod folder;
 mod footer;
 mod frame;
 #[cfg(test)]
@@ -116,6 +117,7 @@ fn draw_banner(
 	shaper: &mut TextShaper,
 	width: f32,
 	deferred: usize,
+	left: f32,
 	interaction: &InteractionState,
 	lang: Lang,
 ) -> Vec<Draw> {
@@ -136,13 +138,14 @@ fn draw_banner(
 		),
 	];
 	let buttons = banner_buttons(shaper, width, lang);
-	let available = buttons.first().map_or(width - 32.0, |b| b.rect.x - 16.0);
+	let available =
+		buttons.first().map_or(width - 32.0, |b| b.rect.x - 16.0) - left;
 	let label =
 		shaper.fit(&lang.notice_remote_images(deferred), 12.0, available);
 	out.extend(shaper.label(
 		&label,
 		12.0,
-		16.0,
+		16.0 + left,
 		TOP + BANNER / 2.0 + 5.0,
 		Paint::Styled(Condition::Statusbar, C::Color),
 	));
@@ -175,6 +178,7 @@ fn style_page_buttons(
 }
 
 pub(super) struct Chrome<'a> {
+	pub folder: Option<&'a super::folder::Browser>,
 	pub(super) input_draws: Vec<Draw>,
 	pub(super) backend: Option<wgpu::Backend>,
 	pub(super) ui: &'a mut TextShaper,
@@ -252,10 +256,11 @@ impl<'a> Chrome<'a> {
 			self.ui,
 			(!self.session.layout_pending).then_some(self.session.counts),
 			self.interaction.selection_counts.map(|(_, counts)| counts),
-			self.width,
+			self.width - self.footer_inset(),
 			self.settings.lang(),
 		);
-		let (_, rect) = footer::trailing(self.ui, &path, used, size)?;
+		let (_, rect) =
+			footer::trailing(self.ui, &path, used + self.footer_inset(), size)?;
 		// The label holds the whole path, so a copy never depends on what fit.
 		let label: std::sync::Arc<str> = std::sync::Arc::from(&*path);
 		Some(components::button(label, Command::CopyPath, rect))
@@ -344,19 +349,29 @@ impl<'a> Chrome<'a> {
 				self.settings.lang(),
 			)
 		} else if self.interaction.panel == crate::state::PanelPage::Tabs {
-			let mut buttons = tab_drawer::buttons(
-				self.ui,
-				self.tabs,
-				self.active_tab,
-				self.tab_strip.drawer_scroll,
-				(width, height),
-				self.settings.lang(),
-			);
+			let mut buttons = match self.interaction.sidebar_tab {
+				crate::state::SidebarTab::Tabs => tab_drawer::buttons(
+					self.ui,
+					self.tabs,
+					self.active_tab,
+					self.tab_strip.drawer_scroll,
+					(width, height),
+					self.settings.lang(),
+					320_f32,
+				),
+				crate::state::SidebarTab::Folder => tab_drawer::folder_buttons(
+					self.folder,
+					tab_drawer::rect(width, height, 320_f32),
+					width,
+					self.settings.lang(),
+				),
+			};
 			tab_drawer::slide_buttons(
 				&mut buttons,
 				width,
 				height,
 				self.interaction.tabs_reveal(),
+				320_f32,
 			);
 			buttons
 		} else if self.interaction.panel_open()
@@ -420,6 +435,54 @@ impl<'a> Chrome<'a> {
 		self.apply_button_load_state(&mut buttons);
 		buttons
 	}
+	fn folder_toggle(&self) -> Option<Button> {
+		Some(folder::toggle(
+			self.frame.sidebar_toggle?,
+			self.settings.lang(),
+		))
+	}
+
+	fn footer_inset(&self) -> f32 {
+		if !self.tab_strip.phone
+			&& self.folder.is_some_and(|b| b.tree.is_some())
+		{
+			let drawer = self.folder_drawer();
+			(drawer.x + drawer.w).max(0.)
+		} else {
+			0.
+		}
+	}
+
+	fn folder_drawer(&self) -> Rect {
+		let reveal = self
+			.folder
+			.map_or(0., |b| self.interaction.folder_reveal(b.open));
+		folder::animated_rect(
+			folder::rect(self.width, self.height, TOP, BOTTOM, 260_f32),
+			reveal,
+		)
+	}
+
+	/// The document controls cannot receive input through the folder overlay.
+	fn reading_clip(&self) -> Rect {
+		let left = self
+			.folder
+			.filter(|b| !self.tab_strip.phone && b.tree.is_some())
+			.map_or(0., |_| {
+				let drawer = self.folder_drawer();
+				drawer.x + drawer.w
+			});
+		Rect {
+			x: left,
+			y: content_top(self.remote_notice.is_some()),
+			w: (self.width - left).max(0.),
+			h: (self.height
+				- content_top(self.remote_notice.is_some())
+				- super::search::bottom(self.session.search.open))
+			.max(0.),
+		}
+	}
+
 	fn reading_buttons(&mut self) -> Vec<Button> {
 		let (width, height) = (self.width, self.height);
 		let mut buttons = toolbar_controls_at(
@@ -427,6 +490,25 @@ impl<'a> Chrome<'a> {
 			self.interaction.outline_open,
 			self.settings.lang(),
 		);
+		let clip = Rect {
+			x: self.frame.left_inset,
+			y: 0.,
+			w: (width - self.frame.left_inset).max(0.),
+			h: self.height,
+		};
+		for button in &mut buttons {
+			button.clip = Some(clip);
+		}
+		buttons.extend(self.folder_toggle());
+		if let Some(browser) =
+			self.folder.filter(|b| !self.tab_strip.phone && b.open)
+		{
+			buttons.extend(folder::buttons(
+				browser,
+				self.folder_drawer(),
+				self.settings.lang(),
+			));
+		}
 		if self.tab_strip.phone {
 			buttons.push(tab_drawer::toggle(self.settings.lang()));
 		}
@@ -434,12 +516,16 @@ impl<'a> Chrome<'a> {
 			&& self.session.snapshot.blocks.is_empty()
 		{
 			// Each `Open` control has its own identity and geometry.
-			buttons.extend(empty::buttons(
-				self.ui,
-				width,
-				height,
-				self.settings.lang(),
-			));
+			let clip = self.reading_clip();
+			buttons.extend(
+				empty::buttons(self.ui, width, height, self.settings.lang())
+					.into_iter()
+					.filter_map(|mut button| {
+						button.rect.intersect(clip)?;
+						button.clip = Some(clip);
+						Some(button)
+					}),
+			);
 		}
 
 		if self.remote_notice.is_some() {
@@ -464,6 +550,30 @@ impl<'a> Chrome<'a> {
 		// The footer's path answers a press last: nothing else in the
 		// reading view reaches the band it sits in.
 		buttons.extend(self.path_button());
+		let main = Rect {
+			x: self.frame.left_inset,
+			y: 0.,
+			w: (width - self.frame.left_inset).max(0.),
+			h: height,
+		};
+		buttons.retain_mut(|b| {
+			if matches!(
+				b.action,
+				Command::Folder
+					| Command::FolderRoot
+					| Command::FolderEntry(_)
+					| Command::OpenFolder
+					| Command::FolderRefresh
+					| Command::FolderCollapseAll
+			) {
+				return true;
+			}
+			let Some(clip) = b.clip.unwrap_or(main).intersect(main) else {
+				return false;
+			};
+			b.clip = Some(clip);
+			true
+		});
 		buttons
 	}
 
@@ -566,6 +676,7 @@ impl<'a> Chrome<'a> {
 				self.ui,
 				width,
 				deferred,
+				self.frame.left_inset,
 				self.interaction,
 				self.settings.lang(),
 			));
@@ -581,13 +692,18 @@ impl<'a> Chrome<'a> {
 		};
 		if !self.session.search.open {
 			let secondary = self.secondary();
+			let inset = self.footer_inset();
 			out.extend(draw_footer(
 				self.ui,
-				(!self.session.layout_pending).then_some(self.session.counts),
-				self.interaction.selection_counts.map(|(_, counts)| counts),
+				(
+					(!self.session.layout_pending)
+						.then_some(self.session.counts),
+					self.interaction.selection_counts.map(|(_, counts)| counts),
+				),
 				warning,
 				&secondary,
 				(width, height),
+				inset,
 				self.settings.lang(),
 			));
 		}
@@ -745,6 +861,29 @@ impl<'a> Chrome<'a> {
 				),
 			));
 		}
+		if let Some(browser) = self.folder.filter(|b| {
+			!self.tab_strip.phone && self.interaction.folder_reveal(b.open) > 0.
+		}) {
+			out.extend(folder::draw(
+				self.ui,
+				browser,
+				self.session.path.as_deref(),
+				self.interaction,
+				folder::Pane {
+					body: self.folder_drawer(),
+					surface: folder::surface(self.folder_drawer(), height),
+				},
+				self.settings.lang(),
+			));
+		}
+		if let Some(button) = self.folder_toggle() {
+			out.extend(components::draw_button(
+				self.ui,
+				self.interaction,
+				&button,
+				true,
+			));
+		}
 		if self.interaction.outline_reveal() > 0.0 {
 			out.extend(outline::draw(
 				self.ui,
@@ -758,15 +897,25 @@ impl<'a> Chrome<'a> {
 		}
 		let tabs_reveal = self.interaction.tabs_reveal();
 		if tabs_reveal > 0.0 {
-			let draws = tab_drawer::draw(
-				self.ui,
-				self.tabs,
-				self.active_tab,
-				self.tab_strip.drawer_scroll,
-				self.interaction,
-				(width, height),
-				self.settings.lang(),
-			);
+			let draws = match self.interaction.sidebar_tab {
+				crate::state::SidebarTab::Tabs => tab_drawer::draw(
+					self.ui,
+					self.tabs,
+					self.active_tab,
+					self.tab_strip.drawer_scroll,
+					self.interaction,
+					(width, height),
+					self.settings,
+				),
+				crate::state::SidebarTab::Folder => tab_drawer::draw_folder(
+					self.ui,
+					self.folder,
+					self.session.path.as_deref(),
+					self.interaction,
+					(width, height),
+					self.settings,
+				),
+			};
 			out.extend(draws);
 		}
 	}
@@ -961,11 +1110,19 @@ impl<'a> Chrome<'a> {
 
 	/// The outline drawer's rectangle for this window and notice strip.
 	pub(super) fn outline_drawer(&self) -> Rect {
+		let inset = if folder::docked(self.width, self.tab_strip.phone)
+			&& self.folder.is_some_and(|b| b.open && b.tree.is_some())
+		{
+			self.folder_drawer().w
+		} else {
+			0.
+		};
 		let mut drawer = outline::rect_above(
 			self.width,
 			self.height,
 			content_top(self.remote_notice.is_some()),
 			super::search::bottom(self.session.search.open),
+			300_f32.min(self.width - inset),
 		);
 		drawer.x += drawer.w * (1.0 - self.interaction.outline_reveal());
 		drawer

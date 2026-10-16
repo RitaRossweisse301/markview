@@ -609,6 +609,199 @@ fn physical_click(app: &mut App<StubProxy>, at: (f32, f32)) {
 }
 
 #[test]
+fn folder_collapse_all_clears_nested_expansion_and_scroll_on_both_layouts() {
+	use crate::app::folder::Tree;
+	let dir = tempfile::tempdir().unwrap();
+	std::fs::create_dir_all(dir.path().join("notes/nested")).unwrap();
+	std::fs::write(dir.path().join("notes/nested/Note.md"), SOURCE).unwrap();
+	for phone in [false, true] {
+		let (mut app, _) = reader(SOURCE, 320.);
+		app.tab_strip.phone = phone;
+		let mut tree = Tree::read(dir.path().into()).unwrap();
+		tree.toggle(0);
+		tree.toggle(1);
+		assert_eq!(tree.rows().len(), 3);
+		app.folder.tree = Some(tree);
+		app.set_folder_open(true);
+		app.interaction
+			.advance_drawers(Instant::now() + Duration::from_secs(1));
+		let buttons = app.buttons();
+		assert_eq!(
+			buttons
+				.iter()
+				.filter(|b| b.action == Command::OpenFolder)
+				.count(),
+			usize::from(phone),
+		);
+		let collapse = buttons
+			.iter()
+			.find(|b| b.action == Command::FolderCollapseAll)
+			.unwrap();
+		let path = app.readers.session.path.clone();
+		app.folder.scroll = 80.;
+		app.folder.grab = Some(4.);
+		physical_click(
+			&mut app,
+			(
+				collapse.rect.x + collapse.rect.w / 2.,
+				collapse.rect.y + collapse.rect.h / 2.,
+			),
+		);
+		let tree = app.folder.tree.as_ref().unwrap();
+		assert!(tree.root_collapsed());
+		assert!(tree.rows().is_empty());
+		assert!(tree.collapsed(0) && tree.collapsed(1));
+		assert_eq!(app.folder.scroll, 0.);
+		assert!(app.folder.grab.is_none());
+		assert_eq!(app.readers.session.path, path);
+		assert_eq!(app.phone_folder_open(), phone);
+		assert_eq!(app.folder.open, !phone);
+		app.action(Command::FolderRoot);
+		assert_eq!(app.folder.tree.as_ref().unwrap().rows(), &[0]);
+		app.action(Command::FolderEntry(0));
+		assert_eq!(app.folder.tree.as_ref().unwrap().rows(), &[0, 1]);
+	}
+}
+
+#[test]
+fn phone_sidebar_shares_one_shell_and_keeps_each_list_and_selected_page() {
+	use crate::{
+		app::folder::Tree,
+		state::{PanelPage, SidebarTab},
+	};
+	let (mut app, _) = reader(SOURCE, 320.);
+	app.tab_strip.phone = true;
+	let dir = tempfile::tempdir().unwrap();
+	for i in 0..80 {
+		std::fs::write(dir.path().join(format!("note-{i:02}.md")), "# Note")
+			.unwrap();
+	}
+	app.folder.tree = Some(Tree::read(dir.path().into()).unwrap());
+	for i in 0..30 {
+		app.readers
+			.open(dir.path().join(format!("note-{i:02}.md")), Instant::now());
+	}
+	app.action(Command::Tabs);
+	let reveal = app.interaction.tabs_reveal();
+	app.action(Command::SidebarTab(SidebarTab::Folder));
+	assert!(app.interaction.tabs_reveal() >= reveal);
+	assert!(app.interaction.tabs_animation.is_some());
+	assert!(app.interaction.folder_animation.is_none());
+	app.interaction
+		.advance_drawers(Instant::now() + Duration::from_secs(1));
+	assert_eq!(app.folder_rect().w, 320.);
+	assert_eq!(
+		app.folder_rect(),
+		crate::app::chrome::tab_drawer::folder_rect(
+			crate::app::chrome::tab_drawer::rect(1200., 800., 320.)
+		)
+	);
+	assert!(app.phone_folder_open());
+	assert!(!app.folder.open);
+	app.scroll_panel(250.);
+	let folder_scroll = app.folder.scroll;
+	assert!(folder_scroll > 0.);
+	let select_page = |app: &mut App<StubProxy>, tab| {
+		let button = app
+			.buttons()
+			.into_iter()
+			.find(|b| b.action == Command::SidebarTab(tab))
+			.unwrap();
+		physical_click(
+			app,
+			(
+				button.rect.x + button.rect.w / 2.,
+				button.rect.y + button.rect.h / 2.,
+			),
+		);
+	};
+	select_page(&mut app, SidebarTab::Tabs);
+	app.scroll_panel(140.);
+	let tab_scroll = app.tab_strip.drawer_scroll;
+	assert!(tab_scroll > 0.);
+	assert_eq!(app.folder.scroll, folder_scroll);
+	select_page(&mut app, SidebarTab::Folder);
+	assert_eq!(app.folder.scroll, folder_scroll);
+	let buttons = app.buttons();
+	assert!(!buttons.iter().any(|b| matches!(
+		b.action,
+		Command::Folder
+			| Command::SelectTab(_)
+			| Command::CloseTab(_)
+			| Command::Open
+	)));
+	assert_eq!(
+		buttons
+			.iter()
+			.filter(|b| b.action == Command::OpenFolder)
+			.count(),
+		1
+	);
+	assert_eq!(
+		buttons
+			.iter()
+			.map(|b| b.id)
+			.collect::<std::collections::HashSet<_>>()
+			.len(),
+		buttons.len()
+	);
+	app.android_back();
+	assert_eq!(app.interaction.panel, PanelPage::Closed);
+	app.action(Command::Tabs);
+	assert!(app.phone_folder_open());
+	assert_eq!(app.folder.scroll, folder_scroll);
+	assert_eq!(app.tab_strip.drawer_scroll, tab_scroll);
+	let file = app
+		.folder
+		.tree
+		.as_ref()
+		.unwrap()
+		.entries
+		.iter()
+		.position(|e| e.path.ends_with("note-00.md"))
+		.unwrap();
+	app.action(Command::FolderEntry(file));
+	assert_eq!(app.interaction.panel, PanelPage::Closed);
+	assert!(
+		app.readers
+			.session
+			.path
+			.as_ref()
+			.unwrap()
+			.ends_with("note-00.md")
+	);
+}
+
+#[test]
+fn phone_sidebar_offers_folder_selection_before_a_tree_exists_and_stays_phone_only()
+ {
+	use crate::state::{PanelPage, SidebarTab};
+	let (mut app, _) = reader(SOURCE, 320.);
+	app.tab_strip.phone = true;
+	app.action(Command::SidebarTab(SidebarTab::Folder));
+	app.interaction.tabs_animation = None;
+	assert!(app.phone_folder_open());
+	let buttons = app.buttons();
+	assert!(buttons.iter().any(|b| b.action == Command::OpenFolder));
+	assert!(!buttons.iter().any(|b| matches!(
+		b.action,
+		Command::FolderRoot | Command::FolderEntry(_) | Command::SelectTab(_)
+	)));
+	assert!(!app.overlay().is_empty());
+	app.action(Command::Tabs);
+	app.tab_strip.phone = false;
+	app.action(Command::SidebarTab(SidebarTab::Tabs));
+	app.action(Command::Tabs);
+	assert_eq!(app.interaction.panel, PanelPage::Closed);
+	assert!(
+		!app.buttons().iter().any(|b| matches!(
+			b.action,
+			Command::Tabs | Command::SidebarTab(_)
+		))
+	);
+}
+
+#[test]
 fn a_press_and_a_drag_over_text_select_it() {
 	let (mut app, _) = reader(
 		"One line here.\n\nTwo line here.\n\nThree line here.",

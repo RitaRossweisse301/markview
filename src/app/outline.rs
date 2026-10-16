@@ -71,6 +71,7 @@ impl<P: super::SendEvent> App<P> {
 			height,
 			self.content_top(),
 			self.bottom(),
+			300_f32.min(width - self.folder_inset()),
 		);
 		drawer.x += drawer.w * (1.0 - self.interaction.outline_reveal());
 		drawer
@@ -102,6 +103,9 @@ impl<P: super::SendEvent> App<P> {
 
 	/// Opens or closes the drawer on the reading position's entry.
 	pub(super) fn toggle_outline(&mut self) {
+		if self.folder_inset() == 0. {
+			self.set_folder_open(false);
+		}
 		if self.interaction.outline_open {
 			self.interaction.close_outline();
 			self.redraw();

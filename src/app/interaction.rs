@@ -58,6 +58,7 @@ impl<P: super::SendEvent> App<P> {
 				| Command::Export
 				| Command::ExportStyles
 				| Command::Tabs
+				| Command::SidebarTab(_)
 		) {
 			self.close_search();
 		}
@@ -152,36 +153,8 @@ impl<P: super::SendEvent> App<P> {
 					),
 				}
 			}
-			Command::Tabs => {
-				if !self.tab_strip.phone {
-					return;
-				}
-				self.readers.session.cancel_scroll_animation();
-				self.tab_strip.cancel_drag();
-				let open = self.interaction.panel != PanelPage::Tabs;
-				self.interaction.show_panel(if open {
-					PanelPage::Tabs
-				} else {
-					PanelPage::Closed
-				});
-				if open && self.readers.session.path.is_some() {
-					let (width, height, _) = self.dimensions();
-					let list = super::chrome::tab_drawer::list(
-						width,
-						height,
-						self.readers.entries().len(),
-						self.tab_strip.drawer_scroll,
-					);
-					let row = list.row_rect(self.readers.active());
-					self.tab_strip.drawer_scroll = (list.scroll
-						+ (row.y - list.viewport.y).min(0.)
-						+ (row.y + row.h - list.viewport.y - list.viewport.h)
-							.max(0.))
-					.clamp(0., list.max_scroll());
-				}
-				self.refresh_hover();
-				self.redraw();
-			}
+			Command::Tabs => self.toggle_phone_sidebar(),
+			Command::SidebarTab(tab) => self.switch_sidebar_tab(tab),
 			Command::SelectTab(index) => {
 				if self.interaction.panel == PanelPage::Tabs {
 					self.interaction.show_panel(PanelPage::Closed);
@@ -380,6 +353,30 @@ impl<P: super::SendEvent> App<P> {
 			}
 			Command::NewPage => {
 				self.new_page();
+			}
+			Command::OpenFolder => self.pick_folder(),
+			Command::Folder => self.toggle_folder(),
+			Command::FolderRoot => {
+				if let Some(tree) = &mut self.folder.tree {
+					tree.toggle_root();
+					self.scroll_folder(0.);
+					self.redraw();
+				}
+			}
+			Command::FolderEntry(index) => self.activate_folder_entry(index),
+			Command::FolderCollapseAll => {
+				if let Some(tree) = &mut self.folder.tree {
+					tree.collapse_all();
+					self.folder.grab = None;
+					self.scroll_folder(0.);
+					self.refresh_hover();
+					self.redraw();
+				}
+			}
+			Command::FolderRefresh => {
+				if let Some(tree) = &self.folder.tree {
+					self.open_folder(tree.root.clone(), false);
+				}
 			}
 			Command::Open => {
 				if self.interaction.panel == PanelPage::Tabs {
