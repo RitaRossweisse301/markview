@@ -317,7 +317,7 @@ pub(super) fn definitions(source: &str) -> String {
 		{
 			let label = &rest[1..close];
 			let value = rest[close + 2..].trim();
-			if !label.is_empty() && !value.is_empty() {
+			if ![label, value].contains(&"") {
 				if last.is_some_and(|last| last + 1 != index) {
 					out.push('\n');
 				}

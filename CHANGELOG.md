@@ -36,6 +36,7 @@ at the same level, without `[brackets]`.
 
 ### Changed
 
+- Reduce reference-definition scan complexity with an equivalent empty-field check.
 - Reuse icon rasters across integer pixel translations while preserving subpixel coverage, reducing work during scrolling and animation.
 - Simplify complexity-triaged functions through focused extraction, preserving parsing, rendering and native reader behavior; keep justified exceptions explicit.
 - Separate block measurement from placement and require `Sync` cancellation callbacks so native layout workers can observe superseded passes.
