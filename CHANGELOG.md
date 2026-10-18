@@ -63,6 +63,7 @@ at the same level, without `[brackets]`.
 
 ### Fixed
 
+- Hide the desktop sidebar toggle when no folder is open.
 - Keep outgoing phone drawer controls in their animated positions when toolbar input resumes.
 - Keep modals safe over open panels, distinguish same-path tabs and separate dismiss controls, and align animated drawer hit clips with their painted rows.
 - Wait for completed layout updates when verifying worker document counts, allowing intermediate snapshots during slower test runs.

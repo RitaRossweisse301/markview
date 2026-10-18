@@ -998,7 +998,7 @@ fn folder_links_prefer_existing_document_relative_paths() {
 }
 
 #[test]
-fn desktop_folder_picker_is_clickable_before_loading_a_tree() {
+fn desktop_folder_toggle_is_hidden_before_loading_a_tree() {
 	use crate::{settings::WindowLayout, state::Command};
 	let mut h = Harness::new();
 	h.app.tab_strip.phone = false;
@@ -1013,16 +1013,9 @@ fn desktop_folder_picker_is_clickable_before_loading_a_tree() {
 		] {
 			h.app.frame.layout = style;
 			let buttons = h.app.buttons();
-			let toggle = buttons
-				.iter()
-				.find(|b| b.action == Command::Folder)
-				.unwrap();
-			assert!(toggle.enabled);
-			h.app.interaction.cursor =
-				(toggle.rect.x + 14., toggle.rect.y + 14.);
-			h.app.press_widget(&buttons);
-			assert_eq!(h.app.release_widget(), Some(Command::Folder));
+			assert!(!buttons.iter().any(|b| b.action == Command::Folder));
 			assert!(h.app.folder.tree.is_none());
+			assert!(h.app.frame_layout().sidebar_toggle.is_none());
 			assert_eq!(h.app.frame_layout().left_inset, 0.);
 		}
 	}

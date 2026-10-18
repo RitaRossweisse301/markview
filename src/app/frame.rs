@@ -290,13 +290,9 @@ impl<P: super::SendEvent> App<P> {
 			fullscreen,
 			maximized,
 		);
-		if !self.tab_strip.phone {
+		if !self.tab_strip.phone && self.folder.tree.is_some() {
 			let drawer = self.folder_rect();
-			let reveal = if self.folder.tree.is_some() {
-				self.interaction.folder_reveal(self.folder.open)
-			} else {
-				0.
-			};
+			let reveal = self.interaction.folder_reveal(self.folder.open);
 			layout = layout.with_sidebar(drawer.w, reveal);
 		}
 		let tab_end = self.tab_metrics.end(layout.tabs, self.tab_strip.scroll);

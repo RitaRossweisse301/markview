@@ -609,6 +609,46 @@ fn physical_click(app: &mut App<StubProxy>, at: (f32, f32)) {
 }
 
 #[test]
+fn desktop_sidebar_toggle_requires_an_open_folder_independently_of_files() {
+	let dir = tempfile::tempdir().unwrap();
+	for file_open in [false, true] {
+		let (mut app, _) = reader("", 320.);
+		app.tab_strip.phone = false;
+		if file_open {
+			app.readers.open(dir.path().join("note.md"), Instant::now());
+		}
+		let base = app.frame_layout().tabs;
+		assert!(app.frame_layout().sidebar_toggle.is_none());
+		assert!(!app.buttons().iter().any(|b| b.action == Command::Folder));
+
+		app.folder.tree =
+			Some(crate::app::folder::Tree::read(dir.path().into()).unwrap());
+		assert!(app.frame_layout().sidebar_toggle.is_some());
+		let button = app
+			.buttons()
+			.into_iter()
+			.find(|b| b.action == Command::Folder)
+			.unwrap();
+		let icon = button.icon.unwrap();
+		let painted = |app: &mut App<StubProxy>| {
+			app.overlay().iter().any(|draw| {
+				matches!(draw,
+				crate::layout::Draw::Icon { paths, .. } if std::ptr::eq(*paths, icon))
+			})
+		};
+		assert!(painted(&mut app));
+
+		app.folder.tree = None;
+		assert_eq!(app.frame_layout().tabs, base);
+		assert!(!app.buttons().iter().any(|b| b.action == Command::Folder));
+		assert!(!painted(&mut app));
+
+		app.tab_strip.phone = true;
+		assert!(app.buttons().iter().any(|b| b.action == Command::Tabs));
+	}
+}
+
+#[test]
 fn folder_collapse_all_clears_nested_expansion_and_scroll_on_both_layouts() {
 	use crate::app::folder::Tree;
 	let dir = tempfile::tempdir().unwrap();
