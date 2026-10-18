@@ -294,6 +294,10 @@ impl<P: super::SendEvent> App<P> {
 			self.drag_folder();
 			self.update_drag();
 			self.refresh_hover();
+			let now = Instant::now();
+			if self.hover_preview(now) {
+				self.redraw();
+			}
 			if self.interaction.panel_open()
 				|| was_button
 				|| self.button_at_cursor()
@@ -325,6 +329,7 @@ impl<P: super::SendEvent> App<P> {
 		self.interaction.drag_at = None;
 		self.interaction.hover = None;
 		self.interaction.hover_overflow = None;
+		self.dismiss_preview();
 		if let Some(w) = &self.window {
 			w.set_cursor(CursorIcon::Default);
 		}
@@ -332,6 +337,7 @@ impl<P: super::SendEvent> App<P> {
 	}
 
 	fn middle_pressed(&mut self) {
+		self.dismiss_preview();
 		if !self.interaction.panel_open()
 			&& self.interaction.modal.is_none()
 			&& !self.pointer_in_outline()
@@ -354,6 +360,7 @@ impl<P: super::SendEvent> App<P> {
 		)
 	)]
 	fn pointer_pressed(&mut self) {
+		self.dismiss_preview();
 		self.cancel_gestures();
 		self.tab_strip.cancel_drag();
 		self.interaction.widgets.focus_visible = false;
@@ -572,6 +579,7 @@ impl<P: super::SendEvent> App<P> {
 		self.folder.grab = None;
 		self.interaction.sidebar_drag = None;
 		self.interaction.modifiers = Default::default();
+		self.dismiss_preview();
 		self.refresh_hover();
 		self.redraw();
 	}

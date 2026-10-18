@@ -15,6 +15,7 @@ pub(super) mod icons;
 pub(in crate::app) mod list;
 mod modal;
 pub(in crate::app) mod outline;
+pub(in crate::app) mod preview;
 pub(in crate::app) mod styles;
 pub(in crate::app) mod tab_drawer;
 mod tabs;
@@ -187,6 +188,8 @@ pub(super) struct Chrome<'a> {
 	pub(super) active_tab: usize,
 	pub(super) tab_strip: &'a super::tab_strip::TabStrip,
 	pub(super) tab_widths: &'a [(f32, f32)],
+	/// The open hover preview, when one is painted.
+	pub(super) preview: Option<&'a super::preview::Open>,
 	pub(super) settings: &'a ReaderSettings,
 	pub(super) restart_pending: bool,
 	/// The fonts the reader shapes with, which the family choosers describe.
@@ -602,12 +605,14 @@ impl<'a> Chrome<'a> {
 	#[cfg(test)]
 	pub(super) fn overlay(&mut self) -> Vec<Draw> {
 		let form = self.form();
-		self.overlay_with_form(form.as_ref())
+		self.overlay_with_form(form.as_ref()).0
 	}
+	/// Draws the whole chrome and returns where a hover preview's body was
+	/// reserved, so the caller can compose the target's scene into it.
 	pub(super) fn overlay_with_form(
 		&mut self,
 		form: Option<&components::Form>,
-	) -> Vec<Draw> {
+	) -> (Vec<Draw>, Option<Rect>) {
 		let (width, height, _) = (self.width, self.height, 1.0);
 		let mut out = vec![
 			Draw::Rect(
@@ -716,6 +721,7 @@ impl<'a> Chrome<'a> {
 		self.draw_document_status(&mut out);
 
 		self.draw_drawers(&mut out);
+		let body = self.draw_preview(&mut out);
 		self.draw_panel_overlay(&mut out, form);
 		self.draw_resource_feedback(&mut out);
 		out.append(&mut self.input_draws);
@@ -747,7 +753,45 @@ impl<'a> Chrome<'a> {
 			));
 		}
 		out.extend(frame::draw(self.frame));
-		out
+		(out, body)
+	}
+
+	/// Paints the hover preview card below its anchor, returning the body
+	/// rectangle the renderer composes the target's scene into.
+	fn draw_preview(&mut self, out: &mut Vec<Draw>) -> Option<Rect> {
+		let preview = self.preview?;
+		// A panel, list, confirmation or search owns the screen; the card must
+		// not float above them for the frame before the tick closes it.
+		if self.tab_strip.phone
+			|| self.interaction.panel_open()
+			|| self.session.search.open
+			|| self.interaction.modal.is_some()
+			|| self.interaction.dropdown.is_some()
+			|| self.interaction.viewer.is_some()
+		{
+			return None;
+		}
+		let anchor = self.preview_anchor(preview.target)?;
+		let layout =
+			preview::layout(&preview.card, anchor, (self.width, self.height));
+		let body = layout.body;
+		out.extend(preview::draw(self.ui, &preview.card, &layout));
+		body
+	}
+
+	/// The rectangle a preview card hangs under.
+	fn preview_anchor(
+		&mut self,
+		target: super::preview::Target,
+	) -> Option<Rect> {
+		match target {
+			super::preview::Target::Tab(id) => {
+				let index = self.tabs.iter().position(|tab| tab.id == id)?;
+				let layout = self.tab_bar().layout();
+				let tab = *layout.rects.get(index)?;
+				tab.intersect(layout.viewport)
+			}
+		}
 	}
 
 	fn resource_viewport(&self) -> Rect {

@@ -97,6 +97,24 @@ impl View<'_> {
 	}
 }
 
+/// A second document scene composed into part of the frame.
+///
+/// The source is the scene itself, not a captured image: the host keeps the
+/// snapshot it already holds, and the renderer lays the visible slice out
+/// again at device resolution. The GPU viewport transform then maps that
+/// rendering into `rect`, so glyphs stay sharp while the thumbnail stays
+/// small, and no pixels are copied or cached between frames.
+pub struct Preview<'a> {
+	pub snapshot: &'a markview_layout::scene::LayoutSnapshot,
+	/// The document y the preview's top edge shows.
+	pub scroll: f32,
+	/// The destination rectangle, in logical UI pixels.
+	pub rect: Rect,
+	pub theme: Theme,
+	/// Horizontal block offsets, so wide code and tables keep their position.
+	pub horizontal: &'a HashMap<(usize, usize), f32>,
+}
+
 pub struct Renderer {
 	ui_origin: (f32, f32),
 	gpu: gpu::Gpu,
@@ -111,6 +129,12 @@ pub struct Renderer {
 	/// must leave the published image demand and every cached texture exactly
 	/// as the frame on screen left them.
 	prewarming: bool,
+	/// While a preview scene prepares, its image demand belongs to the tab the
+	/// card shows, not to the frame the reader is looking at.
+	guest: bool,
+	/// The unchanged preview scene the glyph atlas could not hold; see
+	/// [`frame::RejectedPreview`].
+	preview_rejected: Option<frame::RejectedPreview>,
 	stylesheet: Option<Arc<markview_layout::style::Stylesheet>>,
 	fallback: Option<TextShaper>,
 	pub adapter_name: String,
@@ -184,6 +208,8 @@ impl Renderer {
 			images: images::ImageTextures::new(image_pipeline),
 			pointer: None,
 			prewarming: false,
+			guest: false,
+			preview_rejected: None,
 			stylesheet: None,
 			fallback: None,
 		})

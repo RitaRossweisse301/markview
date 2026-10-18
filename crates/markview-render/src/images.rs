@@ -1,11 +1,26 @@
 //! Versioned image textures, GPU budget and per-frame demand publication.
 use crate::gpu::Gpu;
 use markview_layout::{
-	image::{ImageDemand, ImageSnapshot, raster_size},
+	image::{ImageDemand, ImageInfo, ImageSnapshot, raster_size},
 	scene::Rect,
 };
-use std::{collections::HashMap, ops::Range};
-pub(super) type ImageKey = (String, u64);
+use std::{
+	collections::{HashMap, HashSet},
+	ops::Range,
+};
+/// One image texture: the snapshot generation, source alias and version.
+///
+/// The generation keeps two documents' identically named sources apart while
+/// a hover preview shows another tab's images in the same frame.
+pub(super) type ImageKey = (u64, String, u64);
+/// Texture bytes image sources may occupy on the GPU at once.
+const IMAGE_BUDGET: u64 = 256 * 1024 * 1024;
+/// Whether `key` still matches the metadata of the snapshot that draws it.
+fn current(entries: &HashMap<String, ImageInfo>, key: &ImageKey) -> bool {
+	entries
+		.get(&key.1)
+		.is_some_and(|info| info.version == key.2 && info.error.is_none())
+}
 pub(super) struct ImageTextures {
 	pub(super) pipeline: wgpu::RenderPipeline,
 	cache: HashMap<ImageKey, (wgpu::BindGroup, u64)>,
@@ -13,6 +28,15 @@ pub(super) struct ImageTextures {
 	runs: Vec<(Range<u32>, Option<ImageKey>)>,
 	demand: HashMap<String, ImageDemand>,
 	images: ImageSnapshot,
+	/// The snapshot the main frame draws, whose textures stay cached.
+	frame: u64,
+	/// The snapshot a preview layer draws, kept cached while a card is open.
+	guest: Option<u64>,
+	/// The guest snapshot's image metadata, so textures an earlier preview
+	/// pass created can be version-checked while the main snapshot is current.
+	guest_entries: HashMap<String, ImageInfo>,
+	/// Textures the main pass used, which a preview upload must not evict.
+	frame_keys: HashSet<ImageKey>,
 }
 impl ImageTextures {
 	pub(super) fn new(pipeline: wgpu::RenderPipeline) -> Self {
@@ -22,18 +46,57 @@ impl ImageTextures {
 			runs: Vec::new(),
 			demand: HashMap::new(),
 			images: Default::default(),
+			frame: 0,
+			guest: None,
+			guest_entries: HashMap::new(),
+			frame_keys: HashSet::new(),
 		}
 	}
 	pub(super) fn begin(&mut self, snapshot: &ImageSnapshot) {
 		self.runs.clear();
 		self.images = snapshot.clone();
-		self.cache.retain(|(src, version), _| {
-			snapshot
-				.entries
-				.get(src)
-				.is_some_and(|i| i.version == *version && i.error.is_none())
+		self.frame = snapshot.generation;
+		self.frame_keys.clear();
+		let guest = self.guest;
+		let guest_entries = &self.guest_entries;
+		self.cache.retain(|key, _| {
+			if key.0 == snapshot.generation {
+				current(&snapshot.entries, key)
+			} else if Some(key.0) == guest {
+				current(guest_entries, key)
+			} else {
+				false
+			}
 		});
 		self.demand.clear();
+	}
+	/// Switches the pixel source to a preview's snapshot while both
+	/// documents' textures stay cached across frames.
+	pub(super) fn begin_guest(&mut self, snapshot: &ImageSnapshot) {
+		// Record what the main pass just used before its runs are cleared: a
+		// preview upload must not evict the frame the reader is looking at.
+		self.frame_keys = self
+			.runs
+			.iter()
+			.filter_map(|(_, key)| key.clone())
+			.collect();
+		self.runs.clear();
+		self.images = snapshot.clone();
+		self.guest = Some(snapshot.generation);
+		self.guest_entries = snapshot.entries.clone();
+		let frame = self.frame;
+		self.cache.retain(|key, _| {
+			if key.0 == snapshot.generation {
+				current(&snapshot.entries, key)
+			} else {
+				key.0 == frame
+			}
+		});
+	}
+	/// Forgets the preview snapshot once no card shows it.
+	pub(super) fn release_guest(&mut self) {
+		self.guest = None;
+		self.guest_entries.clear();
 	}
 	pub(super) fn publish(&mut self) {
 		self.images.pixels.publish_demand(
@@ -70,7 +133,7 @@ impl ImageTextures {
 		scale: f32,
 		gpu: &Gpu,
 	) -> Option<ImageKey> {
-		let key = (src.clone(), version);
+		let key = (self.images.generation, src.clone(), version);
 		let demand = ImageDemand {
 			size: raster_size(rect.w * scale, rect.h * scale),
 			needs_pixels: !self.cache.contains_key(&key),
@@ -88,16 +151,21 @@ impl ImageTextures {
 				return None;
 			}
 			let bytes = pixels.rgba.len() as u64;
-			if self.cache.values().map(|(_, b)| b).sum::<u64>() + bytes
-				> 256 * 1024 * 1024
-			{
+			if self.bytes() + bytes > IMAGE_BUDGET {
+				// Keep what this pass has already drawn and what the main
+				// frame published demand for; evict everything else.
+				let pinned = &self.frame_keys;
 				self.cache.retain(|key, _| {
-					self.runs.iter().any(|(_, used)| used.as_ref() == Some(key))
+					pinned.contains(key)
+						|| self
+							.runs
+							.iter()
+							.any(|(_, used)| used.as_ref() == Some(key))
 				});
 			}
-			if self.cache.values().map(|(_, b)| b).sum::<u64>() + bytes
-				> 256 * 1024 * 1024
-			{
+			if self.bytes() + bytes > IMAGE_BUDGET {
+				// A preview declines rather than displacing the main frame,
+				// whose demand is already published as resident.
 				return None;
 			}
 			let texture = gpu.device.create_texture(&wgpu::TextureDescriptor {

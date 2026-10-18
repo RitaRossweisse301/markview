@@ -21,6 +21,7 @@ mod outline;
 mod painting;
 mod pointer;
 mod preferences;
+mod preview;
 pub(crate) mod search;
 mod security;
 pub(crate) mod session;
@@ -242,6 +243,7 @@ struct App<P = EventLoopProxy<Event>> {
 	folder: folder::Browser,
 	tab_strip: tab_strip::TabStrip,
 	tab_metrics: tab_metrics::TabMetrics,
+	preview: preview::Preview,
 	args: LaunchOptions,
 	/// The reader's own font sources: the configured directories plus the
 	/// personal download directory. The export panel shapes with the same
@@ -395,6 +397,7 @@ impl<P: SendEvent> App<P> {
 			folder: Default::default(),
 			tab_strip: Default::default(),
 			tab_metrics: Default::default(),
+			preview: Default::default(),
 			args,
 			fonts_config,
 			proxy,

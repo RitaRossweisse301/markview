@@ -163,6 +163,11 @@ impl RasterCache {
 	pub(super) fn full(&self) -> bool {
 		self.atlas_full
 	}
+	/// Forgets an exhaustion an earlier pass reported, so a frame that only
+	/// reuses cached entries never evicts them for another pass's content.
+	pub(super) fn begin_frame(&mut self) {
+		self.atlas_full = false;
+	}
 	/// True while new entries still fit without evicting the atlas.
 	pub(super) fn has_room(&self) -> bool {
 		!self.atlas_full && self.shelf.1 + self.shelf.2 < ATLAS_SIZE * 3 / 4

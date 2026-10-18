@@ -133,6 +133,18 @@ impl Renderer {
 					.images
 					.prepare(src, *version, rect, view.scale, &self.gpu)
 				else {
+					// A preview draws a tab whose loader may have released its
+					// decoded pictures; a neutral block is clearer than a hole.
+					if self.guest {
+						let color = self.color(
+							Paint::Styled(
+								markview_layout::style::Condition::Button,
+								markview_layout::style::ColorField::HoverBackground,
+							),
+							view.theme,
+						);
+						self.geometry.solid(rect, color, clip, view);
+					}
 					return;
 				};
 				let start = self.geometry.len();

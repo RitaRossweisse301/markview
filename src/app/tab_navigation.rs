@@ -37,6 +37,9 @@ impl<P: super::SendEvent> App<P> {
 		}
 		self.tab_strip.scroll =
 			(layout.scroll + delta).clamp(0.0, layout.max_scroll);
+		// Tabs slide under the resting pointer; the next motion re-arms the
+		// preview for whichever one arrives there.
+		self.dismiss_preview();
 		self.move_tab_drag();
 		self.redraw();
 		true

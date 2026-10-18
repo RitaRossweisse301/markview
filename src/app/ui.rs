@@ -202,6 +202,7 @@ impl<P: super::SendEvent> App<P> {
 			active_tab: self.readers.active(),
 			tab_strip: &self.tab_strip,
 			tab_widths: &self.tab_metrics.widths,
+			preview: self.preview.open(),
 			restart_pending: self.preferences.restart_pending(),
 			settings: view.settings,
 			font_config: &self.fonts_config,
@@ -457,7 +458,9 @@ impl<P: super::SendEvent> App<P> {
 		let mut out = self.draw_search_highlights();
 		let mut chrome = self.chrome();
 		chrome.input_draws = inputs;
-		out.extend(chrome.overlay_with_form(layout.form.as_ref()));
+		let (draws, body) = chrome.overlay_with_form(layout.form.as_ref());
+		out.extend(draws);
+		self.preview.set_body(body);
 		if markview_platform::touch_layout() {
 			use crate::layout::{Paint, Rect};
 			use markview_layout::style::{ColorField, Condition};

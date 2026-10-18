@@ -219,6 +219,7 @@ impl LayoutEngine {
 				&options.details_open,
 				options.force_open,
 			)),
+			content_id: document.content_id,
 			images: images.clone(),
 			width: options.width,
 			height: opening,

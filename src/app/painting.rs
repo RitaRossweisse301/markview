@@ -78,6 +78,9 @@ impl<P: super::SendEvent> App<P> {
 			),
 		};
 		let settings_kind = self.settings_kind();
+		let preview = self
+			.preview
+			.scene(&self.readers, self.preferences.values.theme);
 		let Some(renderer) = &mut self.renderer else {
 			return Ok(());
 		};
@@ -103,10 +106,11 @@ impl<P: super::SendEvent> App<P> {
 		let target = frame.texture.create_view(&Default::default());
 		let rasterized_before = renderer.raster_stats().rasterized;
 		let started = Instant::now();
-		let submission = renderer.render(
+		let submission = renderer.render_with_preview(
 			&self.readers.session.snapshot,
 			&view,
 			&overlay,
+			preview.as_ref(),
 			&target,
 		)?;
 		let prepared_ms = started.elapsed().as_secs_f64() * 1000.0;

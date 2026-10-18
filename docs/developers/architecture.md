@@ -40,7 +40,7 @@ representation; neither depends on the other. Layout tests use CommonMark as a
 development dependency. The renderer, PDF backend and selection engine have no
 production dependency on the CommonMark parser.
 
-`markview-render` consumes those instructions. It owns the wgpu device and surface, glyph and image resources, clipping, colors that can be changed without reflow, and headless output. It does not contain a second document layout engine.
+`markview-render` consumes those instructions. It owns the wgpu device and surface, glyph and image resources, clipping, colors that can be changed without reflow, headless output, and the second document scene a hover preview composes into its card. It does not contain a second document layout engine.
 
 `markview-pdf` consumes the same snapshot for paper. The application's exporter lays the document out at the page's text measure and uses `markview-layout::paginate` to break the column into pages. The PDF backend writes vector content through `krilla`: text as glyph runs with subset fonts and a character map, math, rules, boxes, images, and link annotations. It owns no window, no GPU, and no source parsing.
 

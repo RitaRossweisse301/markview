@@ -237,6 +237,7 @@ impl<P: super::SendEvent> App<P> {
 			return;
 		};
 		let origin = self.readers.session_mut(index).security.origin.clone();
+		self.dismiss_preview();
 		let result = self.readers.close(index, Instant::now());
 		// A watched export belongs to the document and origin that chose it.
 		if self.watch_export.as_ref().is_some_and(|watch| {

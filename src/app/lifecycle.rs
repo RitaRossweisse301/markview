@@ -514,6 +514,10 @@ impl<P: super::SendEvent> App<P> {
 			self.refresh_hover();
 			self.redraw();
 		}
+		// The hover preview opens only after its delay, so opening is a tick
+		// rather than a pointer handler: a pointer sliding across tabs never
+		// builds a card.
+		self.preview_tick(now);
 		self.readers.release_inactive(now);
 		self.session_tick(now);
 		// One PNG strip per frame keeps the window responsive and the status
@@ -586,6 +590,7 @@ impl<P: super::SendEvent> App<P> {
 			.chain(self.interaction.drag_at)
 			.chain(self.readers.session.scroll_animation_deadline(now))
 			.chain(self.tab_strip.scroll_at)
+			.chain(self.preview.deadline())
 			.chain(self.gestures.deadline(now))
 			.chain(self.interaction.drawer_deadline(now))
 			.chain(self.dm.as_ref().and_then(|dm| dm.deadline(now)))

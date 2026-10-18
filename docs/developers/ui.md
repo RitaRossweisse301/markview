@@ -47,6 +47,13 @@ Identity is local to the running UI and is not a persistence format.
 Drawer and toolbar controls use separate identities because both remain painted
 during drawer dismissal.
 
+Hover previews are transient chrome state, not a component: pointer motion arms
+a fixed delay, the event loop's tick opens a shared card with the target's
+wrapped title, detail line and optional page body, and the renderer composes
+that page from the snapshot the tab already holds, at device resolution, through
+a scaled render pass. No screenshot or texture is cached between frames; a new
+target only adds a `Target` arm and its card content.
+
 `UiLayout` supplies visible controls, keyboard traversal and the measured form.
 Painting uses these placed control rectangles; the same clipped rectangles answer
 pointer input. A scrolling form keeps offscreen controls in keyboard order and

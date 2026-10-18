@@ -291,6 +291,9 @@ pub struct PlacedBlock {
 pub struct LayoutSnapshot {
 	/// Presentation identity, independent of the worker's geometry pass.
 	pub presentation_key: u64,
+	/// Semantic identity of the reading text; a changed document or edit
+	/// changes it, while cached geometry keeps it stable across passes.
+	pub content_id: u64,
 	pub images: crate::image::ImageSnapshot,
 	pub document_box: Option<Draw>,
 	pub blocks: Vec<PlacedBlock>,

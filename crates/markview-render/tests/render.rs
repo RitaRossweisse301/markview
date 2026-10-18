@@ -171,3 +171,83 @@ fn prewarm_prepares_atlases_without_a_frame() -> anyhow::Result<()> {
 	assert_eq!(frame, renderer.read_pixels(&target)?.rgba);
 	Ok(())
 }
+
+/// A hover preview is composed from the scene itself, scaled into its card by
+/// the pass viewport, and it must leave the frame below it untouched.
+#[test]
+fn preview_scene_composes_above_the_frame_only_in_its_rect()
+-> anyhow::Result<()> {
+	let doc = markview_commonmark::parse(
+		"# Preview\n\nA paragraph of text the hover card shows small, with enough words to fill the card.\n\n- first\n- second\n",
+	);
+	let mut engine =
+		LayoutEngine::with_executor(Arc::new(Direct), Arc::new(|| {}));
+	let mut renderer = pollster::block_on(Renderer::new(None))?;
+	let sheet = Stylesheet::bundled(false);
+	renderer.set_stylesheet(sheet.clone());
+	let options = LayoutOptions {
+		width: 360.0,
+		fonts: fonts(),
+		stylesheet: sheet,
+		..Default::default()
+	};
+	let snapshot = engine.layout(&doc, &options);
+	let horizontal = HashMap::new();
+	let empty = markview_layout::scene::LayoutSnapshot::default();
+	let frame = view(Theme::Light, 1.0, &horizontal);
+	let target = renderer.offscreen(frame.width, frame.height);
+	let view = target.create_view(&Default::default());
+	let rect = markview_layout::scene::Rect {
+		x: 40.0,
+		y: 300.0,
+		w: 200.0,
+		h: 125.0,
+	};
+	let preview = markview_render::Preview {
+		snapshot: &snapshot,
+		scroll: 0.0,
+		rect,
+		theme: Theme::Light,
+		horizontal: &horizontal,
+	};
+	renderer.render(&empty, &frame, &[], &view)?;
+	renderer.wait(None)?;
+	let plain = renderer.read_pixels(&target)?.rgba;
+	renderer.render_with_preview(&empty, &frame, &[], Some(&preview), &view)?;
+	renderer.wait(None)?;
+	let composed = renderer.read_pixels(&target)?.rgba;
+	let width = frame.width as usize;
+	let background = &plain[..4];
+	let inside = |i: usize| {
+		let x = (i % width) as f32;
+		let y = (i / width) as f32;
+		rect.contains(x, y)
+	};
+	let changed = composed
+		.as_chunks::<4>()
+		.0
+		.iter()
+		.enumerate()
+		.filter(|(i, pixel)| inside(*i) && pixel.as_slice() != background)
+		.count();
+	assert!(changed > 500, "the preview scene drew nothing: {changed}");
+	for (i, (before, after)) in plain
+		.as_chunks::<4>()
+		.0
+		.iter()
+		.zip(composed.as_chunks::<4>().0)
+		.enumerate()
+	{
+		if !inside(i) {
+			assert_eq!(
+				before, after,
+				"the preview touched the frame at pixel {i}"
+			);
+		}
+	}
+	// Closing the card releases the layer; the next frame is the plain one.
+	renderer.render(&empty, &frame, &[], &view)?;
+	renderer.wait(None)?;
+	assert_eq!(plain, renderer.read_pixels(&target)?.rgba);
+	Ok(())
+}

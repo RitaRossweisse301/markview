@@ -108,6 +108,7 @@ impl Published {
 			.extend_from_slice(&prefix.blocks[published..]);
 		self.snapshot.height = prefix.height;
 		self.snapshot.presentation_key = prefix.presentation_key;
+		self.snapshot.content_id = prefix.content_id;
 		self.snapshot.document_box = prefix.document_box.clone();
 		self.snapshot.width = prefix.width;
 		self.snapshot.reused = prefix.reused;
