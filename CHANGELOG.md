@@ -41,6 +41,7 @@ at the same level, without `[brackets]`.
 
 ### Changed
 
+- Swap the folder sidebar header buttons so refresh sits left of collapse-all.
 - Reduce reference-definition scan complexity with an equivalent empty-field check.
 - Share one animated phone sidebar between Tabs and Folders, preserving each list's scroll position; dock the desktop file tree in wide windows and overlay it in narrow ones.
 - Cache visible folder labels with font revision tracking, reducing shaping work during sidebar scrolling.

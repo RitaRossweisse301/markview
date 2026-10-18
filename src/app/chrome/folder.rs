@@ -133,14 +133,14 @@ pub(super) fn buttons(
 	let mut buttons = Vec::new();
 	for (i, (label, action, icon)) in [
 		(
-			lang.folder_collapse_all(),
-			Command::FolderCollapseAll,
-			icons::COLLAPSE_ALL,
-		),
-		(
 			lang.folder_refresh(),
 			Command::FolderRefresh,
 			icons::REDOWNLOAD,
+		),
+		(
+			lang.folder_collapse_all(),
+			Command::FolderCollapseAll,
+			icons::COLLAPSE_ALL,
 		),
 	]
 	.into_iter()
@@ -488,11 +488,11 @@ mod tests {
 				let drawer =
 					animated_rect(rect(1200., 800., 40., 24., width), reveal);
 				let buttons = buttons(&browser, drawer, Lang::En);
-				assert_eq!(buttons[0].action, Command::FolderCollapseAll);
-				let refresh = &buttons[1];
-				assert_eq!(refresh.action, Command::FolderRefresh);
+				assert_eq!(buttons[0].action, Command::FolderRefresh);
+				let collapse_all = &buttons[1];
+				assert_eq!(collapse_all.action, Command::FolderCollapseAll);
 				assert_eq!(
-					refresh.rect.x + refresh.rect.w,
+					collapse_all.rect.x + collapse_all.rect.w,
 					drawer.x + width - RIGHT_INSET
 				);
 				if reveal == 1. {
@@ -505,7 +505,10 @@ mod tests {
 						false,
 					)
 					.with_sidebar(width, reveal);
-					assert_eq!(refresh.rect.x, frame.sidebar_toggle.unwrap().x);
+					assert_eq!(
+						collapse_all.rect.x,
+						frame.sidebar_toggle.unwrap().x
+					);
 				}
 				let draws = draw(
 					&mut ui,
