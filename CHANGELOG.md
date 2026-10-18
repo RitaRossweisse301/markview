@@ -91,6 +91,7 @@ at the same level, without `[brackets]`.
 - Refresh cached tabs when their source files change, disappear or are recreated while inactive, including tabs restored by closing the current one.
 - Preserve fragment navigation during cached-tab refreshes by waiting for the current content revision before resolving anchors.
 - Avoid quadratic reading-position recovery when a document replacement removes the current block, preserving duplicate-block and nearest-neighbor matching.
+- Give inline link hover and click the whole line box the text I-beam uses, so the line's leading no longer drops off the link.
 
 ### Documentation
 

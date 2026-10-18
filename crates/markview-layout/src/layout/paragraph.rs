@@ -496,11 +496,13 @@ impl BlockContext<'_> {
 					if let Some((url, x0)) = link.take() {
 						out.links.push(LinkRect {
 							command: start_draw,
+							// The whole line box, like the cluster rects the
+							// I-beam hits, so leading never leaves the link.
 							rect: Rect {
 								x: x0,
-								y: baseline - ascent,
+								y: y_cursor,
 								w: cursor - x0,
-								h: ascent + descent,
+								h: height,
 							},
 							url,
 						});
@@ -596,11 +598,13 @@ impl BlockContext<'_> {
 			if let Some((url, x0)) = link {
 				out.links.push(LinkRect {
 					command: start_draw,
+					// The whole line box, like the cluster rects the
+					// I-beam hits, so leading never leaves the link.
 					rect: Rect {
 						x: x0,
-						y: baseline - ascent,
+						y: y_cursor,
 						w: cursor - x0,
-						h: ascent + descent,
+						h: height,
 					},
 					url,
 				});

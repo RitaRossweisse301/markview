@@ -371,6 +371,42 @@ fn links_are_hit_testable_and_survive_reuse() {
 		(hit.x, hit.y, hit.w, hit.h)
 	);
 }
+
+/// A link run must hit the same box the I-beam hits: the whole line, not the
+/// ink height. With leading, the pointer can sit above or below the glyphs
+/// and still be on the link.
+#[test]
+fn a_link_run_hits_the_whole_line_like_the_text_does() {
+	let d = markview_commonmark::parse(
+		"See [the manual](https://example.com/manual) today.\n",
+	);
+	let mut engine = LayoutEngine::new();
+	let opts = LayoutOptions {
+		width: 400.0,
+		..Default::default()
+	};
+	let snapshot = engine.layout(&d, &opts);
+	let block = &snapshot.blocks[0];
+	let link = &block.layout.links[0].rect;
+	let cluster = block
+		.layout
+		.text
+		.iter()
+		.flat_map(|node| node.clusters.iter())
+		.find(|c| c.rect.x < link.x + link.w && c.rect.x + c.rect.w > link.x)
+		.unwrap();
+	assert_eq!(
+		(link.y, link.h),
+		(cluster.rect.y, cluster.rect.h),
+		"the link must hit where the text does"
+	);
+	let none = HashMap::new();
+	// A point in the leading below the ink is on the link.
+	assert_eq!(
+		snapshot.link_at(link.x + 1.0, block.y + link.y + link.h - 1.0, &none),
+		Some("https://example.com/manual")
+	);
+}
 #[test]
 fn heading_anchors_resolve_to_layout_positions() {
 	let mut engine = LayoutEngine::new();
