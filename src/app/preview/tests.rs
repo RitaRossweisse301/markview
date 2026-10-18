@@ -1,4 +1,60 @@
 use super::*;
+use crate::{
+	app::{Event, SendEvent},
+	cli::{LaunchOptions, Mode},
+};
+use std::{path::PathBuf, sync::mpsc};
+
+/// Captures the app's events so a test can feed layout results back.
+#[derive(Clone)]
+struct Proxy(mpsc::Sender<Event>);
+impl SendEvent for Proxy {
+	fn try_send(&self, event: Event) -> bool {
+		self.0.send(event).is_ok()
+	}
+}
+
+fn app() -> (App<Proxy>, mpsc::Receiver<Event>) {
+	let (tx, events) = mpsc::channel();
+	let mut app = App::new(
+		LaunchOptions {
+			mode: Mode::Smoke,
+			offline: true,
+			width: 800,
+			height: 600,
+			options: crate::test_support::options(),
+			..Default::default()
+		},
+		Proxy(tx),
+	);
+	app.preferences.values = Default::default();
+	(app, events)
+}
+
+/// Opens a file and runs its layout results through the session.
+fn load(app: &mut App<Proxy>, events: &mpsc::Receiver<Event>, path: PathBuf) {
+	app.open(path);
+	let deadline = Instant::now() + Duration::from_secs(10);
+	while app.readers.session.layout_pending {
+		let event = events
+			.recv_timeout(deadline.saturating_duration_since(Instant::now()))
+			.expect("the document did not render");
+		let Event::Ready(update) = event else {
+			continue;
+		};
+		if update.version == app.readers.session.version
+			&& Some(&update.path) == app.readers.session.path.as_ref()
+			&& let Some(result) = update.result
+		{
+			let reader = result.unwrap();
+			let viewport = app.viewport();
+			if app.readers.session.can_display(&reader, viewport) {
+				app.readers.session.accept(reader, viewport, update.counts);
+				app.readers.session.displayed_version = update.version;
+			}
+		}
+	}
+}
 
 fn card(tab: u64) -> Open {
 	Open {
@@ -96,33 +152,7 @@ fn the_chrome_body_rect_belongs_to_the_open_card() {
 /// opens the card, and motion away closes it.
 #[test]
 fn a_resting_pointer_opens_the_card_after_the_delay() {
-	use crate::{
-		app::{Event, SendEvent},
-		cli::{LaunchOptions, Mode},
-	};
-	use std::sync::mpsc;
-
-	#[derive(Clone)]
-	struct Proxy(mpsc::Sender<Event>);
-	impl SendEvent for Proxy {
-		fn try_send(&self, event: Event) -> bool {
-			self.0.send(event).is_ok()
-		}
-	}
-
-	let (tx, _events) = mpsc::channel();
-	let mut app = App::new(
-		LaunchOptions {
-			mode: Mode::Smoke,
-			offline: true,
-			width: 800,
-			height: 600,
-			options: crate::test_support::options(),
-			..Default::default()
-		},
-		Proxy(tx),
-	);
-	app.preferences.values = Default::default();
+	let (mut app, _events) = app();
 	let second = std::path::PathBuf::from("/tmp/second.md");
 	app.readers
 		.open(std::path::PathBuf::from("/tmp/first.md"), Instant::now());
@@ -163,5 +193,54 @@ fn a_resting_pointer_opens_the_card_after_the_delay() {
 	assert!(app.preview.open().is_some());
 	app.interaction.cursor = (400.0, 300.0);
 	assert!(app.hover_preview(at + Duration::from_millis(1)));
+	assert!(app.preview.open().is_none());
+}
+
+/// The active page is already on screen, so its card only names it; another
+/// tab's rendered page still gets a body.
+#[test]
+fn the_active_tab_opens_a_text_only_card() {
+	use std::fs;
+
+	let (mut app, events) = app();
+	let dir = tempfile::tempdir().unwrap();
+	let first = dir.path().join("first.md");
+	let second = dir.path().join("second.md");
+	fs::write(&first, "# First\n\nReading paragraph.\n").unwrap();
+	fs::write(&second, "# Second\n\nReading paragraph.\n").unwrap();
+	load(&mut app, &events, first);
+	load(&mut app, &events, second);
+	assert!(!app.readers.session.snapshot.blocks.is_empty());
+	assert!(!app.readers.entries()[0].session.snapshot.blocks.is_empty());
+
+	let layout = app.tab_layout();
+	let now = Instant::now();
+	app.interaction.cursor = (layout.rects[1].x + 5.0, 20.0);
+	app.hover_preview(now);
+	app.preview_tick(now + SHOW_DELAY);
+	let open = app
+		.preview
+		.open()
+		.expect("the active tab's card did not open");
+	assert_eq!(open.target, Target::Tab(app.readers.entries()[1].id));
+	assert!(!open.card.body, "the active tab must not render a body");
+	assert_eq!(open.card.title, ["second.md"]);
+	assert!(open.card.detail.ends_with("second.md"));
+	app.overlay();
+	assert_eq!(app.preview.body(), None);
+
+	// The inactive tab still previews its rendered page.
+	app.interaction.cursor = (layout.rects[0].x + 5.0, 20.0);
+	app.hover_preview(now + Duration::from_secs(1));
+	app.preview_tick(now + Duration::from_secs(1) + SHOW_DELAY);
+	let open = app
+		.preview
+		.open()
+		.expect("the inactive tab's card did not open");
+	assert_eq!(open.target, Target::Tab(app.readers.entries()[0].id));
+	assert!(open.card.body);
+
+	// Making that tab active ends the card describing it as a preview.
+	app.select_tab(0);
 	assert!(app.preview.open().is_none());
 }

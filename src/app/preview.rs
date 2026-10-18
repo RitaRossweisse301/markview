@@ -237,12 +237,14 @@ impl<P: super::SendEvent> App<P> {
 			.to_string_lossy();
 		let title = card::title_lines(&mut self.ui, &name);
 		let detail = card::detail_line(&mut self.ui, &path.to_string_lossy());
-		let session = if index == self.readers.active() {
+		let active = index == self.readers.active();
+		let session = if active {
 			&self.readers.session
 		} else {
 			&self.readers.entries()[index].session
 		};
-		let body = !session.snapshot.blocks.is_empty();
+		// The active page already fills the window, so its card names it only.
+		let body = !active && !session.snapshot.blocks.is_empty();
 		self.preview.show(Open {
 			target: Target::Tab(tab),
 			card: Card {

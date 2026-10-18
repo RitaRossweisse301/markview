@@ -210,6 +210,9 @@ impl<P: super::SendEvent> App<P> {
 			self.redraw();
 			return;
 		}
+		// A card describes the tab it was opened for, so a new active tab
+		// closes it; the resting pointer re-arms it on its next move.
+		self.dismiss_preview();
 		self.interaction.clear_selection();
 		self.worker.cancel();
 		self.close_search();

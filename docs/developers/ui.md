@@ -51,8 +51,10 @@ Hover previews are transient chrome state, not a component: pointer motion arms
 a fixed delay, the event loop's tick opens a shared card with the target's
 wrapped title, detail line and optional page body, and the renderer composes
 that page from the snapshot the tab already holds, at device resolution, through
-a scaled render pass. No screenshot or texture is cached between frames; a new
-target only adds a `Target` arm and its card content.
+a scaled render pass. The page already on screen is never repeated in its card,
+so the active tab previews its title and path only. No screenshot or texture is
+cached between frames; a new target only adds a `Target` arm and its card
+content.
 
 `UiLayout` supplies visible controls, keyboard traversal and the measured form.
 Painting uses these placed control rectangles; the same clipped rectangles answer
