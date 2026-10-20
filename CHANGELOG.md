@@ -78,6 +78,7 @@ at the same level, without `[brackets]`.
 
 ### Fixed
 
+- Isolate HTML allocation regression cases from concurrent test allocations without relaxing their memory limits.
 - Match Windows paths in VS Code host-test mocks so tests do not load native font services into the VM sandbox.
 - Restore fuzz harness compilation and include link command ranges and occurrence ids in layout differential checks.
 - Keep inline-link hover on the link under the pointer, so repeated links with one address and neighboring links no longer highlight together.
