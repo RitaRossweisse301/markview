@@ -21,6 +21,17 @@ at the same level, without `[brackets]`.
 
 ## Unreleased
 
+## 0.4.0 - 2026-10-20
+
+**Highlights**:
+
+- Browse Markdown folders in a native file tree that opens the clicked document's branches and restores across sessions.
+- Export unsaved Markdown straight from an editor buffer to PDF or PNG with `markview export --stdin`.
+- A browser Markdown editor with live preview, bundled fonts and scroll sync.
+- Editor-managed font downloads for templates, with availability, progress and cancellation in VS Code.
+- Resizable sidebars saved per panel, plus previews of a tab's page on hover.
+- Native parallel block layout on capable GPUs, with faster scrolling and reflows.
+
 ### Added
 
 - Follow a tab switch in an open folder tree: the clicked document's branches open and its entry scrolls into view.
