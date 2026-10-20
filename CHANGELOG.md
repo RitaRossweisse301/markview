@@ -34,6 +34,7 @@ at the same level, without `[brackets]`.
 
 ### Added
 
+- Read unsaved Markdown in a VS Code side preview using MVaaC, with theme changes and window restoration.
 - Follow a tab switch in an open folder tree: the clicked document's branches open and its entry scrolls into view.
 - Manage template fonts in VS Code with availability, individual or bulk downloads, progress and cancellation.
 - Preview a tab on hover after a short delay: a shared card shows its wrapped title and path, plus the tab's page scene drawn at device resolution unless that page is already on screen.
@@ -77,6 +78,7 @@ at the same level, without `[brackets]`.
 
 ### Fixed
 
+- Match Windows paths in VS Code host-test mocks so tests do not load native font services into the VM sandbox.
 - Restore fuzz harness compilation and include link command ranges and occurrence ids in layout differential checks.
 - Keep inline-link hover on the link under the pointer, so repeated links with one address and neighboring links no longer highlight together.
 - Hide the desktop sidebar toggle when no folder is open.
