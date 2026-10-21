@@ -139,6 +139,9 @@ impl<P: super::SendEvent> App<P> {
 				self.redraw();
 			}
 			Command::CopyPath => {
+				if !self.preferences.values.footer_path {
+					return;
+				}
 				let Some(path) = self.readers.session.path.clone() else {
 					return;
 				};
@@ -256,7 +259,8 @@ impl<P: super::SendEvent> App<P> {
 				self.start_export(true);
 			}
 			// Applied by `page_command` before this match.
-			Command::ExportFormat(_)
+			Command::FooterPath
+			| Command::ExportFormat(_)
 			| Command::ExportSize(_)
 			| Command::ExportIndent(_)
 			| Command::ExportPaper(_)

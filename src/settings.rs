@@ -97,6 +97,9 @@ pub struct ReaderSettings {
 	pub scroll_speed: f32,
 	pub single_instance: bool,
 	pub restore_session: bool,
+	/// Whether the idle footer shows the open document's absolute path and
+	/// copies it when clicked. Off by default.
+	pub footer_path: bool,
 }
 impl Default for ReaderSettings {
 	fn default() -> Self {
@@ -125,6 +128,7 @@ impl Default for ReaderSettings {
 			scroll_speed: 1.0,
 			single_instance: markview_platform::mobile_session(),
 			restore_session: markview_platform::mobile_session(),
+			footer_path: false,
 		}
 	}
 }
@@ -191,6 +195,7 @@ pub enum Setting {
 	ScrollSpeed,
 	SingleInstance,
 	RestoreSession,
+	FooterPath,
 	/// Every per-role font family, which is one list of overrides.
 	FontFamily,
 }
@@ -416,6 +421,7 @@ impl ReaderSettings {
 			Setting::SingleInstance => {
 				self.single_instance = other.single_instance
 			}
+			Setting::FooterPath => self.footer_path = other.footer_path,
 			// One role's change rewrites the whole list of overrides.
 			Setting::FontFamily => {
 				self.fontdef_overrides = other.fontdef_overrides.clone()

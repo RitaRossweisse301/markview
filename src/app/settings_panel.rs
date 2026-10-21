@@ -31,6 +31,7 @@ pub(super) enum Message {
 	TabStyle(TabStyle),
 	SingleInstance,
 	RestoreSession,
+	FooterPath,
 	ScrollSpeed(i8),
 	Reset(Box<ReaderSettings>),
 }
@@ -58,6 +59,7 @@ impl Message {
 			Command::TabStyle(value) => Self::TabStyle(value),
 			Command::SingleInstance => Self::SingleInstance,
 			Command::RestoreSession => Self::RestoreSession,
+			Command::FooterPath => Self::FooterPath,
 			Command::ScrollSpeed(delta) => Self::ScrollSpeed(delta),
 			Command::SidebarWidth(sidebar, delta) => {
 				Self::SidebarWidth(sidebar, delta)
@@ -144,6 +146,10 @@ impl Component for Model {
 				self.values.codeblock_wrap = !self.values.codeblock_wrap;
 				Setting::CodeblockWrap
 			}
+			Message::FooterPath => {
+				self.values.footer_path = !self.values.footer_path;
+				Setting::FooterPath
+			}
 			Message::Indent(em) => {
 				self.values.paragraph_indent = f32::from(em);
 				Setting::ParagraphIndent
@@ -214,7 +220,7 @@ impl Component for Model {
 			Setting::SidebarWidth(sidebar) => {
 				update.effects.push(Effect::SidebarResize(sidebar));
 			}
-			Setting::ScrollSpeed => {}
+			Setting::ScrollSpeed | Setting::FooterPath => {}
 			_ => update.effects.push(Effect::Reflow),
 		}
 		update

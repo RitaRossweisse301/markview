@@ -227,8 +227,17 @@ impl<'a> Chrome<'a> {
 			.map(|path| path.to_string_lossy())
 	}
 
-	/// The footer's trailing label: a timed status, a hover hint, or — while
-	/// the reader is idle — the open document's absolute path.
+	/// The footer's opted-in document path.
+	fn footer_path(&self) -> Option<std::borrow::Cow<'a, str>> {
+		if self.settings.footer_path {
+			self.path()
+		} else {
+			None
+		}
+	}
+
+	/// The footer's trailing label: a timed status, a hover hint, or — when
+	/// enabled — the open document's absolute path.
 	fn secondary(&self) -> std::borrow::Cow<'a, str> {
 		if self
 			.status_until
@@ -238,7 +247,7 @@ impl<'a> Chrome<'a> {
 		} else if let Some(hint) = self.hover_hint {
 			hint.into()
 		} else {
-			self.path().unwrap_or_default()
+			self.footer_path().unwrap_or_default()
 		}
 	}
 
@@ -253,7 +262,7 @@ impl<'a> Chrome<'a> {
 		{
 			return None;
 		}
-		let path = self.path()?;
+		let path = self.footer_path()?;
 		let size = (self.width, self.height);
 		let (_, used) = footer::counts_label(
 			self.ui,

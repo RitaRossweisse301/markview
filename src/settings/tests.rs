@@ -345,6 +345,30 @@ fn codeblock_wrap_round_trips_settings_and_layout() {
 }
 
 #[test]
+fn footer_path_defaults_off_and_round_trips() {
+	let dir = tempfile::tempdir().unwrap();
+	let path = dir.path().join("settings.toml");
+	let (mut store, warning) = SettingsStore::load(Some(path.clone()));
+	assert!(warning.is_none());
+	assert!(!store.settings().footer_path);
+	let mut settings = store.settings();
+	settings.footer_path = true;
+	store.changed(&settings, Some(Setting::FooterPath));
+	store.flush().unwrap();
+	assert!(
+		fs::read_to_string(&path)
+			.unwrap()
+			.contains("footer-path = true")
+	);
+	let (mut loaded, warning) = SettingsStore::load(Some(path.clone()));
+	assert!(warning.is_none());
+	assert!(loaded.settings().footer_path);
+	loaded.changed(&ReaderSettings::default(), None);
+	loaded.flush().unwrap();
+	assert!(!SettingsStore::load(Some(path)).0.settings().footer_path);
+}
+
+#[test]
 fn corrupt_configuration_is_preserved_and_defaults_recover() {
 	let dir = tempfile::tempdir().unwrap();
 	let path = dir.path().join("settings.json");

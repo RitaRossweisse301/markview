@@ -56,6 +56,18 @@ fn rows(settings: &ReaderSettings, phone: bool) -> Vec<Row> {
 		Row::new(t.settings_language(), vec![])
 			.menu(DropdownId::Language, language_options(t, settings))
 			.section(t.section_interface()),
+		Row::new(
+			t.settings_footer_path(),
+			vec![action(
+				if settings.footer_path {
+					t.settings_on()
+				} else {
+					t.settings_off()
+				},
+				settings.footer_path,
+				Command::FooterPath,
+			)],
+		),
 	];
 	let left = if phone {
 		(Sidebar::Tabs, t.settings_sidebar_width())

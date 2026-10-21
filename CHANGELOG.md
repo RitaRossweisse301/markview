@@ -25,6 +25,10 @@ at the same level, without `[brackets]`.
 
 - Export saved or unsaved Markdown from VS Code to PDF or PNG using built-in or custom templates.
 
+### Changed
+
+- Make the idle footer's document path and click-to-copy behavior an opt-in setting, off by default.
+
 ## 0.4.0 - 2026-10-20
 
 **Highlights**:

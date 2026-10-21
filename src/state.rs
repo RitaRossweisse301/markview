@@ -53,6 +53,8 @@ pub(crate) enum Command {
 	CodeWrap,
 	SingleInstance,
 	RestoreSession,
+	/// Show the open document's path in the idle footer and copy it on click.
+	FooterPath,
 	/// Step the reader's scroll-speed multiplier by whole steps.
 	ScrollSpeed(i8),
 	SidebarWidth(crate::settings::Sidebar, i8),

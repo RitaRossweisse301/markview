@@ -331,6 +331,13 @@ fn an_idle_footer_names_the_document_and_offers_its_whole_path() {
 			.find(|button| button.action == Command::CopyPath)
 	};
 
+	assert!(
+		path_button(&mut app).is_none(),
+		"the footer path is off by default"
+	);
+	app.action(Command::CopyPath);
+	assert!(app.status.is_empty(), "the disabled path copies nothing");
+	app.preferences.values.footer_path = true;
 	let found =
 		path_button(&mut app).expect("an idle footer with a document names it");
 	// The label carries the whole path, so a copy never depends on what fit.

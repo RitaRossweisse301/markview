@@ -170,6 +170,25 @@ fn panel_exposes_first_line_indent_presets() {
 	}
 }
 #[test]
+fn panel_toggles_the_footer_path() {
+	let mut shaper = crate::test_support::shaper();
+	for (enabled, expected) in [(false, "Off"), (true, "On")] {
+		let settings = ReaderSettings {
+			footer_path: enabled,
+			..Default::default()
+		};
+		let initial = form(&mut shaper, &settings, 0.0, 1200.0, 800.0);
+		let scroll = initial.reveal(Command::FooterPath.widget_id());
+		let button = form(&mut shaper, &settings, scroll, 1200.0, 800.0)
+			.visible_buttons()
+			.into_iter()
+			.find(|b| b.action == Command::FooterPath)
+			.expect("footer path toggle");
+		assert_eq!(button.label, expected);
+	}
+}
+
+#[test]
 fn panel_toggles_codeblock_wrapping() {
 	let mut shaper = crate::test_support::shaper();
 	let mut label = |wrap| {

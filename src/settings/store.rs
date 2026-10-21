@@ -123,6 +123,8 @@ struct Config {
 	single_instance: bool,
 	#[serde(rename = "restore-session")]
 	restore_session: bool,
+	#[serde(rename = "footer-path")]
+	footer_path: bool,
 	/// The reader's export preferences, kept apart from the reading view.
 	export: ExportSettings,
 }
@@ -154,6 +156,7 @@ impl Default for Config {
 			scroll_speed: settings.scroll_speed,
 			single_instance: settings.single_instance,
 			restore_session: settings.restore_session,
+			footer_path: settings.footer_path,
 			export: ExportSettings::default(),
 		}
 	}
@@ -207,6 +210,7 @@ impl Config {
 			scroll_speed: self.scroll_speed,
 			single_instance: self.single_instance || self.restore_session,
 			restore_session: self.restore_session,
+			footer_path: self.footer_path,
 			..Default::default()
 		}
 	}
@@ -440,6 +444,7 @@ impl SettingsStore {
 					Setting::ScrollSpeed,
 					Setting::SingleInstance,
 					Setting::RestoreSession,
+					Setting::FooterPath,
 					Setting::FontFamily,
 				];
 				self.saved = effective.clone();
@@ -505,6 +510,7 @@ impl SettingsStore {
 			scroll_speed: self.saved.scroll_speed,
 			single_instance: self.saved.single_instance,
 			restore_session: self.saved.restore_session,
+			footer_path: self.saved.footer_path,
 			export: self.saved_export.clone(),
 		};
 		let mut values = toml_edit::ser::to_document(&config)?;

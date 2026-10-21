@@ -786,10 +786,7 @@ fn tab_after_closing_the_list_advances_from_the_chooser() {
 	assert!(app.interaction.dropdown.is_none());
 	assert_eq!(
 		app.interaction.widgets.focus,
-		Some(
-			Command::SidebarWidth(crate::settings::Sidebar::Folder, -1)
-				.widget_id()
-		),
+		Some(Command::FooterPath.widget_id()),
 		"traversal moved past the chooser, not back to the first control"
 	);
 }
