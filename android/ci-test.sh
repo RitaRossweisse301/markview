@@ -6,8 +6,23 @@ boundary_width=$2
 serial=emulator-5554
 artifacts="artifacts/android/$layout"
 mkdir -p "$artifacts"
-# `test.py` needs root for its local web fixture; restart `adbd` before logging.
-adb -s "$serial" root
+retry() {
+  local attempts=$1
+  shift
+  local attempt
+  for ((attempt = 1; attempt <= attempts; attempt++)); do
+    "$@" && return 0
+    if ((attempt < attempts)); then
+      echo "retrying (${attempt}/${attempts}): $*" >&2
+      sleep $((attempt * 2))
+    fi
+  done
+  return 1
+}
+# The boot property lands before `adbd` is always ready, so restarting it as
+# root can race the daemon. A few short retries absorb that race.
+retry 4 adb -s "$serial" wait-for-device
+retry 4 adb -s "$serial" root
 adb -s "$serial" wait-for-device
 adb -s "$serial" shell cmd overlay enable-exclusive --category com.android.internal.systemui.navbar.gestural
 adb -s "$serial" logcat -c
