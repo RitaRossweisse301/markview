@@ -1301,7 +1301,9 @@ fn a_scrolling_strip_carries_the_dragged_tab_with_it() {
 		WindowId::dummy(),
 		WindowEvent::MouseWheel {
 			device_id: DeviceId::dummy(),
-			delta: winit::event::MouseScrollDelta::LineDelta(0.0, -1.0),
+			// Three detents clear a whole tab on every platform: macOS reports
+			// one line per detent where X11 and Wayland report three.
+			delta: winit::event::MouseScrollDelta::LineDelta(0.0, -3.0),
 			phase: TouchPhase::Moved,
 		},
 	);
