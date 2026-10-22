@@ -140,9 +140,6 @@ impl<P: super::SendEvent> App<P> {
 			attributes,
 			self.frame.layout == crate::settings::WindowLayout::Macos,
 		);
-		if let Some(icon) = markview_platform::window_icon() {
-			attributes = attributes.with_window_icon(Some(icon));
-		}
 		Ok(Arc::new(event_loop.create_window(attributes)?))
 	}
 

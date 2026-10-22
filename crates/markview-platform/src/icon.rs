@@ -3,7 +3,9 @@
 //! Every platform embeds the same committed byte assets, so the reader never
 //! depends on a system theme to find its own icon.
 use std::sync::OnceLock;
-use winit::window::Icon;
+#[cfg(target_os = "windows")]
+use winit::platform::windows::WindowAttributesExtWindows;
+use winit::window::{Icon, WindowAttributes};
 
 #[cfg(target_os = "windows")]
 const WINDOWS_ICON: &[u8] =
@@ -13,11 +15,25 @@ const WINDOWS_ICON: &[u8] =
 const LINUX_ICON: &[u8] =
 	include_bytes!("../../../assets/icons/markview-128.png");
 
+/// Advertises the reader's icon, including the image a taskbar button draws.
+///
+/// Windows paints a taskbar button from `ICON_BIG`, which only `taskbar_icon`
+/// sets; `window_icon` sets `ICON_SMALL` alone, so the button stays blank
+/// until the shell happens to re-read the window.
+pub(crate) fn with_icon(attributes: WindowAttributes) -> WindowAttributes {
+	let Some(icon) = window_icon() else {
+		return attributes;
+	};
+	#[cfg(target_os = "windows")]
+	let attributes = attributes.with_taskbar_icon(Some(icon.clone()));
+	attributes.with_window_icon(Some(icon))
+}
+
 /// Returns the window icon, decoding the embedded bytes at most once.
 ///
 /// winit wants an owned [`Icon`], so the decoded RGBA buffer is cached and a
 /// fresh icon is built from it.
-pub fn window_icon() -> Option<Icon> {
+fn window_icon() -> Option<Icon> {
 	type Pixels = (u32, u32, Vec<u8>);
 	static PIXELS: OnceLock<Option<Pixels>> = OnceLock::new();
 	let (width, height, data) = PIXELS.get_or_init(decode).as_ref()?;
