@@ -1,5 +1,5 @@
 //! Tab strip geometry and transient gestures, independent of document sessions.
-use crate::layout::Rect;
+use crate::{layout::Rect, scroll::ScrollArea};
 use std::time::Instant;
 
 pub(super) const GAP: f32 = 2.0;
@@ -7,8 +7,8 @@ pub(super) const GAP: f32 = 2.0;
 #[derive(Default)]
 pub(super) struct TabStrip {
 	pub phone: bool,
-	pub drawer_scroll: f32,
-	pub scroll: f32,
+	pub drawer_scroll: ScrollArea,
+	pub scroll: ScrollArea,
 	pub drag: Option<TabDrag>,
 	pub reveal_active: bool,
 	pub scroll_at: Option<Instant>,
@@ -53,6 +53,21 @@ impl TabStrip {
 		self.reveal_active |= self.drag.is_some_and(|drag| drag.moving);
 		self.drag = None;
 		self.scroll_at = None;
+	}
+	/// Advances eased wheel motion on the strip and its drawer.
+	pub(super) fn advance_scrolls(&mut self, now: Instant) {
+		self.scroll.advance(now);
+		self.drawer_scroll.advance(now);
+	}
+	pub(super) fn scroll_animating(&self) -> bool {
+		self.scroll.animating() || self.drawer_scroll.animating()
+	}
+	pub(super) fn scroll_deadline(&self, now: Instant) -> Option<Instant> {
+		[self.scroll.deadline(now), self.drawer_scroll.deadline(now)]
+			.into_iter()
+			.flatten()
+			.chain(self.scroll_at)
+			.min()
 	}
 }
 

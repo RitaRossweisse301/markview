@@ -606,6 +606,11 @@ impl Scrollbar {
 		}
 	}
 
+	/// Scroll offset at the end of the thumb's travel.
+	pub fn max_scroll(&self) -> f32 {
+		self.max_scroll
+	}
+
 	/// True when the point is inside the interactive track.
 	pub fn hit(&self, x: f32, y: f32) -> bool {
 		self.track.contains(x, y)

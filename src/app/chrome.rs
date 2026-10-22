@@ -323,7 +323,7 @@ impl<'a> Chrome<'a> {
 			export::form(
 				self.ui,
 				self.export,
-				self.interaction.export_scroll,
+				self.interaction.export_scroll.offset(),
 				self.width,
 				self.height,
 				self.settings.lang(),
@@ -366,7 +366,7 @@ impl<'a> Chrome<'a> {
 					self.ui,
 					self.tabs,
 					self.active_tab,
-					self.tab_strip.drawer_scroll,
+					self.tab_strip.drawer_scroll.offset(),
 					(width, height),
 					self.settings.lang(),
 					self.settings.tabs_width,
@@ -561,7 +561,7 @@ impl<'a> Chrome<'a> {
 				self.outline_drawer(),
 				self.session.outline_entries(),
 				&self.session.outline_tree,
-				self.interaction.outline_scroll,
+				self.interaction.outline_scroll.offset(),
 				lang,
 			));
 		}
@@ -961,7 +961,7 @@ impl<'a> Chrome<'a> {
 					self.ui,
 					self.tabs,
 					self.active_tab,
-					self.tab_strip.drawer_scroll,
+					self.tab_strip.drawer_scroll.offset(),
 					self.interaction,
 					(width, height),
 					self.settings,

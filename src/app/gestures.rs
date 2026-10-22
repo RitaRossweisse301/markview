@@ -245,6 +245,17 @@ impl<P: super::SendEvent> App<P> {
 		window_action
 	}
 
+	/// Stops the eased scroll of the surface a touch just captured.
+	fn cancel_control_scroll(&mut self, surface: Surface) {
+		match surface {
+			Surface::Panel => self.cancel_panel_scroll(),
+			Surface::Folder => self.folder.scroll.cancel(),
+			Surface::Outline => self.interaction.outline_scroll.cancel(),
+			Surface::Tabs => self.tab_strip.scroll.cancel(),
+			Surface::None | Surface::Document | Surface::Overflow(..) => {}
+		}
+	}
+
 	fn start_touch_contact(
 		&mut self,
 		id: recognizer::Contact,
@@ -289,6 +300,9 @@ impl<P: super::SendEvent> App<P> {
 		} else {
 			capture
 		};
+		// A finger that lands on a control owns it: nothing eases under it
+		// while the contact decides between a tap and a pan.
+		self.cancel_control_scroll(capture.surface);
 		self.frame.pressed = match &capture.tap {
 			Some(Tap::Caption(caption)) => Some(*caption),
 			_ => None,
@@ -518,9 +532,9 @@ impl<P: super::SendEvent> App<P> {
 					.unwrap_or(&0.0),
 				self.readers.session.scrolling.offset,
 			),
-			Surface::Tabs => (self.tab_strip.scroll, 0.0),
-			Surface::Outline => (0.0, self.interaction.outline_scroll),
-			Surface::Folder => (0.0, self.folder.scroll),
+			Surface::Tabs => (self.tab_strip.scroll.offset(), 0.0),
+			Surface::Outline => (0.0, self.interaction.outline_scroll.offset()),
+			Surface::Folder => (0.0, self.folder.scroll.offset()),
 			Surface::Panel => (
 				0.0,
 				self.panel_scroll_range().map_or(0.0, |(scroll, _)| scroll),
@@ -536,8 +550,8 @@ impl<P: super::SendEvent> App<P> {
 			Surface::Folder => self.scroll_folder(-dy),
 			Surface::Tabs => {
 				let layout = self.tab_layout();
-				self.tab_strip.scroll =
-					(layout.scroll - dx).clamp(0.0, layout.max_scroll);
+				self.tab_strip.scroll.set_max(layout.max_scroll);
+				self.tab_strip.scroll.by(-dx);
 			}
 			Surface::Overflow(bi, oi) if dx != 0.0 => {
 				if let Some(overflow) = self

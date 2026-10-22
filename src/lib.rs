@@ -19,6 +19,7 @@ mod mailbox;
 mod net;
 mod paste;
 mod pdf;
+mod scroll;
 pub mod security;
 mod services;
 mod settings;

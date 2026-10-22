@@ -52,15 +52,18 @@ impl<P: super::SendEvent> App<P> {
 					width,
 					height,
 					self.readers.entries().len(),
-					self.tab_strip.drawer_scroll,
+					self.tab_strip.drawer_scroll.offset(),
 					self.preferences.values.tabs_width,
 				);
 				let row = list.row_rect(self.readers.active());
-				self.tab_strip.drawer_scroll = (list.scroll
-					+ (row.y - list.viewport.y).min(0.)
-					+ (row.y + row.h - list.viewport.y - list.viewport.h)
-						.max(0.))
-				.clamp(0., list.max_scroll());
+				self.tab_strip.drawer_scroll.set_max(list.max_scroll());
+				self.tab_strip.drawer_scroll.set(
+					(list.scroll
+						+ (row.y - list.viewport.y).min(0.)
+						+ (row.y + row.h - list.viewport.y - list.viewport.h)
+							.max(0.))
+					.clamp(0., list.max_scroll()),
+				);
 			}
 		}
 		self.refresh_hover();

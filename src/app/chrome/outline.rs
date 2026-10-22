@@ -207,7 +207,7 @@ pub(in crate::app) fn normalize(
 	interaction: &mut InteractionState,
 ) {
 	let max = max_scroll(drawer, rows.len());
-	interaction.outline_scroll = interaction.outline_scroll.clamp(0.0, max);
+	interaction.outline_scroll.set_max(max);
 	interaction.outline_selection = rows
 		.iter()
 		.copied()
@@ -298,9 +298,9 @@ pub(super) fn draw(
 	let current = current.and_then(|index| {
 		rows.iter().copied().take_while(|row| *row <= index).last()
 	});
-	for row in visible(list, rows.len(), interaction.outline_scroll) {
+	for row in visible(list, rows.len(), interaction.outline_scroll.offset()) {
 		let index = rows[row];
-		let rect = row_rect(list, row, interaction.outline_scroll);
+		let rect = row_rect(list, row, interaction.outline_scroll.offset());
 		let entry = &entries[index];
 		let hovered = rect.contains(interaction.cursor.0, interaction.cursor.1);
 		let pressed = hovered

@@ -237,7 +237,7 @@ fn tab_style_commits_from_keyboard_and_pointer_without_document_reflow() {
 	let options = app.options();
 	let sheet = app.preferences.values.stylesheet.clone();
 	let frame = app.frame.layout;
-	let scroll = app.tab_strip.scroll;
+	let scroll = app.tab_strip.scroll.offset();
 	assert_eq!(app.preferences.values.tab_style, TabStyle::Underline);
 	app.action(Command::ToggleDropdown(DropdownId::TabStyle, 0));
 	app.key_pressed(&Key::Named(NamedKey::ArrowDown));
@@ -264,7 +264,7 @@ fn tab_style_commits_from_keyboard_and_pointer_without_document_reflow() {
 		&sheet
 	));
 	assert_eq!(app.frame.layout, frame);
-	assert_eq!(app.tab_strip.scroll, scroll);
+	assert_eq!(app.tab_strip.scroll.offset(), scroll);
 }
 
 #[test]
@@ -591,7 +591,7 @@ fn the_wheel_does_not_scroll_the_page_behind_an_open_list() {
 	app.action(Command::ToggleDropdown(DropdownId::Language, 0));
 	// The pointer is on the page the list covers.
 	app.interaction.cursor = (700.0, 400.0);
-	let before = app.interaction.settings_scroll;
+	let before = app.interaction.settings_scroll.offset();
 
 	app.handle_window_event(
 		&StubLoop,
@@ -603,12 +603,42 @@ fn the_wheel_does_not_scroll_the_page_behind_an_open_list() {
 		},
 	);
 	assert_eq!(
-		app.interaction.settings_scroll, before,
+		app.interaction.settings_scroll.offset(),
+		before,
 		"the wheel left the page where it was"
 	);
 	assert!(
 		app.dropdown_menu().is_some(),
 		"the list still hangs from a visible row"
+	);
+}
+
+/// Opening the list takes the page's easing with it: the row the list hangs
+/// from must not keep moving while the list owns the wheel.
+#[test]
+fn opening_a_list_stops_the_page_ease() {
+	let mut app = app_with_panel();
+	app.overlay();
+	let (_, max) = app.panel_scroll_range().expect("the page scrolls");
+	assert!(max > 0.0, "the test needs a page with somewhere to scroll");
+	app.interaction.cursor = (700.0, 400.0);
+	wheel(&mut app, MouseScrollDelta::LineDelta(0.0, -1.0));
+	assert!(app.interaction.settings_scroll.animating());
+	let held = app.interaction.settings_scroll.offset();
+
+	app.action(Command::ToggleDropdown(DropdownId::Language, 0));
+	assert!(
+		app.dropdown_menu().is_some(),
+		"the list hangs from a row still on screen"
+	);
+	assert!(!app.interaction.settings_scroll.animating());
+	app.advance_control_scroll(
+		std::time::Instant::now() + std::time::Duration::from_secs(1),
+	);
+	assert_eq!(
+		app.interaction.settings_scroll.offset(),
+		held,
+		"the page stayed under the list"
 	);
 }
 
@@ -620,7 +650,7 @@ fn the_wheel_steps_the_highlight_like_the_arrow_keys() {
 	app.action(Command::ToggleDropdown(DropdownId::Language, 0));
 	// The pointer rests on the page the list covers.
 	app.interaction.cursor = (700.0, 400.0);
-	let before = app.interaction.settings_scroll;
+	let before = app.interaction.settings_scroll.offset();
 
 	wheel(&mut app, MouseScrollDelta::LineDelta(0.0, -1.0));
 	assert_eq!(highlighted(&mut app), Command::Language(Some(Lang::En)));
@@ -637,7 +667,8 @@ fn the_wheel_steps_the_highlight_like_the_arrow_keys() {
 	assert_eq!(highlighted(&mut app), Command::Language(Some(Lang::Ja)));
 
 	assert_eq!(
-		app.interaction.settings_scroll, before,
+		app.interaction.settings_scroll.offset(),
+		before,
 		"the page behind the list kept its scroll"
 	);
 	assert!(app.interaction.dropdown.is_some());
@@ -719,7 +750,7 @@ fn a_modified_wheel_over_an_open_list_leaves_the_highlight() {
 	let mut app = app_with_panel();
 	app.action(Command::ToggleDropdown(DropdownId::Language, 0));
 	app.interaction.modifiers = ModifiersState::SUPER;
-	let before = app.interaction.settings_scroll;
+	let before = app.interaction.settings_scroll.offset();
 
 	wheel(&mut app, MouseScrollDelta::LineDelta(0.0, -1.0));
 	assert_eq!(
@@ -728,7 +759,8 @@ fn a_modified_wheel_over_an_open_list_leaves_the_highlight() {
 		"the chord left the list where it was"
 	);
 	assert_eq!(
-		app.interaction.settings_scroll, before,
+		app.interaction.settings_scroll.offset(),
+		before,
 		"the page behind it kept its scroll too"
 	);
 	assert!(app.interaction.dropdown.is_some());

@@ -509,6 +509,7 @@ impl<P: super::SendEvent> App<P> {
 		// resume when the owner lets go.
 		self.pump_native_pan();
 		self.advance_scroll(now);
+		self.advance_control_scroll(now);
 		self.advance_gestures(now);
 		if self.interaction.advance_drawers(now) {
 			self.refresh_hover();
@@ -589,7 +590,7 @@ impl<P: super::SendEvent> App<P> {
 			.chain(self.persistence.deadline)
 			.chain(self.interaction.drag_at)
 			.chain(self.readers.session.scroll_animation_deadline(now))
-			.chain(self.tab_strip.scroll_at)
+			.chain(self.control_scroll_deadline(now))
 			.chain(self.preview.deadline())
 			.chain(self.gestures.deadline(now))
 			.chain(self.interaction.drawer_deadline(now))

@@ -200,7 +200,7 @@ pub(super) fn draw_export(
 	let form = form(
 		ui,
 		settings,
-		interaction.export_scroll,
+		interaction.export_scroll.offset(),
 		size.0,
 		size.1,
 		lang,

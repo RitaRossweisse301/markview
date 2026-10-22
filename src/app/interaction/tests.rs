@@ -19,7 +19,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use winit::dpi::PhysicalPosition;
 use winit::event::{
-	DeviceId, ElementState, MouseButton, TouchPhase, WindowEvent,
+	DeviceId, ElementState, MouseButton, Touch, TouchPhase, WindowEvent,
 };
 use winit::keyboard::ModifiersState;
 use winit::window::WindowId;
@@ -690,7 +690,7 @@ fn folder_collapse_all_clears_nested_expansion_and_scroll_on_both_layouts() {
 			.find(|b| b.action == Command::FolderCollapseAll)
 			.unwrap();
 		let path = app.readers.session.path.clone();
-		app.folder.scroll = 80.;
+		app.folder.scroll = 80.0.into();
 		app.folder.grab = Some(4.);
 		physical_click(
 			&mut app,
@@ -703,7 +703,7 @@ fn folder_collapse_all_clears_nested_expansion_and_scroll_on_both_layouts() {
 		assert!(tree.root_collapsed());
 		assert!(tree.rows().is_empty());
 		assert!(tree.collapsed(0) && tree.collapsed(1));
-		assert_eq!(app.folder.scroll, 0.);
+		assert_eq!(app.folder.scroll.offset(), 0.);
 		assert!(app.folder.grab.is_none());
 		assert_eq!(app.readers.session.path, path);
 		assert_eq!(app.phone_folder_open(), phone);
@@ -753,7 +753,7 @@ fn phone_sidebar_shares_one_shell_and_keeps_each_list_and_selected_page() {
 	assert!(app.phone_folder_open());
 	assert!(!app.folder.open);
 	app.scroll_panel(250.);
-	let folder_scroll = app.folder.scroll;
+	let folder_scroll = app.folder.scroll.offset();
 	assert!(folder_scroll > 0.);
 	let select_page = |app: &mut App<StubProxy>, tab| {
 		let button = app
@@ -771,11 +771,11 @@ fn phone_sidebar_shares_one_shell_and_keeps_each_list_and_selected_page() {
 	};
 	select_page(&mut app, SidebarTab::Tabs);
 	app.scroll_panel(140.);
-	let tab_scroll = app.tab_strip.drawer_scroll;
+	let tab_scroll = app.tab_strip.drawer_scroll.offset();
 	assert!(tab_scroll > 0.);
-	assert_eq!(app.folder.scroll, folder_scroll);
+	assert_eq!(app.folder.scroll.offset(), folder_scroll);
 	select_page(&mut app, SidebarTab::Folder);
-	assert_eq!(app.folder.scroll, folder_scroll);
+	assert_eq!(app.folder.scroll.offset(), folder_scroll);
 	let buttons = app.buttons();
 	assert!(!buttons.iter().any(|b| matches!(
 		b.action,
@@ -803,8 +803,8 @@ fn phone_sidebar_shares_one_shell_and_keeps_each_list_and_selected_page() {
 	assert_eq!(app.interaction.panel, PanelPage::Closed);
 	app.action(Command::Tabs);
 	assert!(app.phone_folder_open());
-	assert_eq!(app.folder.scroll, folder_scroll);
-	assert_eq!(app.tab_strip.drawer_scroll, tab_scroll);
+	assert_eq!(app.folder.scroll.offset(), folder_scroll);
+	assert_eq!(app.tab_strip.drawer_scroll.offset(), tab_scroll);
 	let file = app
 		.folder
 		.tree
@@ -1128,6 +1128,192 @@ fn a_deferred_select_all_resolves_once_the_layout_is_complete() {
 		app.selected_text().as_deref(),
 		Some(expected.as_str()),
 		"the completed layout selects the whole document"
+	);
+}
+
+#[test]
+fn wheel_travel_eases_the_settings_panel_and_tab_strip() {
+	let wheel = |app: &mut App<StubProxy>| {
+		app.handle_window_event(
+			&StubLoop,
+			WindowId::dummy(),
+			WindowEvent::MouseWheel {
+				device_id: DeviceId::dummy(),
+				delta: winit::event::MouseScrollDelta::LineDelta(0.0, -1.0),
+				phase: TouchPhase::Moved,
+			},
+		);
+	};
+	let mut app = App::new(
+		crate::cli::LaunchOptions {
+			mode: Mode::Smoke,
+			options: crate::test_support::options(),
+			..Default::default()
+		},
+		StubProxy,
+	);
+	app.interaction
+		.show_panel(crate::state::PanelPage::Settings(
+			crate::state::PanelTab::Generic,
+		));
+	app.interaction.cursor = (700.0, 400.0);
+	let (_, max) = app.panel_scroll_range().expect("the page scrolls");
+	assert!(max > 0.0);
+	assert_eq!(app.interaction.settings_scroll.offset(), 0.0);
+	wheel(&mut app);
+	assert_eq!(
+		app.interaction.settings_scroll.offset(),
+		0.0,
+		"the wheel starts an ease instead of jumping"
+	);
+	assert!(app.control_scroll_animating());
+	app.advance_control_scroll(Instant::now() + Duration::from_secs(1));
+	assert!(app.interaction.settings_scroll.offset() > 0.0);
+	assert!(!app.control_scroll_animating());
+
+	app.interaction.show_panel(crate::state::PanelPage::Closed);
+	let now = Instant::now();
+	for index in 0..30 {
+		app.readers
+			.open(PathBuf::from(format!("/tmp/wheel-tab-{index}.md")), now);
+	}
+	let layout = app.frame_layout();
+	app.interaction.cursor = (layout.tabs.x + layout.tabs.w / 2.0, 10.0);
+	assert_eq!(app.tab_strip.scroll.offset(), 0.0);
+	wheel(&mut app);
+	assert_eq!(
+		app.tab_strip.scroll.offset(),
+		0.0,
+		"the strip eases under the detent"
+	);
+	assert!(app.control_scroll_animating());
+	app.advance_control_scroll(Instant::now() + Duration::from_secs(1));
+	assert!(app.tab_strip.scroll.offset() > 0.0);
+	assert!(!app.control_scroll_animating());
+}
+
+#[test]
+fn grabbing_the_panel_thumb_stops_its_ease() {
+	let mut app = App::new(
+		crate::cli::LaunchOptions {
+			mode: Mode::Smoke,
+			options: crate::test_support::options(),
+			..Default::default()
+		},
+		StubProxy,
+	);
+	app.interaction
+		.show_panel(crate::state::PanelPage::Settings(
+			crate::state::PanelTab::Generic,
+		));
+	app.overlay();
+	let (_, max) = app.panel_scroll_range().expect("the page scrolls");
+	assert!(max > 0.0);
+	app.interaction.cursor = (700.0, 400.0);
+	app.handle_window_event(
+		&StubLoop,
+		WindowId::dummy(),
+		WindowEvent::MouseWheel {
+			device_id: DeviceId::dummy(),
+			delta: winit::event::MouseScrollDelta::LineDelta(0.0, -1.0),
+			phase: TouchPhase::Moved,
+		},
+	);
+	assert!(app.interaction.settings_scroll.animating());
+	let (_, thumb) = app.panel_bar().expect("the page scrolls").bars(false);
+	app.interaction.cursor = (thumb.x + thumb.w / 2.0, thumb.y + thumb.h / 2.0);
+	assert!(app.begin_panel_drag());
+	assert!(!app.interaction.settings_scroll.animating());
+	let held = app.interaction.settings_scroll.offset();
+	app.advance_control_scroll(Instant::now() + Duration::from_secs(1));
+	assert_eq!(
+		app.interaction.settings_scroll.offset(),
+		held,
+		"the thumb stayed under the held pointer"
+	);
+}
+
+#[test]
+fn touching_a_panel_stops_its_ease() {
+	let mut app = App::new(
+		crate::cli::LaunchOptions {
+			mode: Mode::Smoke,
+			options: crate::test_support::options(),
+			..Default::default()
+		},
+		StubProxy,
+	);
+	app.interaction
+		.show_panel(crate::state::PanelPage::Settings(
+			crate::state::PanelTab::Generic,
+		));
+	app.overlay();
+	let (_, max) = app.panel_scroll_range().expect("the page scrolls");
+	assert!(max > 0.0);
+	app.interaction.cursor = (700.0, 400.0);
+	app.handle_window_event(
+		&StubLoop,
+		WindowId::dummy(),
+		WindowEvent::MouseWheel {
+			device_id: DeviceId::dummy(),
+			delta: winit::event::MouseScrollDelta::LineDelta(0.0, -1.0),
+			phase: TouchPhase::Moved,
+		},
+	);
+	assert!(app.interaction.settings_scroll.animating());
+	let at = (700.0, 400.0);
+	app.handle_touch(Touch {
+		device_id: DeviceId::dummy(),
+		id: 1,
+		phase: TouchPhase::Started,
+		location: PhysicalPosition::new(at.0, at.1),
+		force: None,
+	});
+	assert!(
+		!app.interaction.settings_scroll.animating(),
+		"the captured panel stopped easing under the finger"
+	);
+	let held = app.interaction.settings_scroll.offset();
+	app.advance_control_scroll(Instant::now() + Duration::from_secs(1));
+	assert_eq!(app.interaction.settings_scroll.offset(), held);
+}
+
+#[test]
+fn a_scrolling_strip_carries_the_dragged_tab_with_it() {
+	let (mut app, _) = reader(SOURCE, 760.0);
+	let now = Instant::now();
+	for index in 0..30 {
+		app.readers
+			.open(PathBuf::from(format!("/tmp/drag-tab-{index}.md")), now);
+	}
+	let layout = app.tab_layout();
+	let viewport = app.frame_layout().tabs;
+	let start = layout
+		.hit(viewport.x + viewport.w / 2.0, viewport.y + viewport.h / 2.0)
+		.expect("the strip shows a tab in the middle");
+	let tab = layout.rects[start];
+	app.interaction.cursor = (tab.x + tab.w / 2.0, tab.y + tab.h / 2.0);
+	app.begin_tab_drag(start);
+	app.tab_strip.drag.as_mut().unwrap().moving = true;
+
+	app.handle_window_event(
+		&StubLoop,
+		WindowId::dummy(),
+		WindowEvent::MouseWheel {
+			device_id: DeviceId::dummy(),
+			delta: winit::event::MouseScrollDelta::LineDelta(0.0, -1.0),
+			phase: TouchPhase::Moved,
+		},
+	);
+	assert_eq!(
+		app.tab_strip.drag.unwrap().index,
+		start,
+		"the ease has not moved the strip yet"
+	);
+	app.advance_control_scroll(Instant::now() + Duration::from_secs(1));
+	assert!(
+		app.tab_strip.drag.unwrap().index > start,
+		"the dragged tab followed the tabs sliding under the pointer"
 	);
 }
 
@@ -1536,7 +1722,7 @@ fn phone_drawer_switches_and_closes_shared_tabs_and_hides_tab_style() {
 	assert!(app.tab_layout().rects.is_empty());
 	app.action(Command::Tabs);
 	assert_eq!(app.interaction.panel, PanelPage::Tabs);
-	assert!(app.tab_strip.drawer_scroll > 0.);
+	assert!(app.tab_strip.drawer_scroll.offset() > 0.);
 	assert!(
 		app.buttons()
 			.iter()

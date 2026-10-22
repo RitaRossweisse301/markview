@@ -669,16 +669,16 @@ impl<P: super::SendEvent> App<P> {
 		self.cancel_gestures();
 		if self.interaction.panel_open() {
 			if self.pointer_in_panel() {
-				self.scroll_panel(-dy);
+				self.wheel_panel(-dy);
 			}
 			return;
 		}
 		if self.pointer_in_folder() {
-			self.scroll_folder(-dy);
+			self.wheel_folder(-dy);
 			return;
 		}
 		if self.pointer_in_outline() {
-			self.scroll_outline(-dy);
+			self.wheel_outline(-dy);
 			return;
 		}
 		if self.scroll_tabs(if dx.abs() > dy.abs() { -dx } else { -dy }) {

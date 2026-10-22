@@ -32,7 +32,7 @@ impl TabBar<'_> {
 		if self.style == TabStyle::Underline {
 			viewport.h -= 4.0;
 		}
-		TabLayout::new(viewport, self.widths, self.strip.scroll)
+		TabLayout::new(viewport, self.widths, self.strip.scroll.offset())
 	}
 
 	pub(super) fn draw_tabs(&mut self) -> Vec<Draw> {

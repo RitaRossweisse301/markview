@@ -452,6 +452,10 @@ impl<P: super::SendEvent> App<P> {
 				match self.interaction.dropdown {
 					Some(open) if open.id == id => self.close_dropdown(),
 					_ => {
+						// The list owns the page's scroll from here: freeze
+						// its anchor instead of easing it out from under the
+						// list.
+						self.cancel_panel_scroll();
 						self.interaction.dropdown =
 							Some(crate::state::Dropdown::new(id, highlight));
 					}

@@ -97,7 +97,7 @@ pub(super) struct FontPanel {
 	font_status_filter: Option<crate::fonts::State>,
 	/// Whether the page shows its chooser rows rather than the catalogue.
 	font_choosers: bool,
-	scroll: f32,
+	scroll: crate::scroll::ScrollArea,
 }
 
 pub(super) struct View<'a> {
@@ -118,7 +118,7 @@ impl FontPanel {
 			catalog: &self.font_catalog,
 			shown: self.shown_fonts(),
 			jobs: &self.font_jobs,
-			scroll: self.scroll,
+			scroll: self.scroll.offset(),
 			note: self.font_note.as_deref(),
 			status_filter: self.font_status_filter,
 			choosers: self.font_choosers,
@@ -141,8 +141,24 @@ impl FontPanel {
 			.flatten()
 			.map(|name| name.to_string())
 	}
+	#[cfg(test)]
 	pub(super) fn set_scroll(&mut self, scroll: f32) {
-		self.scroll = scroll;
+		self.scroll.set(scroll);
+	}
+	pub(super) fn scroll_area(&mut self) -> &mut crate::scroll::ScrollArea {
+		&mut self.scroll
+	}
+	pub(super) fn scroll_area_ref(&self) -> &crate::scroll::ScrollArea {
+		&self.scroll
+	}
+	pub(super) fn advance_scroll(&mut self, now: std::time::Instant) {
+		self.scroll.advance(now);
+	}
+	pub(super) fn scroll_deadline(
+		&self,
+		now: std::time::Instant,
+	) -> Option<std::time::Instant> {
+		self.scroll.deadline(now)
 	}
 	pub(super) fn progress(&mut self, progress: crate::fonts::Progress) {
 		self.font_jobs.insert(progress.id.clone(), progress);
@@ -197,12 +213,12 @@ impl FontPanel {
 			Command::StatusFilter(state) => {
 				self.font_status_filter = state;
 				self.font_choosers = false;
-				self.scroll = 0.0;
+				self.scroll.reset();
 				return Update::new(Invalidation::Layout);
 			}
 			Command::Choosers => {
 				self.font_choosers = true;
-				self.scroll = 0.0;
+				self.scroll.reset();
 				return Update::new(Invalidation::Layout);
 			}
 		};

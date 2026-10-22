@@ -175,7 +175,7 @@ pub(super) fn buttons(
 	root.clip = Some(drawer);
 	buttons.push(root);
 	let rows = tree.rows();
-	let list = list(drawer, rows.len(), browser.scroll);
+	let list = list(drawer, rows.len(), browser.scroll.offset());
 	let row_buttons = list
 		.visible()
 		.map(|row| {
@@ -281,7 +281,7 @@ pub(super) fn draw(
 		out.extend(components::draw_button(ui, interaction, &b, true));
 	}
 	let rows = tree.rows();
-	let list = list(drawer, rows.len(), browser.scroll);
+	let list = list(drawer, rows.len(), browser.scroll.offset());
 	let mut body = Vec::new();
 	if tree.entries.is_empty() && !tree.root_collapsed() {
 		body.extend(components::label(

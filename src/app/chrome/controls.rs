@@ -467,7 +467,7 @@ pub(super) fn settings_form(
 		return reader_form(
 			ui,
 			settings,
-			interaction.settings_scroll,
+			interaction.settings_scroll.offset(),
 			width,
 			height,
 			phone,
@@ -507,7 +507,7 @@ pub(super) fn settings_form(
 	let mut form = Form::new(
 		width,
 		height,
-		interaction.settings_scroll,
+		interaction.settings_scroll.offset(),
 		rows,
 		Some(Command::Settings),
 		false,

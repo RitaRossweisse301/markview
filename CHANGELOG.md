@@ -29,6 +29,10 @@ at the same level, without `[brackets]`.
 
 - Make the idle footer's document path and click-to-copy behavior an opt-in setting, off by default.
 
+### Fixed
+
+- Ease wheel scrolling in the tab strip, settings and export panels, folder tree and outline like the document's own.
+
 ## 0.4.0 - 2026-10-20
 
 **Highlights**:

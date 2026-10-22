@@ -19,12 +19,13 @@ impl<P: super::SendEvent> App<P> {
 	}
 	pub(super) fn normalize_tab_scroll(&mut self) {
 		let layout = self.tab_layout();
-		self.tab_strip.scroll = if self.tab_strip.reveal_active {
+		self.tab_strip.scroll.set_max(layout.max_scroll);
+		if self.tab_strip.reveal_active {
 			self.tab_strip.reveal_active = false;
-			layout.reveal(self.readers.active())
-		} else {
-			layout.scroll
-		};
+			self.tab_strip
+				.scroll
+				.set(layout.reveal(self.readers.active()));
+		}
 	}
 	pub(super) fn scroll_tabs(&mut self, delta: f32) -> bool {
 		let layout = self.tab_layout();
@@ -35,8 +36,8 @@ impl<P: super::SendEvent> App<P> {
 		{
 			return false;
 		}
-		self.tab_strip.scroll =
-			(layout.scroll + delta).clamp(0.0, layout.max_scroll);
+		self.tab_strip.scroll.set_max(layout.max_scroll);
+		self.tab_strip.scroll.wheel(delta, Instant::now());
 		// Tabs slide under the resting pointer; the next motion re-arms the
 		// preview for whichever one arrives there.
 		self.dismiss_preview();
@@ -86,9 +87,11 @@ impl<P: super::SendEvent> App<P> {
 			return;
 		}
 		let layout = self.tab_layout();
-		self.tab_strip.scroll = (layout.scroll
-			+ layout.edge_scroll(self.interaction.cursor.0))
-		.clamp(0.0, layout.max_scroll);
+		self.tab_strip.scroll.set_max(layout.max_scroll);
+		self.tab_strip.scroll.set(
+			(layout.scroll + layout.edge_scroll(self.interaction.cursor.0))
+				.clamp(0.0, layout.max_scroll),
+		);
 		self.move_tab_drag();
 	}
 }

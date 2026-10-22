@@ -128,13 +128,27 @@ impl<P: super::SendEvent> App<P> {
 		self.redraw();
 	}
 
-	/// Scrolls the drawer's own list, leaving the document where it is.
+	/// Pans the drawer's own list by a touch or touchpad stream.
 	pub(super) fn scroll_outline(&mut self, delta: f32) {
 		self.readers.session.ensure_outline();
 		let entries = self.outline_rows().len();
 		let max =
 			super::chrome::outline::max_scroll(self.outline_drawer(), entries);
-		self.interaction.scroll_outline(delta, max);
+		self.interaction.outline_scroll.set_max(max);
+		self.interaction.outline_scroll.by(delta);
+		self.redraw();
+	}
+
+	/// A wheel step over the drawer, eased like the document's own.
+	pub(super) fn wheel_outline(&mut self, delta: f32) {
+		self.readers.session.ensure_outline();
+		let entries = self.outline_rows().len();
+		let max =
+			super::chrome::outline::max_scroll(self.outline_drawer(), entries);
+		self.interaction.outline_scroll.set_max(max);
+		self.interaction
+			.outline_scroll
+			.wheel(delta, std::time::Instant::now());
 		self.redraw();
 	}
 
@@ -158,12 +172,19 @@ impl<P: super::SendEvent> App<P> {
 		let Some(row) = rows.iter().position(|entry| *entry == index) else {
 			return;
 		};
-		self.interaction.outline_scroll = super::chrome::outline::reveal(
+		let max = super::chrome::outline::max_scroll(
 			self.outline_drawer(),
 			rows.len(),
-			self.interaction.outline_scroll,
-			row,
 		);
+		self.interaction.outline_scroll.set_max(max);
+		self.interaction
+			.outline_scroll
+			.set(super::chrome::outline::reveal(
+				self.outline_drawer(),
+				rows.len(),
+				self.interaction.outline_scroll.offset(),
+				row,
+			));
 	}
 
 	/// Jumps the document to one entry through the ordinary anchor path.

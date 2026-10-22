@@ -4,6 +4,7 @@ use super::{
 	chrome::{self, Chrome},
 };
 use crate::layout::{Draw, Scrollbar};
+use std::time::Instant;
 impl<P: super::SendEvent> App<P> {
 	pub(super) fn page_command(
 		&mut self,
@@ -218,7 +219,7 @@ impl<P: super::SendEvent> App<P> {
 			},
 			resource_load: resource_kind
 				.map(|kind| self.settings_resources.load(kind)),
-			style_scroll: self.interaction.styles_scroll,
+			style_scroll: self.interaction.styles_scroll.offset(),
 			fonts,
 			width,
 			height,
@@ -248,14 +249,14 @@ impl<P: super::SendEvent> App<P> {
 			Some(chrome::folder::list(
 				self.folder_rect(),
 				self.folder.tree.as_ref().map_or(0, |t| t.rows().len()),
-				self.folder.scroll,
+				self.folder.scroll.offset(),
 			))
 		} else if self.interaction.panel == crate::state::PanelPage::Tabs {
 			let mut list = chrome::tab_drawer::list(
 				width,
 				height,
 				self.readers.entries().len(),
-				self.tab_strip.drawer_scroll,
+				self.tab_strip.drawer_scroll.offset(),
 				self.preferences.values.tabs_width,
 			);
 			let offset = chrome::tab_drawer::animated_rect(
@@ -275,7 +276,7 @@ impl<P: super::SendEvent> App<P> {
 				width,
 				height,
 				self.preferences.style_entries.len(),
-				self.interaction.styles_scroll,
+				self.interaction.styles_scroll.offset(),
 			))
 		} else if self.interaction.fonts_open() {
 			let fonts = self.preferences.fonts.view();
@@ -300,29 +301,44 @@ impl<P: super::SendEvent> App<P> {
 			.map(|list| (list.scroll, list.max_scroll()))
 	}
 	/// The scrollbar of whichever panel page scrolls.
-	fn panel_bar(&mut self) -> Option<Scrollbar> {
+	pub(super) fn panel_bar(&mut self) -> Option<Scrollbar> {
 		if let Some(form) = self.panel_form() {
 			return form.scrollbar(&self.ui);
 		}
 		self.panel_list()?.scrollbar(&self.ui)
 	}
-	pub(super) fn set_panel_scroll(&mut self, scroll: f32) {
+	/// The offset owner of whichever panel page scrolls.
+	fn panel_scroll_area(&mut self) -> Option<&mut crate::scroll::ScrollArea> {
 		if self.phone_folder_open() {
-			self.folder.scroll = scroll;
+			Some(&mut self.folder.scroll)
 		} else if self.interaction.panel == crate::state::PanelPage::Tabs {
-			self.tab_strip.drawer_scroll = scroll;
+			Some(&mut self.tab_strip.drawer_scroll)
 		} else if self.interaction.export_open()
 			&& !self.interaction.export_styles_open()
 		{
-			self.interaction.export_scroll = scroll;
+			Some(&mut self.interaction.export_scroll)
 		} else if self.interaction.fonts_open() {
-			self.preferences.fonts.set_scroll(scroll);
+			Some(self.preferences.fonts.scroll_area())
 		} else if self.interaction.styles_open()
 			|| self.interaction.export_styles_open()
 		{
-			self.interaction.styles_scroll = scroll;
+			Some(&mut self.interaction.styles_scroll)
+		} else if self.interaction.panel_open() {
+			Some(&mut self.interaction.settings_scroll)
 		} else {
-			self.interaction.settings_scroll = scroll;
+			None
+		}
+	}
+	pub(super) fn set_panel_scroll(&mut self, scroll: f32, max: f32) {
+		if let Some(area) = self.panel_scroll_area() {
+			area.set_max(max);
+			area.set(scroll);
+		}
+	}
+	/// Stops the open page's easing where it is, for a new input owner.
+	pub(super) fn cancel_panel_scroll(&mut self) {
+		if let Some(area) = self.panel_scroll_area() {
+			area.cancel();
 		}
 	}
 	pub(super) fn scroll_panel(&mut self, delta: f32) {
@@ -334,7 +350,22 @@ impl<P: super::SendEvent> App<P> {
 		let Some((scroll, max)) = self.panel_scroll_range() else {
 			return;
 		};
-		self.set_panel_scroll((scroll + delta).clamp(0.0, max));
+		self.set_panel_scroll((scroll + delta).clamp(0.0, max), max);
+		self.interaction.widgets.captured = None;
+		self.redraw();
+	}
+	/// A wheel step over the open panel page, eased like the document's own.
+	pub(super) fn wheel_panel(&mut self, delta: f32) {
+		if self.interaction.dropdown.is_some() {
+			return;
+		}
+		let Some((_, max)) = self.panel_scroll_range() else {
+			return;
+		};
+		if let Some(area) = self.panel_scroll_area() {
+			area.set_max(max);
+			area.wheel(delta, Instant::now());
+		}
 		self.interaction.widgets.captured = None;
 		self.redraw();
 	}
@@ -345,7 +376,8 @@ impl<P: super::SendEvent> App<P> {
 				.widgets
 				.focus
 				.map_or(form.scroll, |id| form.reveal(id));
-			self.set_panel_scroll(scroll);
+			let max = form.max_scroll;
+			self.set_panel_scroll(scroll, max);
 		}
 	}
 	pub(super) fn begin_panel_drag(&mut self) -> bool {
@@ -356,10 +388,14 @@ impl<P: super::SendEvent> App<P> {
 		if !bar.hit(x, y) {
 			return false;
 		}
+		// The thumb follows the pointer now, not the ease it interrupted.
+		if let Some(area) = self.panel_scroll_area() {
+			area.cancel();
+		}
 		let grab = if bar.on_thumb(x, y) {
 			bar.grab(x, y)
 		} else {
-			self.set_panel_scroll(bar.scroll_for(x, y, 0.0));
+			self.set_panel_scroll(bar.scroll_for(x, y, 0.0), bar.max_scroll());
 			0.0
 		};
 		self.interaction.panel_grab = Some(grab);
@@ -370,9 +406,46 @@ impl<P: super::SendEvent> App<P> {
 			&& let Some(bar) = self.panel_bar()
 		{
 			let (x, y) = self.interaction.cursor;
-			self.set_panel_scroll(bar.scroll_for(x, y, grab));
+			self.set_panel_scroll(bar.scroll_for(x, y, grab), bar.max_scroll());
 			self.redraw();
 		}
+	}
+	/// Advances eased scroll on every control surface.
+	pub(super) fn advance_control_scroll(&mut self, now: Instant) {
+		if !self.control_scroll_animating() {
+			return;
+		}
+		self.interaction.advance_scrolls(now);
+		self.folder.scroll.advance(now);
+		let strip_moving = self.tab_strip.scroll.animating();
+		self.tab_strip.advance_scrolls(now);
+		if strip_moving && self.tab_strip.drag.is_some() {
+			// Tabs have moved under the held pointer; keep the dragged tab
+			// where the pointer now sits before the next frame is drawn.
+			self.move_tab_drag();
+		}
+		self.preferences.fonts.advance_scroll(now);
+		self.refresh_hover();
+		self.redraw();
+	}
+	pub(super) fn control_scroll_animating(&self) -> bool {
+		self.interaction.scroll_animating()
+			|| self.folder.scroll.animating()
+			|| self.tab_strip.scroll_animating()
+			|| self.preferences.fonts.scroll_area_ref().animating()
+	}
+	/// The earliest frame any control surface needs.
+	pub(super) fn control_scroll_deadline(
+		&self,
+		now: Instant,
+	) -> Option<Instant> {
+		self.interaction
+			.scroll_deadline(now)
+			.into_iter()
+			.chain(self.folder.scroll.deadline(now))
+			.chain(self.tab_strip.scroll_deadline(now))
+			.chain(self.preferences.fonts.scroll_deadline(now))
+			.min()
 	}
 
 	pub(super) fn ui_layout(&mut self) -> super::widgets::UiLayout {
@@ -428,8 +501,10 @@ impl<P: super::SendEvent> App<P> {
 		self.ensure_outline();
 		self.normalize_tab_scroll();
 		// The wheel, the scrollbar and the page all read one clamped offset.
-		if let Some((scroll, _)) = self.panel_scroll_range() {
-			self.set_panel_scroll(scroll);
+		if let Some((_, max)) = self.panel_scroll_range()
+			&& let Some(area) = self.panel_scroll_area()
+		{
+			area.set_max(max);
 		}
 		let session = &self.readers.session;
 		let selection = self.interaction.selection.filter(|s| {

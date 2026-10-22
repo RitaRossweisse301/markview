@@ -295,7 +295,9 @@ impl<P: super::SendEvent> App<P> {
 			let reveal = self.interaction.folder_reveal(self.folder.open);
 			layout = layout.with_sidebar(drawer.w, reveal);
 		}
-		let tab_end = self.tab_metrics.end(layout.tabs, self.tab_strip.scroll);
+		let tab_end = self
+			.tab_metrics
+			.end(layout.tabs, self.tab_strip.scroll.offset());
 		layout = layout.with_tab_end(tab_end);
 		if self.tab_strip.phone {
 			layout.new_page = None;
@@ -320,7 +322,8 @@ impl<P: super::SendEvent> App<P> {
 			native.set_fullscreen(layout.fullscreen);
 			self.native_tab_end.set(Some((
 				layout.left_inset,
-				self.tab_metrics.end(layout.tabs, self.tab_strip.scroll),
+				self.tab_metrics
+					.end(layout.tabs, self.tab_strip.scroll.offset()),
 			)));
 		}
 	}

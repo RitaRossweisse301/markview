@@ -1280,8 +1280,39 @@ fn folder_sidebar_geometry_keyboard_and_pointer_ownership() {
 	);
 	h.app.interaction.cursor = (20., 150.);
 	assert!(h.app.pointer_in_folder());
+	h.app.folder.scroll.reset();
+	h.app.wheel_folder(100.);
+	assert_eq!(
+		h.app.folder.scroll.offset(),
+		0.,
+		"the wheel eases the tree instead of jumping"
+	);
+	assert!(h.app.folder.scroll.animating());
+	let (_, thumb) = h.app.folder_bar().expect("the tree scrolls").bars(false);
+	h.app.interaction.cursor = (thumb.x + thumb.w / 2., thumb.y + thumb.h / 2.);
+	assert!(h.app.begin_folder_drag());
+	assert!(
+		!h.app.folder.scroll.animating(),
+		"the grabbed thumb stops the ease"
+	);
+	let held = h.app.folder.scroll.offset();
+	h.app
+		.advance_control_scroll(Instant::now() + Duration::from_secs(1));
+	assert_eq!(
+		h.app.folder.scroll.offset(),
+		held,
+		"the thumb stayed under the held pointer"
+	);
+	h.app.folder.grab = None;
+	h.app.interaction.cursor = (20., 150.);
+	h.app.wheel_folder(100.);
+	assert!(h.app.folder.scroll.animating());
+	h.app
+		.advance_control_scroll(Instant::now() + Duration::from_secs(1));
+	assert!(h.app.folder.scroll.offset() > 0.);
+	assert!(!h.app.folder.scroll.animating());
 	h.app.scroll_folder(10000.);
-	assert!(h.app.folder.scroll > 0.);
+	assert!(h.app.folder.scroll.offset() > 0.);
 	let document_scroll = h.app.readers.session.scrolling.offset;
 	let (track, _) = h.app.folder_bar().unwrap().bars(false);
 	h.app.interaction.cursor = (track.x + track.w / 2., track.y + 5.);
@@ -1309,7 +1340,7 @@ fn folder_sidebar_geometry_keyboard_and_pointer_ownership() {
 		h.app.interaction.widgets.focus,
 		Some(Command::FolderEntry(1).widget_id())
 	);
-	assert!(h.app.folder.scroll <= 28.);
+	assert!(h.app.folder.scroll.offset() <= 28.);
 	h.app.interaction.widgets.focus = Some(Command::FolderRoot.widget_id());
 	assert!(h.app.key_pressed(&Key::Named(NamedKey::ArrowLeft)));
 	assert!(h.app.folder.tree.as_ref().unwrap().rows().is_empty());
@@ -1815,7 +1846,10 @@ fn selecting_a_tab_opens_the_folder_onto_its_document() {
 	}
 	// The row lands inside the clip, not just somewhere in the tree.
 	assert!(reachable(&mut h).contains(&PathBuf::from("zoo/deep/Zeta.md")));
-	assert!(h.app.folder.scroll > 0., "the row scrolls into the clip");
+	assert!(
+		h.app.folder.scroll.offset() > 0.,
+		"the row scrolls into the clip"
+	);
 	// A closed tree stays out of the way of a tab switch.
 	h.app.set_folder_open(false);
 	h.app.action(Command::SelectTab(0));

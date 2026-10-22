@@ -302,7 +302,7 @@ fn touch_window_drags_start_on_contact_and_never_pan_the_reader_or_viewer() {
 			};
 			let layout = app.frame_layout();
 			let offset = app.readers.session.scrolling.offset;
-			let tab_scroll = app.tab_strip.scroll;
+			let tab_scroll = app.tab_strip.scroll.offset();
 			for (at, direction) in [
 				((layout.drag.x + layout.drag.w / 2.0, 20.0), None),
 				((layout.tabs.x + layout.tabs.w / 2.0, 20.0), None),
@@ -323,7 +323,7 @@ fn touch_window_drags_start_on_contact_and_never_pan_the_reader_or_viewer() {
 				send(&mut app, 2, TouchPhase::Cancelled, (1.0, 1.0));
 				send(&mut app, 1, TouchPhase::Ended, at);
 				assert_eq!(app.readers.session.scrolling.offset, offset);
-				assert_eq!(app.tab_strip.scroll, tab_scroll);
+				assert_eq!(app.tab_strip.scroll.offset(), tab_scroll);
 				assert_eq!(app.interaction.viewer.is_some(), viewer);
 				assert!(
 					app.interaction

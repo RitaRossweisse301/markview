@@ -732,11 +732,11 @@ fn the_outline_toggles_closes_and_moves_its_selection() {
 	assert_eq!(interaction.outline_selection, None);
 	// The drawer's own wheel scroll stays inside its content.
 	interaction.scroll_outline(40.0, 100.0);
-	assert_eq!(interaction.outline_scroll, 40.0);
+	assert_eq!(interaction.outline_scroll.offset(), 40.0);
 	interaction.scroll_outline(500.0, 100.0);
-	assert_eq!(interaction.outline_scroll, 100.0);
+	assert_eq!(interaction.outline_scroll.offset(), 100.0);
 	interaction.scroll_outline(-500.0, 100.0);
-	assert_eq!(interaction.outline_scroll, 0.0);
+	assert_eq!(interaction.outline_scroll.offset(), 0.0);
 }
 
 #[test]
@@ -1572,31 +1572,31 @@ fn panel_navigation_preserves_parent_scroll_and_resets_new_visits() {
 		interaction.widgets.focus,
 		Some(Command::SettingsTab(PanelTab::Generic).widget_id())
 	);
-	interaction.settings_scroll = 120.0;
+	interaction.settings_scroll = 120.0.into();
 	interaction.settings_preview = true;
 	interaction.show_styles(false);
 	interaction.show_panel(PanelPage::Settings(PanelTab::Generic));
-	assert_eq!(interaction.settings_scroll, 120.0);
+	assert_eq!(interaction.settings_scroll.offset(), 120.0);
 	assert!(interaction.settings_preview);
 	interaction.toggle_settings();
 	assert!(!interaction.panel_open());
 	assert!(interaction.outline_open);
 	interaction.toggle_settings();
-	assert_eq!(interaction.settings_scroll, 0.0);
+	assert_eq!(interaction.settings_scroll.offset(), 0.0);
 	assert!(!interaction.settings_preview);
 	interaction.toggle_export();
-	interaction.export_scroll = 90.0;
+	interaction.export_scroll = 90.0.into();
 	interaction.show_styles(true);
 	assert!(interaction.export_styles_open());
-	interaction.styles_scroll = 50.0;
+	interaction.styles_scroll = 50.0.into();
 	interaction.show_styles(true);
 	assert!(interaction.export_open());
 	assert!(!interaction.export_styles_open());
-	assert_eq!(interaction.export_scroll, 90.0);
-	assert_eq!(interaction.styles_scroll, 0.0);
+	assert_eq!(interaction.export_scroll.offset(), 90.0);
+	assert_eq!(interaction.styles_scroll.offset(), 0.0);
 	interaction.toggle_export();
 	interaction.toggle_export();
-	assert_eq!(interaction.export_scroll, 0.0);
+	assert_eq!(interaction.export_scroll.offset(), 0.0);
 	assert_eq!(
 		interaction.widgets.focus,
 		Some(Command::ExportRun.widget_id())

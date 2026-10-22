@@ -1,3 +1,4 @@
+use crate::scroll::ScrollArea;
 use crate::state::{Command, Modal};
 use crate::state::{PanelPage, PanelTab};
 use crate::{
@@ -535,7 +536,7 @@ fn tab_strip_frames_clip_overflow_at_fractional_dpi() -> Result<()> {
 		let mut metrics = TabMetrics::default();
 		metrics.sync(&mut ui, &entries);
 		let strip = TabStrip {
-			scroll,
+			scroll: scroll.into(),
 			drag: dragging.then_some(TabDrag {
 				index: 3,
 				start: 100.0,
@@ -1138,7 +1139,7 @@ fn previewing_recedes_the_styles_and_fonts_pages() {
 					export: &export,
 					interaction: &interaction,
 					style_entries: &entries,
-					style_scroll: interaction.styles_scroll,
+					style_scroll: interaction.styles_scroll.offset(),
 					resource_load: (state != "ready").then_some(&load),
 					fonts: crate::app::font_panel::View {
 						choices: std::borrow::Cow::Owned({
@@ -1297,7 +1298,7 @@ fn the_fonts_page_draws_its_open_option_list() {
 		export: &export,
 		interaction: &interaction,
 		style_entries: &entries,
-		style_scroll: interaction.styles_scroll,
+		style_scroll: interaction.styles_scroll.offset(),
 		resource_load: None,
 		fonts: crate::app::font_panel::View {
 			choices: std::borrow::Cow::Owned({
@@ -1400,7 +1401,7 @@ fn dismissed_pages_stop_drawing_and_answering_pointers() {
 			export: &export,
 			interaction: &interaction,
 			style_entries: &entries,
-			style_scroll: interaction.styles_scroll,
+			style_scroll: interaction.styles_scroll.offset(),
 			resource_load: None,
 			fonts: crate::app::font_panel::View {
 				choices: std::borrow::Cow::Owned({
@@ -1672,9 +1673,9 @@ fn redesigned_chrome_frames() -> Result<()> {
 						),
 						// A page below the fold, to capture the clip and bar.
 						styles_scroll: if page == "styles-scrolled" {
-							f32::MAX
+							f32::MAX.into()
 						} else {
-							0.0
+							ScrollArea::default()
 						},
 						..Default::default()
 					};
@@ -1720,7 +1721,7 @@ fn redesigned_chrome_frames() -> Result<()> {
 							&mut ui, &settings, 0.0, width, height,
 						);
 						interaction.settings_scroll =
-							form.reveal(Command::Larger.widget_id());
+							form.reveal(Command::Larger.widget_id()).into();
 					}
 					let catalog = font_samples();
 					let shown: Vec<usize> = if page == "fonts-empty" {
@@ -1798,8 +1799,9 @@ fn redesigned_chrome_frames() -> Result<()> {
 						let tab = layout.rects[1];
 						interaction.cursor = (tab.x + tab.w / 2.0, TOP / 2.0);
 					}
-					frame = frame
-						.with_tab_end(metrics.end(frame.tabs, strip.scroll));
+					frame = frame.with_tab_end(
+						metrics.end(frame.tabs, strip.scroll.offset()),
+					);
 					let input_draws = if page == "empty" {
 						let buttons = empty::buttons(
 							&mut ui,
@@ -1839,7 +1841,7 @@ fn redesigned_chrome_frames() -> Result<()> {
 						export: &export,
 						interaction: &interaction,
 						style_entries: &entries,
-						style_scroll: interaction.styles_scroll,
+						style_scroll: interaction.styles_scroll.offset(),
 						resource_load: pending.then_some(&load),
 						fonts: crate::app::font_panel::View {
 							choices: std::borrow::Cow::Owned({

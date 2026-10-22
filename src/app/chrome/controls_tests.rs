@@ -620,7 +620,9 @@ fn about_tab_keeps_navigation_and_scrolls_on_short_windows() {
 		);
 		let scrolled = InteractionState {
 			panel: interaction.panel,
-			settings_scroll: form.reveal(Command::OpenProject.widget_id()),
+			settings_scroll: form
+				.reveal(Command::OpenProject.widget_id())
+				.into(),
 			..Default::default()
 		};
 		let bottom = settings_form(

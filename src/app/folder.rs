@@ -1,6 +1,6 @@
 //! A read-only folder tree shared by native entry points and the sidebar.
 use super::{App, Event, SendEvent};
-use crate::state::Command;
+use crate::{scroll::ScrollArea, state::Command};
 use std::{
 	collections::HashSet,
 	fs,
@@ -9,6 +9,7 @@ use std::{
 		Arc,
 		atomic::{AtomicU64, Ordering},
 	},
+	time::Instant,
 };
 
 #[derive(Debug)]
@@ -267,7 +268,7 @@ pub(super) fn markdown(path: &Path) -> bool {
 pub(super) struct Browser {
 	pub tree: Option<Tree>,
 	pub open: bool,
-	pub scroll: f32,
+	pub scroll: ScrollArea,
 	pub grab: Option<f32>,
 	pub labels: std::cell::RefCell<super::chrome::folder::Labels>,
 	pub navigation_revision: u64,
@@ -409,14 +410,16 @@ impl<P: SendEvent> App<P> {
 		let list = super::chrome::folder::list(
 			self.folder_rect(),
 			rows.len(),
-			self.folder.scroll,
+			self.folder.scroll.offset(),
 		);
 		let top = row as f32 * 28.;
-		self.folder.scroll = list
-			.scroll
-			.min(top)
-			.max(top + 28. - list.viewport.h)
-			.clamp(0., list.max_scroll());
+		self.folder.scroll.set_max(list.max_scroll());
+		self.folder.scroll.set(
+			list.scroll
+				.min(top)
+				.max(top + 28. - list.viewport.h)
+				.clamp(0., list.max_scroll()),
+		);
 	}
 
 	pub(super) fn open_folder(&mut self, root: PathBuf, select: bool) {
@@ -469,7 +472,7 @@ impl<P: SendEvent> App<P> {
 				self.folder.tree = Some(tree);
 				*self.folder.labels.get_mut() = Default::default();
 				self.set_folder_open(reveal);
-				self.folder.scroll = 0.;
+				self.folder.scroll.reset();
 				self.folder.grab = None;
 				self.clear_folder_rows();
 				if reveal && self.folder_inset() == 0. {
@@ -639,7 +642,7 @@ impl<P: SendEvent> App<P> {
 		super::chrome::folder::list(
 			self.folder_rect(),
 			rows,
-			self.folder.scroll,
+			self.folder.scroll.offset(),
 		)
 		.scrollbar(&self.ui)
 	}
@@ -652,10 +655,24 @@ impl<P: SendEvent> App<P> {
 		if !bar.hit(x, y) {
 			return false;
 		}
+		// The thumb follows the pointer now, not the ease it interrupted.
+		self.folder.scroll.cancel();
+		let rows = self
+			.folder
+			.tree
+			.as_ref()
+			.map_or(0, |tree| tree.rows().len());
+		let max = super::chrome::folder::list(
+			self.folder_rect(),
+			rows,
+			self.folder.scroll.offset(),
+		)
+		.max_scroll();
+		self.folder.scroll.set_max(max);
 		let grab = if bar.on_thumb(x, y) {
 			bar.grab(x, y)
 		} else {
-			self.folder.scroll = bar.scroll_for(x, y, 0.);
+			self.folder.scroll.set(bar.scroll_for(x, y, 0.));
 			0.
 		};
 		self.folder.grab = Some(grab);
@@ -668,7 +685,7 @@ impl<P: SendEvent> App<P> {
 			&& let Some(bar) = self.folder_bar()
 		{
 			let (x, y) = self.interaction.cursor;
-			self.folder.scroll = bar.scroll_for(x, y, grab);
+			self.folder.scroll.set(bar.scroll_for(x, y, grab));
 			self.redraw();
 		}
 	}
@@ -678,10 +695,26 @@ impl<P: SendEvent> App<P> {
 		let list = super::chrome::folder::list(
 			self.folder_rect(),
 			count,
-			self.folder.scroll,
+			self.folder.scroll.offset(),
 		);
-		self.folder.scroll =
-			(self.folder.scroll + delta).clamp(0., list.max_scroll());
+		self.folder.scroll.set_max(list.max_scroll());
+		self.folder
+			.scroll
+			.set((list.scroll + delta).clamp(0., list.max_scroll()));
+		self.interaction.widgets.captured = None;
+		self.redraw();
+	}
+
+	/// A wheel step over the tree, eased like the document's own.
+	pub(super) fn wheel_folder(&mut self, delta: f32) {
+		let count = self.folder.tree.as_ref().map_or(0, |t| t.rows().len());
+		let list = super::chrome::folder::list(
+			self.folder_rect(),
+			count,
+			self.folder.scroll.offset(),
+		);
+		self.folder.scroll.set_max(list.max_scroll());
+		self.folder.scroll.wheel(delta, Instant::now());
 		self.interaction.widgets.captured = None;
 		self.redraw();
 	}

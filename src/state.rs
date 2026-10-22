@@ -2,6 +2,7 @@
 use crate::{
 	document,
 	layout::{LayoutOptions, LayoutSnapshot},
+	scroll::ScrollArea,
 };
 use markview_layout::text::{TextCounts, TextSelection};
 use std::{
@@ -215,7 +216,7 @@ impl InteractionState {
 			PanelPage::Closed
 		});
 		if open {
-			self.settings_scroll = 0.0;
+			self.settings_scroll.reset();
 			self.settings_preview = false;
 			self.widgets.focus =
 				Some(Command::SettingsTab(PanelTab::Generic).widget_id());
@@ -230,7 +231,7 @@ impl InteractionState {
 			PanelPage::Closed
 		});
 		if open {
-			self.export_scroll = 0.0;
+			self.export_scroll.reset();
 			self.widgets.focus = Some(Command::ExportRun.widget_id());
 		}
 	}
@@ -246,7 +247,7 @@ impl InteractionState {
 			PanelPage::Settings(PanelTab::Styles)
 		};
 		self.show_panel(page);
-		self.styles_scroll = 0.0;
+		self.styles_scroll.reset();
 	}
 }
 
@@ -650,15 +651,15 @@ pub(crate) struct InteractionState {
 	pub(crate) selection_counts: Option<(TextSelection, TextCounts)>,
 	pub(crate) panel: PanelPage,
 	pub(crate) sidebar_tab: SidebarTab,
-	pub(crate) settings_scroll: f32,
+	pub(crate) settings_scroll: ScrollArea,
 	pub(crate) settings_preview: bool,
-	pub(crate) export_scroll: f32,
+	pub(crate) export_scroll: ScrollArea,
 	/// Offset from the centre of the panel scrollbar thumb while dragging.
 	pub(crate) panel_grab: Option<f32>,
 	pub(crate) sidebar_drag: Option<crate::app::sidebar::Drag>,
 	/// The Styles page's list offset. The export's stylesheet chooser shares
 	/// it: no two pages of the panel are ever open at once.
-	pub(crate) styles_scroll: f32,
+	pub(crate) styles_scroll: ScrollArea,
 	pub(crate) selection: Option<TextSelection>,
 	pub(crate) pointer_down: Option<Drag>,
 	/// An image press, independent of whether the page has selectable text.
@@ -687,7 +688,7 @@ pub(crate) struct InteractionState {
 	/// document keeps scrolling and selecting behind it.
 	pub(crate) outline_open: bool,
 	/// The drawer's own list offset.
-	pub(crate) outline_scroll: f32,
+	pub(crate) outline_scroll: ScrollArea,
 	/// The entry the drawer's keyboard selection is on.
 	pub(crate) outline_selection: Option<usize>,
 }
@@ -835,7 +836,7 @@ impl InteractionState {
 		self.outline_open = !self.outline_open;
 		if self.outline_open {
 			self.widgets.focus = None;
-			self.outline_scroll = 0.0;
+			self.outline_scroll.reset();
 			self.outline_selection =
 				(entries > 0).then_some(current.unwrap_or(0));
 		} else {
@@ -925,9 +926,47 @@ impl InteractionState {
 	}
 
 	/// Scrolls the drawer's own list by `delta`, clamped to `max`.
+	#[cfg(test)]
 	pub(crate) fn scroll_outline(&mut self, delta: f32, max: f32) {
-		self.outline_scroll =
-			(self.outline_scroll + delta).clamp(0.0, max.max(0.0));
+		self.outline_scroll.set_max(max);
+		self.outline_scroll.by(delta);
+	}
+
+	/// Advances eased scrolling on every panel page and the outline.
+	pub(crate) fn advance_scrolls(&mut self, now: Instant) {
+		for area in [
+			&mut self.settings_scroll,
+			&mut self.export_scroll,
+			&mut self.styles_scroll,
+			&mut self.outline_scroll,
+		] {
+			area.advance(now);
+		}
+	}
+
+	/// The earliest frame any panel page or the outline needs.
+	pub(crate) fn scroll_deadline(&self, now: Instant) -> Option<Instant> {
+		[
+			&self.settings_scroll,
+			&self.export_scroll,
+			&self.styles_scroll,
+			&self.outline_scroll,
+		]
+		.into_iter()
+		.filter_map(|area| area.deadline(now))
+		.min()
+	}
+
+	/// Whether any panel page or the outline still has motion in flight.
+	pub(crate) fn scroll_animating(&self) -> bool {
+		[
+			&self.settings_scroll,
+			&self.export_scroll,
+			&self.styles_scroll,
+			&self.outline_scroll,
+		]
+		.into_iter()
+		.any(ScrollArea::animating)
 	}
 
 	/// Advances keyboard focus to the next (or previous) button, wrapping at
