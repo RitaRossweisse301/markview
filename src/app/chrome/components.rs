@@ -294,6 +294,25 @@ pub(in crate::app) fn draw_button(
 	draw_button_edges(ui, interaction, b, panel, [true, true], 20.0)
 }
 
+/// Draws an option of an open list: its fill and focus ring sit 2 points
+/// inside the hit pitch, so adjacent options read apart while their hit
+/// areas meet edge to edge.
+///
+/// `ButtonVisual::new` prefers the laid-out rectangle over the button's own,
+/// so the inset is carved from the rect the paint actually resolves to — the
+/// full-pitch hit area — and not just from `b.rect`.
+fn draw_option(
+	ui: &mut TextShaper,
+	interaction: &InteractionState,
+	b: &Button,
+) -> Vec<Draw> {
+	let mut visual = ButtonVisual::new(interaction, b, true);
+	visual.rect.h -= 2.0;
+	let mut out = visual.background(ui, [true, true]);
+	visual.content(&mut out, ui, b, 20.0);
+	out
+}
+
 pub(super) fn draw_icon_button(
 	ui: &mut TextShaper,
 	interaction: &InteractionState,
@@ -1280,6 +1299,27 @@ impl Form {
 	}
 }
 
+/// The pitch of one option in an open list: hit areas cover the list edge to
+/// edge, so no pointer position between two options belongs to neither.
+///
+/// The list's own top and bottom padding stay a margin no option answers for,
+/// so the last option's hit area stops at the padding. `draw_menu` carves the
+/// visible fill 2 points short of this height, which keeps the options read
+/// apart while their click areas meet.
+fn option_rect(menu: Rect, slot: usize, bar: f32) -> Rect {
+	let mut rect = Rect {
+		x: menu.x + MENU_PAD,
+		y: menu.y + MENU_PAD + slot as f32 * OPTION,
+		w: menu.w - 2.0 * MENU_PAD - bar,
+		h: OPTION,
+	};
+	let bottom = menu.y + menu.h - MENU_PAD;
+	if rect.y + rect.h > bottom {
+		rect.h = bottom - rect.y;
+	}
+	rect
+}
+
 /// The option list hanging from `anchor`, windowed by `dropdown`.
 ///
 /// This is the shared body of every list a control opens, form row or page
@@ -1306,12 +1346,7 @@ pub(in crate::app) fn menu(
 			let mut b = button(
 				entry.label.clone(),
 				entry.action,
-				Rect {
-					x: rect.x + MENU_PAD,
-					y: rect.y + MENU_PAD + slot as f32 * OPTION,
-					w: rect.w - 2.0 * MENU_PAD - bar,
-					h: OPTION - 2.0,
-				},
+				option_rect(rect, slot, bar),
 			);
 			// Options read as a flat list: only the pointer and the current
 			// choice give them a fill.
@@ -1395,7 +1430,9 @@ pub(in crate::app) fn draw_menu(
 		..Default::default()
 	};
 	for b in &menu.buttons {
-		out.extend(draw_button(ui, &targeted, b, true));
+		// Options are one full pitch apart for the pointer, but read as a
+		// separated list: the fill and focus ring keep the 2-point gap.
+		out.extend(draw_option(ui, &targeted, b));
 	}
 	if let Some((track, thumb)) = menu.scrollbar() {
 		out.push(line(track, Condition::Scrollbar, C::Track));

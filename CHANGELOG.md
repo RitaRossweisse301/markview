@@ -32,6 +32,7 @@ at the same level, without `[brackets]`.
 ### Fixed
 
 - Ease wheel scrolling in the tab strip, settings and export panels, folder tree and outline like the document's own.
+- Let dropdown options answer the pointer edge to edge, closing the gap that belonged to no option between two entries.
 
 ## 0.4.0 - 2026-10-20
 

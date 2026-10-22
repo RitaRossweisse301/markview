@@ -577,6 +577,40 @@ fn an_open_option_list_stays_inside_the_panel() {
 	}
 }
 
+/// Adjacent options answer the pointer edge to edge: a point on the line
+/// between two options' visible fills belongs to one of them, never neither.
+#[test]
+fn option_hit_areas_stack_without_a_gap() {
+	let size = (820.0, 600.0);
+	let mut open = Dropdown::new(DropdownId::Language, 0);
+	let menu = list_form(3, 0, size)
+		.menu(&mut open, size)
+		.expect("the row opens a list");
+	for pair in menu.buttons.windows(2) {
+		let boundary = pair[1].rect.y;
+		// The x stays clear of the option's own edges, so the probe answers
+		// about the seam between two options, not about an inclusive edge.
+		let inside = menu.rect.x + menu.rect.w / 2.0;
+		let hit =
+			|y: f32| menu.buttons.iter().any(|b| b.rect.contains(inside, y));
+		// `contains` counts the far edge, so a y just below the boundary is
+		// the first point the upper option stops answering for.
+		assert!(
+			hit(boundary - f32::EPSILON) && hit(boundary),
+			"the boundary between options answers to an option"
+		);
+		assert!(
+			hit(menu.rect.y + MENU_PAD) && hit(boundary - 0.5),
+			"every point of the list's body belongs to an option"
+		);
+	}
+	let last = menu.buttons.last().unwrap();
+	assert!(
+		last.rect.y + last.rect.h <= menu.rect.y + menu.rect.h - MENU_PAD,
+		"options still keep clear of the menu's own padding"
+	);
+}
+
 /// A list that fits its window draws every option and carries no scrollbar.
 #[test]
 fn a_list_that_fits_whole_has_no_scrollbar() {
@@ -664,6 +698,71 @@ fn an_overflowing_list_paints_the_scrollbar_it_measured() {
 	};
 	assert!(drawn(track), "the track reaches the screen");
 	assert!(drawn(thumb), "and so does the thumb");
+}
+
+/// The menu paints every option 2 points shorter than its hit pitch even when
+/// the frame resolved the layout, since `ButtonVisual` reads the paint rect
+/// from the populated controls — not just from the button's own rect.
+#[test]
+fn painted_options_keep_their_gap_after_the_layout_resolves() {
+	let size = (820.0, 600.0);
+	let mut open = Dropdown::new(DropdownId::Language, 0);
+	let menu = list_form(3, 0, size)
+		.menu(&mut open, size)
+		.expect("the row opens a list");
+	let mut ui = crate::test_support::shaper();
+	// The frame's layout carries the options' full-pitch rectangles, exactly
+	// as `App::overlay` populates `controls`.
+	let controls = crate::app::widgets::layout(&menu.buttons);
+	let cursor = (menu.buttons[2].rect.x + 2.0, menu.buttons[2].rect.y + 2.0);
+	let interaction = InteractionState {
+		widgets: markview_ui_core::Interaction {
+			focus: Some(menu.buttons[0].action.widget_id()),
+			focus_visible: true,
+			..Default::default()
+		},
+		cursor,
+		controls: Some(controls),
+		..Default::default()
+	};
+	let rects: Vec<Rect> = draw_menu(&mut ui, &interaction, &menu)
+		.iter()
+		.filter_map(|draw| match draw {
+			Draw::Rect(rect, _) => Some(*rect),
+			_ => None,
+		})
+		.collect();
+	let paints = |r: &Rect, b: &Rect| r.x == b.x && r.y == b.y && r.w == b.w;
+	assert!(
+		rects.iter().any(|r| {
+			paints(r, &menu.buttons[2].rect)
+				&& r.h == menu.buttons[2].rect.h - 2.0
+		}),
+		"the hovered option paints its shortened fill"
+	);
+	for b in &menu.buttons {
+		assert!(
+			!rects.iter().any(|r| paints(r, &b.rect) && r.h == b.rect.h),
+			"nothing paints the option at {:?} for its full pitch",
+			b.rect.y
+		);
+	}
+	// The keyboard highlight paints on the chosen option's shortened fill, so
+	// its horizontal lines stop short of the pitch and never reach the next
+	// option's top edge.
+	let chosen = menu.chosen().unwrap();
+	let b = menu
+		.buttons
+		.iter()
+		.find(|b| b.action == chosen)
+		.expect("the chosen option is drawn");
+	let lower = b.rect.y + b.rect.h - 2.0;
+	assert!(
+		!rects
+			.iter()
+			.any(|r| { paints(r, &b.rect) && r.h <= 2.0 && r.y >= lower }),
+		"no highlight line reaches the full pitch"
+	);
 }
 
 #[test]
