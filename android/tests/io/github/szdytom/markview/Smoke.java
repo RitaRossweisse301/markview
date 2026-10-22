@@ -103,6 +103,7 @@ public class Smoke extends Instrumentation {
                     getUiAutomation().setRotation(0);
                     waitFor(s -> s.optJSONArray("dimensions").optDouble(0) > s.optJSONArray("dimensions").optDouble(1));
                     requireSettingsLayout();
+                    requireTabletColumnWidthControls();
                     screenshot("landscape-settings");
                 }
                 tap("SettingsTab(About)");
@@ -276,6 +277,7 @@ public class Smoke extends Instrumentation {
                 tap("Settings");
                 waitFor(s -> s.optString("panel").equals("Settings(Generic)"));
                 requireSettingsLayout();
+                requireTabletColumnWidthControls();
                 for (int i = 0; i < 9; i++) tap("Wider");
                 waitFor(s -> s.optDouble("column_width") >= 760);
                 screenshot("landscape-settings");
@@ -777,8 +779,8 @@ public class Smoke extends Instrumentation {
         require(button(current, "RestoreSession") == null, "Session restore control is absent on Android");
         require(button(current, "OpenConfig") == null && button(current, "Fonts(OpenFolder)") == null && button(current, "StylesFolder") == null,
             "Desktop settings-file and folder controls are absent on Android");
-        if (current.getString("panel").equals("Settings(Generic)")) {
-            require((button(current, "Narrower") == null) == phone && (button(current, "Wider") == null) == phone, "Column width controls are offered only on tablets");
+        if (phone && current.getString("panel").equals("Settings(Generic)")) {
+            require(button(current, "Narrower") == null && button(current, "Wider") == null, "Column width controls are hidden on phones");
         }
         JSONArray size = current.getJSONArray("dimensions");
         JSONArray panel = current.getJSONArray("panel_rect");
@@ -787,6 +789,17 @@ public class Smoke extends Instrumentation {
         } else {
             require(panel.getDouble(0) > 0 && panel.getDouble(1) > 0 && panel.getDouble(2) <= 600 && panel.getDouble(3) <= 620, "Wide settings retain the centered dialog");
         }
+    }
+    private void requireTabletColumnWidthControls() throws Exception {
+        for (int i = 0; i < 8 && button(state(), "Wider") == null; i++) {
+            JSONArray panel = state().getJSONArray("panel_rect");
+            float x = (float)(panel.getDouble(0) + panel.getDouble(2) / 2);
+            float bottom = (float)(panel.getDouble(1) + panel.getDouble(3) - 56);
+            float top = (float)(panel.getDouble(1) + 96);
+            swipe(x, bottom, x, top);
+        }
+        JSONObject current = state();
+        require(button(current, "Narrower") != null && button(current, "Wider") != null, "Column width controls are offered only on tablets");
     }
     private void waitSystem(String name) throws Exception {
         long deadline = SystemClock.uptimeMillis() + 15000;
