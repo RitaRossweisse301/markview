@@ -330,7 +330,6 @@ pub use files::*;
 mod background;
 pub use background::{background_allowed, detach};
 mod icon;
-pub use icon::window_icon;
 mod window;
 pub use window::*;
 mod events;

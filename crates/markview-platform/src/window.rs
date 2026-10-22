@@ -88,7 +88,7 @@ pub fn window_attributes(
 			.with_name("markview", "markview")
 	};
 	let _ = native_buttons;
-	attributes
+	crate::icon::with_icon(attributes)
 }
 
 pub fn pending_documents_loop<T: 'static>(
